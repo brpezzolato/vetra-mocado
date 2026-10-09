@@ -1,0 +1,861 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import './glass.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Afasta o cromo da Dynamic Island. O iOS às vezes informa safe-area zero ao
+   restaurar o PWA, daí o mínimo fixo no celular instalado (abaixo). */
+.vetra-app-safe-header {
+  padding-top: env(safe-area-inset-top);
+}
+
+.vetra-sheet-safe-header {
+  padding-top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
+}
+
+.vetra-sheet-safe-close {
+  top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
+}
+
+/* Topo do menu lateral fora do celular; no celular manda o bloco de 767px. */
+.vetra-mobile-menu-fixed-top {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+.vetra-chat-sheet {
+  top: var(--vetra-visual-viewport-top);
+  left: var(--vetra-visual-viewport-left);
+  right: auto;
+  bottom: auto;
+  width: var(--vetra-visual-viewport-width);
+  height: var(--vetra-visual-viewport-height);
+}
+
+/* Mínimos da Dynamic Island só no app instalado: no navegador a barra do
+   Safari já ocupa o topo e o recuo viraria espaço morto. */
+@media (max-width: 767px) and (display-mode: standalone) {
+  .vetra-app-safe-header {
+    padding-top: max(3.25rem, calc(env(safe-area-inset-top) + 1rem));
+  }
+
+  /* 2,5rem: o iOS desfoca uma faixa logo abaixo da barra de status. */
+  .vetra-sheet-safe-header {
+    padding-top: max(4.75rem, calc(env(safe-area-inset-top) + 2.5rem));
+  }
+
+  .vetra-sheet-safe-close {
+    top: max(4.75rem, calc(env(safe-area-inset-top) + 2.5rem));
+  }
+
+  .vetra-mobile-menu-fixed-top {
+    padding-top: max(4.5rem, calc(env(safe-area-inset-top) + 1.5rem));
+  }
+}
+
+/* Depois do bloco mobile para vencer o recuo acima. Com teclado aberto o
+   espaço da barra de status é morto. */
+[data-keyboard='true'] .vetra-sheet-safe-header {
+  padding-top: 0.625rem;
+}
+
+[data-keyboard='true'] .vetra-sheet-safe-close {
+  top: 0.625rem;
+}
+
+@media (min-width: 768px) {
+  .vetra-chat-sheet {
+    top: calc(
+      var(--vetra-visual-viewport-top) +
+        (
+          var(--vetra-visual-viewport-height) -
+            min(52rem, calc(var(--vetra-visual-viewport-height) - 2rem))
+        ) /
+        2
+    );
+    left: calc(
+      var(--vetra-visual-viewport-left) +
+        (
+          var(--vetra-visual-viewport-width) -
+            min(27rem, calc(var(--vetra-visual-viewport-width) - 2rem))
+        ) /
+        2
+    );
+    width: min(27rem, calc(var(--vetra-visual-viewport-width) - 2rem));
+    height: min(52rem, calc(var(--vetra-visual-viewport-height) - 2rem));
+    border: 1px solid var(--border);
+    border-radius: 1.5rem;
+  }
+}
+
+.app-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+.vault-carousel {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Diálogos crescem até a altura útil e rolam o próprio corpo. */
+[data-slot='dialog-content'] {
+  top: calc(
+    (100dvh + env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2
+  );
+  max-height: calc(
+    100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.5rem
+  );
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Esconde a barra de rolagem nativa em tudo, sem mudar o comportamento.
+   Regra global única; onde ajudar, use o ScrollArea do shadcn. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Safari dá largura intrínseca a date/time; força respeitar a coluna. */
+[data-slot='input'][type='date'],
+[data-slot='input'][type='time'] {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+
+/* WebKit mantém largura/altura intrínsecas no time; zera só a caixa visual. */
+[data-slot='input'][type='time'] {
+  -webkit-appearance: none;
+  appearance: none;
+  block-size: 2.75rem;
+  min-block-size: 2.75rem;
+  max-block-size: 2.75rem;
+  overflow: hidden;
+  padding-block: 0;
+  font-size: 1rem;
+  line-height: 1.25rem;
+}
+
+[data-slot='input'][type='time']::-webkit-date-and-time-value {
+  min-block-size: 1.25rem;
+  margin: 0;
+  text-align: start;
+}
+
+[data-slot='input'][type='time']::-webkit-datetime-edit {
+  display: block;
+  min-inline-size: 0;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .app-container {
+    padding-inline: 1.25rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-container {
+    padding-inline: 2rem;
+  }
+}
+
+:root {
+  --background: oklch(0.985 0.004 85);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(0.998 0.001 85);
+  --card-foreground: oklch(0.145 0 0);
+  --brand: var(--foreground);
+  --hero: oklch(0.145 0 0);
+  --hero-foreground: oklch(0.985 0.004 85);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.955 0.005 85);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.955 0.005 85);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.006 85);
+  --input: oklch(0.88 0.006 85);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  /* Cores de marca como texto, ajustadas para contraste em cada tema. */
+  --brand-nubank-text: #820ad1;
+  --brand-picpay-text: #0f8a3d;
+  /* Amarelo do Mercado Pago vira dourado escuro no claro (4,8:1). */
+  --brand-mercadopago-text: #8a6d00;
+}
+
+.dark {
+  /* Roxo do Nubank clareia no escuro (original dá 2,9:1). */
+  --brand-nubank-text: #c07bf5;
+  --brand-picpay-text: #21c25e;
+  --brand-mercadopago-text: #ffe600;
+  --background: #030303;
+  --foreground: #f7f7f7;
+  --card: #090909;
+  --card-foreground: #f7f7f7;
+  --brand: var(--foreground);
+  --hero: #090909;
+  --hero-foreground: #f7f7f7;
+  --popover: #0b0b0b;
+  --popover-foreground: #f7f7f7;
+  --primary: #f4f4f4;
+  --primary-foreground: #090909;
+  --secondary: #111111;
+  --secondary-foreground: #f4f4f4;
+  --muted: #131313;
+  --muted-foreground: #a3a3a3;
+  --accent: #161616;
+  --accent-foreground: #f4f4f4;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: #080808;
+  --sidebar-foreground: #f7f7f7;
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: #151515;
+  --sidebar-accent-foreground: #f7f7f7;
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground selection:bg-foreground selection:text-background;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Inclui diálogos e popovers em portal. */
+html[data-vetra-locked='true'] body {
+  visibility: hidden;
+}
+
+html[data-vetra-obscured='true'] [data-vetra-private] {
+  visibility: hidden;
+}
+
+/* Modo privacidade: desfoca valores sem mudar o layout.
+   Marcador oficial: [data-private-value] (private-value.tsx, privacy-coverage.test.ts).
+   .tabular-nums também, mas não dependa disso em código novo. */
+html[data-vetra-privacy='true']
+  [data-vetra-private]
+  :is(.tabular-nums, [data-private-value]) {
+  filter: blur(0.48rem);
+  /* Prefixo para o Safari; sem ele o texto desfocado continua selecionável. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Marcadores aninhados somariam o blur; cancela o interno (o externo cobre). */
+html[data-vetra-privacy='true']
+  [data-vetra-private]
+  :is(.tabular-nums, [data-private-value])
+  :is(.tabular-nums, [data-private-value]) {
+  filter: none;
+}
+
+/* Campos de data/hora usam tabular-nums mas não são valores: sem blur. */
+html[data-vetra-privacy='true']
+  [data-vetra-private]
+  input.tabular-nums:not([data-private-value]) {
+  filter: none;
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
+html[data-vetra-privacy='true'] [data-vetra-private] [data-private-chart],
+html[data-vetra-privacy='true'] [data-vetra-private] .recharts-wrapper {
+  filter: blur(0.7rem);
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+@keyframes vetra-face-scan {
+  0%,
+  100% {
+    top: 18%;
+    opacity: 0.35;
+  }
+  50% {
+    top: 82%;
+    opacity: 1;
+  }
+}
+
+.vetra-face-scan {
+  animation: vetra-face-scan 1.35s ease-in-out infinite;
+}
+
+/* Aurora do Vetra IA: duas manchas girando em sentidos opostos e mudando de
+   forma. Períodos primos entre si para não parecer loop. */
+
+@keyframes vetra-ai-aurora-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Forma de lava: cada canto oscila entre ~35% e ~68%. */
+@keyframes vetra-ai-aurora-morph {
+  0%,
+  100% {
+    border-radius: 42% 58% 60% 40% / 45% 45% 55% 55%;
+  }
+  20% {
+    border-radius: 62% 38% 35% 65% / 55% 62% 38% 45%;
+  }
+  40% {
+    border-radius: 36% 64% 55% 45% / 64% 36% 62% 38%;
+  }
+  60% {
+    border-radius: 66% 34% 44% 56% / 38% 58% 42% 62%;
+  }
+  80% {
+    border-radius: 45% 55% 68% 32% / 56% 40% 60% 44%;
+  }
+}
+
+/* Respira e estica de forma assimétrica. */
+@keyframes vetra-ai-aurora-breathe {
+  0%,
+  100% {
+    transform: scale(0.88, 0.94);
+  }
+  35% {
+    transform: scale(1.04, 0.96);
+  }
+  70% {
+    transform: scale(0.96, 1.06);
+  }
+}
+
+/* O miolo claro passeia. */
+@keyframes vetra-ai-aurora-core {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.8;
+  }
+  33% {
+    transform: translate(10%, -8%) scale(0.85);
+    opacity: 0.65;
+  }
+  66% {
+    transform: translate(-8%, 9%) scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+@keyframes vetra-ai-thinking-copy {
+  from {
+    opacity: 0;
+    transform: translateY(0.2rem);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.vetra-ai-aurora {
+  /* Lado da caixa; os desfoques medem a partir dele. */
+  --s: 2rem;
+  position: relative;
+  display: inline-block;
+  animation: vetra-ai-aurora-breathe 2.6s ease-in-out infinite;
+}
+
+.vetra-ai-aurora::before,
+.vetra-ai-aurora-blob,
+.vetra-ai-aurora::after {
+  position: absolute;
+  content: '';
+}
+
+/* Mancha principal. Hex de propósito: color-mix já quebrou a animação. */
+.vetra-ai-aurora::before {
+  inset: 4%;
+  background: conic-gradient(#ff7eb3, #7ab8ff, #7dffc4, #ffd66e, #ff7eb3);
+  filter: blur(calc(var(--s) * 0.1));
+  animation:
+    vetra-ai-aurora-spin 3.1s linear infinite,
+    vetra-ai-aurora-morph 4.3s ease-in-out infinite;
+}
+
+/* Segunda mancha, girando ao contrário em outro ritmo. */
+.vetra-ai-aurora-blob {
+  inset: 14%;
+  background: conic-gradient(
+    from 140deg,
+    #c58bff,
+    #7dffc4,
+    #ff9f7a,
+    #7ab8ff,
+    #c58bff
+  );
+  filter: blur(calc(var(--s) * 0.08));
+  opacity: 0.8;
+  animation:
+    vetra-ai-aurora-spin 5.3s linear infinite reverse,
+    vetra-ai-aurora-morph 6.7s ease-in-out infinite reverse;
+}
+
+/* Miolo aceso. */
+.vetra-ai-aurora::after {
+  inset: 30%;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.8);
+  filter: blur(calc(var(--s) * 0.07));
+  animation: vetra-ai-aurora-core 4.3s ease-in-out infinite;
+}
+
+/* Saída do carregamento (lib/loading-exit.ts): véu e logo com o mesmo
+   transform centrado na logo. Encolhe a 0,9×, cresce até 60×; logo some no
+   começo, véu no fim. */
+.vetra-loading-exit {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  pointer-events: none;
+  color: var(--foreground);
+}
+
+.vetra-loading-exit-mark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Três vezes a tela, centrado (posição e tamanho vêm do JS). */
+.vetra-loading-exit-veil {
+  position: absolute;
+}
+
+.vetra-loading-exit-box {
+  position: absolute;
+}
+
+/* Barras de vidro sobre fundo opaco: o app não vaza enquanto a logo está inteira. */
+.vetra-loading-exit-box .bl-bar:not(.bl-solid) {
+  background: linear-gradient(var(--frost), var(--frost)), var(--background);
+}
+
+.vetra-loading-exit.is-revealing .vetra-loading-exit-veil {
+  will-change: transform, opacity;
+  animation:
+    vetra-exit-grow var(--reveal) forwards,
+    vetra-exit-veil var(--reveal) forwards;
+}
+
+.vetra-loading-exit.is-revealing .vetra-loading-exit-mark {
+  will-change: transform, opacity;
+  animation:
+    vetra-exit-grow var(--reveal) forwards,
+    vetra-exit-mark var(--reveal) forwards;
+}
+
+@keyframes vetra-exit-grow {
+  0% {
+    transform: scale(1);
+    animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1);
+  }
+  20% {
+    transform: scale(0.9);
+    animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+  }
+  100% {
+    transform: scale(60);
+  }
+}
+
+/* A logo some logo que começa a crescer. */
+@keyframes vetra-exit-mark {
+  0%,
+  22% {
+    opacity: 1;
+  }
+  52%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* O véu some no fim. */
+@keyframes vetra-exit-veil {
+  0%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vetra-ai-aurora,
+  .vetra-ai-aurora::before,
+  .vetra-ai-aurora-blob,
+  .vetra-ai-aurora::after {
+    animation: none;
+  }
+}
+
+/* Mascote do Vetra AI (vetra-mascot.tsx): flutua e balança com períodos
+   diferentes. Só transform. */
+/* Parado: flutua, balança e achata/estica fora de fase. */
+@keyframes vetra-mascot-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1, 1);
+  }
+  22% {
+    transform: translateY(-5%) rotate(-3deg) scale(1.02, 0.98);
+  }
+  48% {
+    transform: translateY(-8%) rotate(0deg) scale(0.98, 1.03);
+  }
+  74% {
+    transform: translateY(-3%) rotate(3deg) scale(1.01, 0.99);
+  }
+}
+
+/* Falando (sincronização): balança mais rápido. */
+@keyframes vetra-mascot-talk {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-7%) rotate(4deg) scale(1.03, 0.97);
+  }
+}
+
+/* Pouso no canto: achata e quica. */
+@keyframes vetra-ai-land {
+  0% {
+    transform: scale(1, 1);
+  }
+  30% {
+    transform: scale(1.07, 0.92);
+  }
+  65% {
+    transform: scale(0.98, 1.03);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+.vetra-mascot-art {
+  /* Tom pastel: metade da saturação e mais luz. */
+  filter: saturate(0.5) brightness(1.12);
+  animation: vetra-mascot-float 4.2s ease-in-out infinite;
+  transform-origin: 50% 85%;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vetra-mascot-art {
+    animation: none;
+  }
+}
+
+.vetra-ai-thinking-copy {
+  animation: vetra-ai-thinking-copy 280ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vetra-ai-thinking-copy {
+    animation: none;
+  }
+}
+
+/* Botão flutuante do Vetra AI (vetra-ai-bubble.tsx). */
+.vetra-ai-bubble-wrap:not([data-ready]) {
+  visibility: hidden;
+}
+
+/* Arrastando: camada própria, só transform. */
+.vetra-ai-bubble-wrap[data-dragging] {
+  will-change: transform;
+}
+
+/* Indo para o canto: mola via Web Animations (springFrames). */
+.vetra-ai-bubble-wrap[data-flying] {
+  will-change: transform;
+}
+
+/* Com qualquer diálogo aberto a bolha some. */
+body:has([role='dialog'], [role='alertdialog']) .vetra-ai-bubble-layer {
+  display: none;
+}
+
+/* Só o porquinho com sombra no contorno; área de toque de 56px. */
+.vetra-ai-bubble {
+  position: relative;
+  border-radius: 9999px;
+  background: transparent;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+  /* Segurar não abre o menu de salvar imagem do iOS. */
+  -webkit-touch-callout: none;
+  /* Volta do toque com quique. */
+  transition: transform 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Sombra na imagem, não no botão: é rasterizada uma vez. O filtro pastel é
+   repetido porque filter substitui a regra inteira. */
+.vetra-ai-bubble .vetra-mascot-art {
+  filter: saturate(0.5) brightness(1.12)
+    drop-shadow(0 6px 10px rgb(0 0 0 / 0.28));
+}
+
+.dark .vetra-ai-bubble .vetra-mascot-art {
+  filter: saturate(0.5) brightness(1.12)
+    drop-shadow(0 6px 12px rgb(0 0 0 / 0.6));
+}
+
+/* Atributo no pointerdown: :active não dispara no iPhone. */
+.vetra-ai-bubble:active,
+.vetra-ai-bubble-wrap[data-pressed] .vetra-ai-bubble {
+  transform: scale(0.86);
+  transition: transform 110ms ease-out;
+}
+
+/* Arrastando: cresce e inclina conforme --vetra-lean. */
+.vetra-ai-bubble-wrap[data-dragging] .vetra-ai-bubble {
+  transform: scale(1.1) rotate(var(--vetra-lean, 0deg));
+  transition: transform 140ms ease-out;
+  cursor: grabbing;
+}
+
+/* Pouso no canto. */
+.vetra-ai-bubble-wrap[data-landed] .vetra-ai-bubble {
+  transform-origin: 50% 90%;
+  animation: vetra-ai-land 380ms ease-out both;
+}
+
+/* Falando durante a sincronização. */
+.vetra-ai-bubble-wrap[data-talking] .vetra-mascot-art {
+  animation: vetra-mascot-talk 0.75s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vetra-ai-bubble-wrap[data-landed] .vetra-ai-bubble,
+  .vetra-ai-bubble-wrap[data-talking] .vetra-mascot-art {
+    animation: none;
+  }
+  .vetra-ai-bubble-wrap[data-dragging] .vetra-ai-bubble {
+    transform: scale(1.1);
+  }
+}
+
+.vetra-ai-bubble:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+/* Tela do Vetra AI no celular (assistant-screen.tsx): caixa do tamanho da
+   área visível (visualViewport). */
+.vetra-assistant-screen {
+  height: var(--vetra-screen-height, 100dvh);
+  /* top em vez de transform: o cursor do iPhone não acompanha transform. */
+  top: var(--vetra-screen-top, 0px);
+}
+
+/* Teclado fechado: tela inteira. O iOS às vezes deixa uma medida velha do
+   visualViewport, que só vale com teclado aberto. */
+.vetra-assistant-screen:not([data-keyboard-open='true']) {
+  height: 100dvh;
+  top: 0;
+}
+
+/* Área visível encolhida pelo iOS depois do teclado: a base da página já não é
+   a borda da tela, então o campo dispensa a folga da barra de gestos. */
+.vetra-assistant-screen[data-viewport-short='true'] [data-chat-composer] {
+  padding-bottom: 0.75rem;
+}
+
+/* Teclado aberto: campo encosta nele, sem folga da barra de gestos. */
+.vetra-assistant-screen[data-keyboard-open='true'] [data-chat-composer] {
+  padding-bottom: 0.25rem;
+}
+
+/* O documento não rola atrás da tela do Vetra AI. */
+html.vetra-scroll-locked,
+html.vetra-scroll-locked body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* Faixa fora da caixa na cor do chat. */
+  background-color: var(--background);
+}
+
+/* No celular, fundo do app (preto mais forte); o campo acompanha. */
+.vetra-assistant-screen [data-chat-composer] {
+  background-color: var(--background);
+}
+
+/* Balão de fala do mascote (progresso da sincronização): sombra, entrada,
+   troca de texto e pontinhos de "trabalhando". */
+/* Sombra na pílula: o <output> externo é retangular. */
+.vetra-ai-speech-pill {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.12),
+    0 12px 32px -12px rgb(0 0 0 / 0.55);
+}
+.vetra-ai-speech {
+  animation: vetra-ai-speech-in 260ms cubic-bezier(0.22, 0.9, 0.28, 1.15) both;
+}
+.vetra-ai-speech-text {
+  animation: vetra-ai-speech-text 220ms ease-out both;
+}
+
+@keyframes vetra-ai-speech-text {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+.vetra-ai-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.vetra-ai-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  /* Pontinhos: branco/cinza no escuro, preto/cinza no claro. */
+  background: currentColor;
+  opacity: 0.3;
+  animation: vetra-ai-dot 1.1s ease-in-out infinite;
+}
+.vetra-ai-dots i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.vetra-ai-dots i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes vetra-ai-dot {
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+@keyframes vetra-ai-speech-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vetra-ai-speech,
+  .vetra-ai-speech-text,
+  .vetra-ai-dots i {
+    animation: none;
+  }
+}

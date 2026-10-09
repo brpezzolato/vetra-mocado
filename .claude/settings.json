@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env*)",
+      "Bash(cat .env*)",
+      "Bash(env)",
+      "Bash(printenv*)"
+    ],
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(npx oxlint*)",
+      "Bash(npx oxfmt*)",
+      "Bash(npx vitest *)",
+      "Bash(node --env-file=.env.local *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)"
+    ]
+  }
+}
