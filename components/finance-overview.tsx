@@ -607,12 +607,13 @@ export function FinanceOverview({
                         aria-hidden="true"
                         className="absolute inset-y-0 left-0 z-10 w-1/3 will-change-transform"
                       >
-                        {/* Camada que cresce ao segurar: separada da que anda, para
-                            os dois transforms não brigarem. */}
+                        {/* Só o fundo branco cresce ao segurar; o texto fica numa camada à
+                            parte, do tamanho normal. */}
                         <span
                           ref={pillLiftRef}
-                          className="absolute inset-0 overflow-hidden rounded-full bg-foreground shadow-sm will-change-transform"
-                        >
+                          className="absolute inset-0 rounded-full bg-foreground shadow-sm will-change-transform"
+                        />
+                        <span className="absolute inset-0 overflow-hidden rounded-full">
                           <span
                             ref={boldLabelsRef}
                             className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3 will-change-transform"
