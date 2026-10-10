@@ -113,10 +113,30 @@ export function FinanceOverview({
     active: boolean;
   } | null>(null);
   const pillFrame = useRef(0);
+  const pillLiftRef = useRef<HTMLSpanElement>(null);
+  // Segurar a pílula: ela cresce um pouco (mola curta) e volta ao soltar.
+  const liftPill = (up: boolean) => {
+    const pill = pillLiftRef.current;
+    if (!pill) return;
+    pill.style.transition = up
+      ? 'transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease-out'
+      : 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 280ms ease-out';
+    pill.style.transform = up ? 'scale(1.1)' : 'scale(1)';
+    pill.style.boxShadow = up ? '0 8px 24px rgb(0 0 0 / 0.35)' : '';
+  };
   const pillDragged = useRef(false);
   const pillDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     pillDragged.current = false;
+    const box = pillLiftRef.current?.getBoundingClientRect();
+    if (
+      box &&
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom
+    )
+      liftPill(true);
     pillDrag.current = {
       id: event.pointerId,
       x: event.clientX,
@@ -138,6 +158,7 @@ export function FinanceOverview({
       if (Math.abs(dx) < 6 && Math.abs(event.clientY - state.y) < 6) return;
       if (Math.abs(event.clientY - state.y) > Math.abs(dx)) {
         pillDrag.current = null;
+        liftPill(false);
         return;
       }
       state.active = true;
@@ -167,6 +188,7 @@ export function FinanceOverview({
   const pillUp = (event: React.PointerEvent<HTMLDivElement>) => {
     const state = pillDrag.current;
     pillDrag.current = null;
+    liftPill(false);
     if (!state || state.id !== event.pointerId || !state.active) return;
     window.cancelAnimationFrame(pillFrame.current);
     pager.current?.release(state.position, state.velocity);
@@ -583,20 +605,27 @@ export function FinanceOverview({
                       <span
                         ref={indicatorRef}
                         aria-hidden="true"
-                        className="absolute inset-y-0 left-0 z-10 w-1/3 overflow-hidden rounded-full bg-foreground shadow-sm will-change-transform"
+                        className="absolute inset-y-0 left-0 z-10 w-1/3 will-change-transform"
                       >
+                        {/* Camada que cresce ao segurar: separada da que anda, para
+                            os dois transforms não brigarem. */}
                         <span
-                          ref={boldLabelsRef}
-                          className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3 will-change-transform"
+                          ref={pillLiftRef}
+                          className="absolute inset-0 overflow-hidden rounded-full bg-foreground shadow-sm will-change-transform"
                         >
-                          {HOME_TABS.map((value) => (
-                            <span
-                              key={value}
-                              className="grid place-items-center text-base font-semibold text-background"
-                            >
-                              {TAB_LABELS[value]}
-                            </span>
-                          ))}
+                          <span
+                            ref={boldLabelsRef}
+                            className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3 will-change-transform"
+                          >
+                            {HOME_TABS.map((value) => (
+                              <span
+                                key={value}
+                                className="grid place-items-center text-base font-semibold text-background"
+                              >
+                                {TAB_LABELS[value]}
+                              </span>
+                            ))}
+                          </span>
                         </span>
                       </span>
                     </span>
