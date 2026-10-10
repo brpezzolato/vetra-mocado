@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useEffectEvent,
+} from 'react';
 import { Bell } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useResumeRefresh } from '@/lib/use-resume-refresh';
@@ -77,26 +84,32 @@ export function NotificationCenter() {
   }, [db, items, load, loadCount]);
 
   useResumeRefresh(load);
+  // Os ouvintes chamam sempre a versão atual de `load`/`seen`. Antes o efeito
+  // dependia de `seen`, que muda a cada carga (depende de `items`): ele rodava
+  // de novo, carregava de novo e entrava num ciclo sem fim de consultas.
+  const refresh = useEffectEvent(() => {
+    if (document.visibilityState === 'visible') void load();
+  });
+  const show = useEffectEvent(() => {
+    setOpen(true);
+    void seen();
+  });
+  const firstLoad = useEffectEvent(() => void load());
   useEffect(() => {
     let live = true;
-    const refresh = () => {
-      if (live && document.visibilityState === 'visible') void load();
-    };
-    const show = () => {
-      setOpen(true);
-      void seen();
-    };
     void Promise.resolve().then(() => {
-      if (live) return load();
+      if (live) firstLoad();
     });
-    window.addEventListener('vetra:notifications', refresh);
-    window.addEventListener('vetra:open-notifications', show);
+    const onRefresh = () => refresh();
+    const onShow = () => show();
+    window.addEventListener('vetra:notifications', onRefresh);
+    window.addEventListener('vetra:open-notifications', onShow);
     return () => {
       live = false;
-      window.removeEventListener('vetra:notifications', refresh);
-      window.removeEventListener('vetra:open-notifications', show);
+      window.removeEventListener('vetra:notifications', onRefresh);
+      window.removeEventListener('vetra:open-notifications', onShow);
     };
-  }, [load, seen]);
+  }, []);
 
   return (
     <Popover

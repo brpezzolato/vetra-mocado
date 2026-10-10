@@ -3,9 +3,11 @@
 import {
   useEffect,
   useEffectEvent,
+  useImperativeHandle,
   useLayoutEffect,
   useRef,
   type ReactNode,
+  type Ref,
 } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -17,18 +19,28 @@ import { cn } from '@/lib/utils';
    - a altura acompanha cada página e anima junto (`contain: layout`);
    - movimento aplicado uma vez por quadro (rAF);
    - recorte reto (`overflow: clip`).
-   `touch-action: pan-y`: rolagem vertical é do navegador. */
+   `touch-action: pan-y`: rolagem vertical é do navegador.
+   `control` deixa outro elemento (a pílula das abas) arrastar as páginas:
+   `scrub` posiciona sem transição, `release` encaixa com o embalo do dedo. */
 
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 /** Uma aba de distância; cada aba a mais no caminho soma `STEP_MS`. */
 const BASE_MS = 360;
 const STEP_MS = 160;
 
+export type PagerControl = {
+  /** Posição em páginas (fracionária), aplicada já, sem transição. */
+  scrub: (position: number) => void;
+  /** Solta na `position`; `velocity` em páginas por ms (positivo = adiante). */
+  release: (position: number, velocity: number) => void;
+};
+
 export function SwipePager({
   index,
   onChange,
   pages,
   onPlace,
+  ref,
   className,
 }: {
   index: number;
@@ -39,6 +51,8 @@ export function SwipePager({
    * anda junto (a pílula das abas).
    */
   onPlace?: (position: number, transition: string) => void;
+  /** Controle externo (`scrub`/`release`). */
+  ref?: Ref<PagerControl>;
   className?: string;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -91,10 +105,10 @@ export function SwipePager({
   };
 
   /** Desliza até `page`, passando pelas do caminho; no fim, avisa o React. */
-  const settle = (page: number, notify: boolean) => {
+  const settle = (page: number, notify: boolean, forced?: number) => {
     window.clearTimeout(settleTimer.current);
     const distance = Math.max(1, Math.abs(page - shown.current));
-    const duration = BASE_MS + (distance - 1) * STEP_MS;
+    const duration = forced ?? BASE_MS + (distance - 1) * STEP_MS;
     place(page, 0, duration);
     shown.current = page;
     moving.current = true;
@@ -137,6 +151,30 @@ export function SwipePager({
       pagesObserver.disconnect();
     };
   }, []);
+
+  // Controle externo: refeito a cada render para usar o `index` e o `onChange` atuais.
+  useImperativeHandle(ref, () => {
+    const clamp = (value: number) => Math.min(count - 1, Math.max(0, value));
+    return {
+      scrub: (position) => {
+        window.clearTimeout(settleTimer.current);
+        moving.current = true;
+        const at = clamp(position);
+        const page = Math.min(count - 1, Math.floor(at));
+        place(page, -(at - page) * width(), 0);
+      },
+      release: (position, velocity) => {
+        // Projeta ~140 ms de embalo e encaixa na página mais perto.
+        const next = clamp(Math.round(position + velocity * 140));
+        const remaining = Math.abs(next - clamp(position));
+        settle(
+          next,
+          next !== index,
+          Math.round(Math.min(BASE_MS, 160 + remaining * 260)),
+        );
+      },
+    };
+  });
 
   useEffect(
     () => () => {

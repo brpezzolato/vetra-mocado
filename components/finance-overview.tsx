@@ -31,7 +31,7 @@ import { ReviewTeaser } from '@/components/review-teaser';
 import { toTotalsView } from '@/lib/entry-share';
 import { AccountBalances } from '@/components/account-balances';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SwipePager } from '@/components/swipe-pager';
+import { SwipePager, type PagerControl } from '@/components/swipe-pager';
 import { RobotFreshness } from '@/components/robot-freshness';
 import { EntryDetails } from '@/components/entry-details';
 import { WeeklyExpenseSummary } from '@/components/expense-assistant';
@@ -96,8 +96,85 @@ export function FinanceOverview({
   // A pílula da aba ativa, movida pelo SwipePager.
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const boldLabelsRef = useRef<HTMLSpanElement>(null);
+  const pager = useRef<PagerControl | null>(null);
+  const tabPosition = useRef(0);
+  // Arrasto da pílula: a posição segue o dedo (um terço do trilho por aba);
+  // só transform, uma vez por quadro, e o React só sabe no fim (onChange).
+  const pillDrag = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    from: number;
+    slot: number;
+    position: number;
+    lastX: number;
+    lastAt: number;
+    velocity: number;
+    active: boolean;
+  } | null>(null);
+  const pillFrame = useRef(0);
+  const pillDragged = useRef(false);
+  const pillDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    pillDragged.current = false;
+    pillDrag.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      from: tabPosition.current,
+      slot: (event.currentTarget.clientWidth - 8) / HOME_TABS.length,
+      position: tabPosition.current,
+      lastX: event.clientX,
+      lastAt: performance.now(),
+      velocity: 0,
+      active: false,
+    };
+  };
+  const pillMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = pillDrag.current;
+    if (!state || state.id !== event.pointerId) return;
+    const dx = event.clientX - state.x;
+    if (!state.active) {
+      if (Math.abs(dx) < 6 && Math.abs(event.clientY - state.y) < 6) return;
+      if (Math.abs(event.clientY - state.y) > Math.abs(dx)) {
+        pillDrag.current = null;
+        return;
+      }
+      state.active = true;
+      pillDragged.current = true;
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Sem captura, o arrasto segue enquanto o dedo está no trilho.
+      }
+    }
+    const now = performance.now();
+    const step = (event.clientX - state.lastX) / state.slot;
+    const elapsed = Math.max(1, now - state.lastAt);
+    state.velocity = state.velocity * 0.6 + (step / elapsed) * 0.4;
+    state.lastX = event.clientX;
+    state.lastAt = now;
+    const last = HOME_TABS.length - 1;
+    const raw = state.from + dx / state.slot;
+    // Nas pontas, pesa.
+    state.position =
+      raw < 0 ? raw * 0.3 : raw > last ? last + (raw - last) * 0.3 : raw;
+    window.cancelAnimationFrame(pillFrame.current);
+    pillFrame.current = window.requestAnimationFrame(() =>
+      pager.current?.scrub(state.position),
+    );
+  };
+  const pillUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = pillDrag.current;
+    pillDrag.current = null;
+    if (!state || state.id !== event.pointerId || !state.active) return;
+    window.cancelAnimationFrame(pillFrame.current);
+    pager.current?.release(state.position, state.velocity);
+  };
+
   /** A pílula e o negrito acompanham as páginas (`position` fracionária). */
   const placeTabs = useCallback((position: number, timing: string) => {
+    tabPosition.current = position;
     const move = timing ? `transform ${timing}` : 'none';
     const indicator = indicatorRef.current;
     const labels = boldLabelsRef.current;
@@ -476,7 +553,20 @@ export function FinanceOverview({
                   {/* Prefixo do grupo: o TabsList do shadcn força 32px na horizontal.
                       As abas por baixo ficam sempre cinza e sem transição: o destaque
                       é só a pílula (senão o branco da aba antiga some com atraso). */}
-                  <TabsList className="relative h-12 w-full gap-0 rounded-full bg-muted/70 p-1 group-data-horizontal/tabs:h-12">
+                  <TabsList
+                    className="relative h-12 w-full touch-pan-y gap-0 rounded-full bg-muted/70 p-1 select-none group-data-horizontal/tabs:h-12"
+                    onPointerDown={pillDown}
+                    onPointerMove={pillMove}
+                    onPointerUp={pillUp}
+                    onPointerCancel={pillUp}
+                    onClickCapture={(event) => {
+                      // O arrasto termina num "clique": não troca de aba de novo.
+                      if (!pillDragged.current) return;
+                      pillDragged.current = false;
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                  >
                     {HOME_TABS.map((value) => (
                       <TabsTrigger
                         key={value}
@@ -493,11 +583,11 @@ export function FinanceOverview({
                       <span
                         ref={indicatorRef}
                         aria-hidden="true"
-                        className="absolute inset-y-0 left-0 z-10 w-1/3 overflow-hidden rounded-full bg-foreground shadow-sm"
+                        className="absolute inset-y-0 left-0 z-10 w-1/3 overflow-hidden rounded-full bg-foreground shadow-sm will-change-transform"
                       >
                         <span
                           ref={boldLabelsRef}
-                          className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3"
+                          className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3 will-change-transform"
                         >
                           {HOME_TABS.map((value) => (
                             <span
@@ -517,6 +607,7 @@ export function FinanceOverview({
                     index={HOME_TABS.indexOf(tab)}
                     onChange={(index) => setTab(HOME_TABS[index])}
                     onPlace={placeTabs}
+                    ref={pager}
                     pages={tabPages}
                   />
                 </div>
