@@ -93,12 +93,10 @@ export function FinanceOverview({
   const setEntryOpen = onEntryOpenChange ?? setOwnEntryOpen;
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<HomeTab>('gastos');
-  // Traço da aba ativa, movido pelo SwipePager.
+  // A pílula da aba ativa, movida pelo SwipePager.
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const boldLabelsRef = useRef<HTMLSpanElement>(null);
-  const cornerRef = useRef<HTMLSpanElement>(null);
-  const cornerRightRef = useRef<HTMLSpanElement>(null);
-  /** Lingueta, negrito e cantos acompanham as páginas (`position` fracionária). */
+  /** A pílula e o negrito acompanham as páginas (`position` fracionária). */
   const placeTabs = useCallback((position: number, timing: string) => {
     const move = timing ? `transform ${timing}` : 'none';
     const indicator = indicatorRef.current;
@@ -110,17 +108,6 @@ export function FinanceOverview({
     if (labels) {
       labels.style.transition = move;
       labels.style.transform = `translate3d(${(-position * 100) / 3}%, 0, 0)`;
-    }
-    // Canto reto só com a lingueta encostada (esquerdo na primeira, direito na última).
-    const last = HOME_TABS.length - 1;
-    const corners: [HTMLSpanElement | null, number][] = [
-      [cornerRef.current, 1 - position],
-      [cornerRightRef.current, position - (last - 1)],
-    ];
-    for (const [corner, amount] of corners) {
-      if (!corner) continue;
-      corner.style.transition = timing ? `opacity ${timing}` : 'none';
-      corner.style.opacity = String(Math.min(1, Math.max(0, amount)));
     }
   }, []);
   const fetchOverview = useCallback(async () => {
@@ -479,44 +466,43 @@ export function FinanceOverview({
             <>
               {recapInvite}
               <ReviewTeaser entries={recorded} />
-              {/* Abas como pastas: a ativa é uma lingueta presa ao cartão e desliza com o
-                conteúdo (swipe-pager.tsx). Sem vidro. */}
+              {/* Abas em pílula: a pílula clara desliza com o dedo, junto com as
+                  páginas (swipe-pager.tsx). Sem vidro. */}
               <div className="min-w-0">
                 <Tabs
                   value={tab}
                   onValueChange={(value) => setTab(value as HomeTab)}
                 >
-                  {/* Prefixo do grupo: o TabsList do shadcn força 32px na horizontal. */}
-                  <TabsList
-                    variant="line"
-                    className="relative h-10 w-full gap-0 p-0 group-data-horizontal/tabs:h-10"
-                  >
+                  {/* Prefixo do grupo: o TabsList do shadcn força 32px na horizontal.
+                      As abas por baixo ficam sempre cinza e sem transição: o destaque
+                      é só a pílula (senão o branco da aba antiga some com atraso). */}
+                  <TabsList className="relative h-12 w-full gap-0 rounded-full bg-muted/70 p-1 group-data-horizontal/tabs:h-12">
                     {HOME_TABS.map((value) => (
                       <TabsTrigger
                         key={value}
                         value={value}
-                        className="relative h-full min-w-0 basis-0 rounded-none text-base font-normal text-muted-foreground after:hidden data-active:text-muted-foreground"
+                        className="relative h-full min-w-0 basis-0 rounded-full border-0 text-base font-normal text-muted-foreground shadow-none transition-none after:hidden hover:text-muted-foreground data-active:bg-transparent data-active:text-muted-foreground data-active:shadow-none dark:text-muted-foreground dark:hover:text-muted-foreground dark:data-active:border-transparent dark:data-active:bg-transparent dark:data-active:text-muted-foreground"
                       >
                         {TAB_LABELS[value]}
                       </TabsTrigger>
                     ))}
-                    {/* Lingueta: um terço da fileira, 1px sobre a borda do cartão. Dentro, os
-                      rótulos em negrito andando ao contrário, então só o trecho sob a lingueta
-                      fica em negrito. Tudo por transform (`placeTabs`). */}
-                    <span
-                      ref={indicatorRef}
-                      aria-hidden="true"
-                      className="pointer-events-none absolute top-0 -bottom-px left-0 z-10 w-1/3"
-                    >
-                      <span className="relative block size-full overflow-hidden rounded-t-2xl border border-b-0 bg-card">
+                    {/* A pílula: um terço do trilho. Dentro, os rótulos em negrito
+                        andando ao contrário, então só o trecho sob ela fica destacado.
+                        Tudo por transform (`placeTabs`). */}
+                    <span className="pointer-events-none absolute inset-1">
+                      <span
+                        ref={indicatorRef}
+                        aria-hidden="true"
+                        className="absolute inset-y-0 left-0 z-10 w-1/3 overflow-hidden rounded-full bg-foreground shadow-sm"
+                      >
                         <span
                           ref={boldLabelsRef}
-                          className="absolute -top-px bottom-0 -left-px grid w-[calc(300%+6px)] grid-cols-3"
+                          className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3"
                         >
                           {HOME_TABS.map((value) => (
                             <span
                               key={value}
-                              className="grid place-items-center text-base font-semibold text-foreground"
+                              className="grid place-items-center text-base font-semibold text-background"
                             >
                               {TAB_LABELS[value]}
                             </span>
@@ -526,18 +512,7 @@ export function FinanceOverview({
                     </span>
                   </TabsList>
                 </Tabs>
-                <div className="relative rounded-3xl border bg-card">
-                  {/* Cantos de cima retos só com a lingueta encostada; somem por opacidade. */}
-                  <span
-                    ref={cornerRef}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -top-px -left-px size-7 border-l bg-card"
-                  />
-                  <span
-                    ref={cornerRightRef}
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -top-px -right-px size-7 border-r bg-card opacity-0"
-                  />
+                <div className="mt-3 rounded-3xl border bg-card">
                   <SwipePager
                     index={HOME_TABS.indexOf(tab)}
                     onChange={(index) => setTab(HOME_TABS[index])}

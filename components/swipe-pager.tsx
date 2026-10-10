@@ -36,7 +36,7 @@ export function SwipePager({
   pages: ReactNode[];
   /**
    * Posição da fileira em páginas (fracionária) e a transição CSS, para quem
-   * anda junto (a lingueta).
+   * anda junto (a pílula das abas).
    */
   onPlace?: (position: number, transition: string) => void;
   className?: string;

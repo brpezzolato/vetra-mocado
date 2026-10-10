@@ -533,7 +533,21 @@ export function demoTables(): Record<string, Row[]> {
     bank_earning_credits: [],
     benefit_card_balances: flashBalances,
     app_notifications: notifications,
-    wishlist_items: [],
+    wishlist_items: (
+      [
+        ['Air fryer', 280, 10],
+        ['Fone Bluetooth', 400, 6],
+        ['Tênis de corrida', 650, 3],
+        ['Cadeira de escritório', 1200, 1],
+      ] as const
+    ).map(([name, price, back]) => ({
+      ...base,
+      id: id('w'),
+      name,
+      price: price.toFixed(2),
+      created_at: at(addDays(today, -back), '09:00'),
+      bought_at: null,
+    })),
     expense_reviews: [],
     merchant_rules: [],
     merchant_aliases: [],

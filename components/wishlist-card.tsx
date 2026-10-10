@@ -24,6 +24,42 @@ const moneyInput = (value: string) => {
   return digits ? money(new Decimal(digits).div(100)) : '';
 };
 
+/** Anel de progresso (0–100). */
+function Ring({ percent, size = 44 }: { percent: number; size?: number }) {
+  const stroke = size > 60 ? 7 : 4;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="shrink-0 -rotate-90"
+    >
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        strokeWidth={stroke}
+        className="stroke-foreground/10"
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - percent / 100)}
+        className="stroke-emerald-500 transition-[stroke-dashoffset] duration-700"
+      />
+    </svg>
+  );
+}
+
 export function WishlistCard({
   entries,
   flat = false,
@@ -106,6 +142,77 @@ export function WishlistCard({
       : await supabase.from('wishlist_items').delete().eq('id', id);
     if (failure) await load();
   }
+
+  const actions = (item: WishlistItem, className = '') => (
+    <span className={`flex shrink-0 items-center ${className}`}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Comprei: ${item.name}`}
+        title="Comprei"
+        className="text-muted-foreground"
+        onClick={() => void finish(item.id, true)}
+      >
+        <Check />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Tirar da lista: ${item.name}`}
+        title="Tirar da lista"
+        className="-mr-2 text-muted-foreground"
+        onClick={() => void finish(item.id, false)}
+      >
+        <X />
+      </Button>
+    </span>
+  );
+  const rows = (items ?? []).map((item) => ({
+    item,
+    progress: wishProgress({ item, today, leftover }),
+  }));
+  // Uma linha por desejo: anel de progresso, quanto já juntou e quantos dias faltam.
+  const list = (
+    <ul className="mt-3 divide-y divide-border/60">
+      {rows.map(({ item, progress }) => (
+        <li key={item.id} className="flex items-center gap-3.5 py-3">
+          <span className="relative grid place-items-center">
+            <Ring percent={progress.percent} />
+            <span className="absolute text-[10px] font-semibold tabular-nums">
+              {Math.round(progress.percent)}%
+            </span>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">
+              {item.name}
+            </span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              {progress.ready ? (
+                <Private>{money(item.price)}</Private>
+              ) : (
+                <>
+                  <Private>{money(progress.saved)}</Private> de{' '}
+                  <Private>{money(item.price)}</Private>
+                </>
+              )}
+            </span>
+          </span>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${progress.ready ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'}`}
+          >
+            {progress.ready
+              ? 'Pronto'
+              : progress.daysLeft === null
+                ? '—'
+                : `~${progress.daysLeft} d`}
+          </span>
+          {actions(item)}
+        </li>
+      ))}
+    </ul>
+  );
 
   if (items === null) return null;
 
@@ -201,85 +308,20 @@ export function WishlistCard({
         </form>
       )}
 
-      {items.length ? (
-        <ul className="mt-4 grid gap-4">
-          {items.map((item) => {
-            const progress = wishProgress({ item, today, leftover });
-            return (
-              <li key={item.id}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm font-medium">
-                    {item.name}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1">
-                    <span className="text-sm tabular-nums">
-                      <Private>{money(item.price)}</Private>
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Comprei: ${item.name}`}
-                      title="Comprei"
-                      className="text-muted-foreground"
-                      onClick={() => void finish(item.id, true)}
-                    >
-                      <Check />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Tirar da lista: ${item.name}`}
-                      title="Tirar da lista"
-                      className="-mr-2 text-muted-foreground"
-                      onClick={() => void finish(item.id, false)}
-                    >
-                      <X />
-                    </Button>
-                  </span>
-                </div>
-                <div
-                  aria-hidden="true"
-                  className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-foreground/10"
-                >
-                  <span
-                    className="block h-full rounded-full bg-emerald-500"
-                    style={{ width: `${progress.percent}%` }}
-                  />
-                </div>
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  {progress.ready ? (
-                    'Pronto: dá para comprar sem apertar ✨'
-                  ) : (
-                    <>
-                      <Private>{money(progress.saved)}</Private> de sobra ·{' '}
-                      {progress.daysLeft === null
-                        ? 'sobre um pouco do valor do dia para começar'
-                        : progress.daysLeft === 1
-                          ? 'falta ~1 dia'
-                          : `faltam ~${progress.daysLeft} dias`}
-                    </>
-                  )}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        !adding && (
-          <p
-            className={
-              flat
-                ? 'mt-4 rounded-2xl border border-dashed px-4 py-3.5 text-sm text-muted-foreground'
-                : 'mt-4 text-sm text-muted-foreground'
-            }
-          >
-            Adicione algo que você quer comprar: o Vetra conta quantos dias de
-            sobra faltam para chegar lá sem apertar.
-          </p>
-        )
-      )}
+      {items.length
+        ? list
+        : !adding && (
+            <p
+              className={
+                flat
+                  ? 'mt-4 rounded-2xl border border-dashed px-4 py-3.5 text-sm text-muted-foreground'
+                  : 'mt-4 text-sm text-muted-foreground'
+              }
+            >
+              Adicione algo que você quer comprar: o Vetra conta quantos dias de
+              sobra faltam para chegar lá sem apertar.
+            </p>
+          )}
     </section>
   );
 }

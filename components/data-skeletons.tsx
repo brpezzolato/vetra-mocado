@@ -1,6 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
-/** Abas da home em pasta com a aba Gastos aberta (finance-overview.tsx). */
+/** Abas da home em pílula com a aba Gastos aberta (finance-overview.tsx). */
 export function FinanceOverviewDataSkeleton() {
   return (
     <div
@@ -8,17 +8,15 @@ export function FinanceOverviewDataSkeleton() {
       aria-label="Carregando informações financeiras"
       className="min-w-0"
     >
-      <div className="grid h-10 grid-cols-3">
-        <div className="relative z-10 -mb-px grid place-items-center rounded-t-2xl border border-b-0 bg-card">
-          <Skeleton className="h-4 w-16" />
-        </div>
+      <div className="relative grid h-12 grid-cols-3 rounded-full bg-muted/70 p-1">
+        <Skeleton className="rounded-full bg-foreground/15" />
         {[0, 1].map((index) => (
           <div key={index} className="grid place-items-center">
             <Skeleton className="h-4 w-16 opacity-60" />
           </div>
         ))}
       </div>
-      <div className="rounded-3xl rounded-tl-none border bg-card">
+      <div className="mt-3 rounded-3xl border bg-card">
         <div className="flex items-center justify-between gap-3 px-5 pt-5 md:px-6 md:pt-6">
           <div>
             <Skeleton className="h-5 w-32" />
