@@ -303,9 +303,29 @@ describe('divisão da compra a chegar', () => {
     expect(items.map((item) => item.amount)).toEqual(['300.00', '42.51']);
   });
 
-  it('sem combinação que feche, volta a compra a chegar inteira', () => {
+  it('sem combinação que feche, o que falta fica no dia corrigido', () => {
     const items = applySplits([{ ...pending, amount: '100.00' }], [split]);
-    expect(items).toEqual([{ ...pending, amount: '100.00' }]);
+    expect(items.map((item) => [item.day, item.amount])).toEqual([
+      ['2026-10-12', '100.00'],
+    ]);
+  });
+
+  it('só corrigir a data: uma parte com o valor inteiro', () => {
+    const fix = {
+      account: 'Nubank',
+      day: '2026-10-13',
+      parts: [{ amount: '492.51', day: '2026-10-12' }],
+    };
+    expect(
+      applySplits([pending], [fix]).map((item) => [item.day, item.amount]),
+    ).toEqual([['2026-10-12', '492.51']]);
+    // Parte das compras chegou: o resto continua em 12/10.
+    expect(
+      applySplits([{ ...pending, amount: '200.00' }], [fix]).map((item) => [
+        item.day,
+        item.amount,
+      ]),
+    ).toEqual([['2026-10-12', '200.00']]);
   });
 
   it('sem divisão, nada muda', () => {

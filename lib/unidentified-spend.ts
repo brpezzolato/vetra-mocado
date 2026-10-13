@@ -93,7 +93,7 @@ function subsetSumming(parts: SplitPart[], target: Decimal) {
  * - Partes somam o valor atual: viram as compras (cada uma no seu dia).
  * - Somam menos: partes + o resto, ainda como compra a chegar.
  * - Somam mais (compras já chegaram): só as partes que somam o que falta.
- * - Nada fecha: fica a compra a chegar inteira.
+ * - Nada fecha: o valor que falta, no dia da maior parte.
  */
 export function applySplits(
   items: UnidentifiedSpend[],
@@ -133,7 +133,19 @@ export function applySplits(
         },
       ];
     const remaining = subsetSumming(split.parts, amount);
-    return remaining ? remaining.map(toItem) : [item];
+    if (remaining) return remaining.map(toItem);
+    // Nada fecha: o que falta chegar fica no dia da maior parte, para a
+    // correção de data não se perder quando parte das compras chega.
+    const main = split.parts.reduce((best, part) =>
+      new Decimal(part.amount).gt(best.amount) ? part : best,
+    );
+    return [
+      {
+        ...toItem(main),
+        amount: item.amount,
+        split: { day: item.day, total: item.amount, description: null },
+      },
+    ];
   });
 }
 
