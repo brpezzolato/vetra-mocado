@@ -37,7 +37,7 @@ export async function loadSafeToSpendInputs(
       admin
         .from('financial_entries')
         .select(
-          'entry_type, amount, occurred_at, split_share, excluded_from_totals, installment_group_id, installment_total',
+          'entry_type, amount, occurred_at, split_share, excluded_from_totals, excluded_from_daily, installment_group_id, installment_total',
         )
         .eq('user_id', userId)
         .eq('entry_type', 'expense')

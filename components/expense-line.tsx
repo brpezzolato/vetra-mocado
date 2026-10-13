@@ -82,6 +82,7 @@ export function ExpenseLine({
             ? ` · parcela ${entry.installment_number}/${entry.installment_total}`
             : ''}
           {split && ' · dividida'}
+          {entry.excluded_from_daily && !excluded && ' · fora do valor do dia'}
         </span>
       </span>
       {/* Fora das contas: olho riscado e o valor riscado e apagado. */}

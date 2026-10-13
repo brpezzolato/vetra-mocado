@@ -98,6 +98,7 @@ export function EntryDetails({
   );
   const [notes, setNotes] = useState(entry.notes ?? '');
   const [excluded, setExcluded] = useState(!!entry.excluded_from_totals);
+  const [outOfDaily, setOutOfDaily] = useState(!!entry.excluded_from_daily);
   // Compra dividida: por igual entre N pessoas ou com a parte digitada.
   const [split, setSplit] = useState(isSplit(entry));
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>(
@@ -162,6 +163,8 @@ export function EntryDetails({
           occurred_at: new Date(`${occurredAt}:00-03:00`).toISOString(),
           notes: notes.trim(),
           excluded_from_totals: excluded,
+          excluded_from_daily:
+            entry.entry_type === 'expense' && !excluded ? outOfDaily : false,
           split_share:
             split && entry.entry_type === 'expense' ? share.toFixed(2) : null,
           split_people:
@@ -483,6 +486,27 @@ export function EntryDetails({
                 onCheckedChange={setExcluded}
               />
             </div>
+            {/* Presente ou gasto extraordinário: conta no mês, não no valor do dia. */}
+            {entry.entry_type === 'expense' && !excluded && (
+              <div className="flex items-start justify-between gap-4 rounded-2xl border p-3">
+                <label
+                  htmlFor="detail-out-of-daily"
+                  className="grid gap-1 text-sm"
+                >
+                  Não contar no valor do dia
+                  <span className="text-xs text-muted-foreground">
+                    Para presentes e gastos extraordinários: continua nos gastos
+                    do mês e na fatura, mas não pesa no &ldquo;Hoje você
+                    pode&rdquo; nem quebra a sequência.
+                  </span>
+                </label>
+                <Switch
+                  id="detail-out-of-daily"
+                  checked={outOfDaily}
+                  onCheckedChange={setOutOfDaily}
+                />
+              </div>
+            )}
             {entry.entry_type === 'expense' && (
               <Button
                 type="button"

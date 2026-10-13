@@ -1,3 +1,4 @@
+import type { FinancialEntry } from './financial-tracker';
 import { describe, expect, it } from 'vitest';
 import {
   adjustAllowances,
@@ -6,6 +7,7 @@ import {
   bestStreakInMonth,
   provisionalSince,
   settlesOn,
+  spentByDayOf,
 } from './daily-allowance';
 
 describe('valor do dia', () => {
@@ -191,5 +193,32 @@ describe('janela de 3 dias úteis', () => {
     });
     expect(old.current).toBe(2);
     expect(old.provisional).toBe(false);
+  });
+});
+
+describe('gasto do dia', () => {
+  const buy = (amount: string, extra: Partial<FinancialEntry> = {}) =>
+    ({
+      id: amount,
+      user_id: 'u',
+      entry_type: 'expense',
+      amount,
+      description: 'Compra',
+      category: 'Compras',
+      account: 'Nubank',
+      occurred_at: '2026-10-12T15:00:00-03:00',
+      source: 'manual',
+      external_id: null,
+      created_at: '2026-10-12T15:00:00-03:00',
+      updated_at: '2026-10-12T15:00:00-03:00',
+      ...extra,
+    }) as FinancialEntry;
+
+  it('presente marcado fica fora do valor do dia; o resto conta', () => {
+    const spent = spentByDayOf(
+      [buy('30.00'), buy('250.00', { excluded_from_daily: true })],
+      Date.parse('2026-10-13T12:00:00-03:00'),
+    );
+    expect(spent['2026-10-12']?.toFixed(2)).toBe('30.00');
   });
 });

@@ -378,7 +378,7 @@ function SpendingRoom({
     whole.gt(0) ? Decimal.max(value, 0).div(whole).times(100).toNumber() : 0;
   // Um pedaço por item na cor do banco; limite livre num tom mais claro.
   // Pedaço abaixo de 1% vira só um risco.
-  const parts = [
+  const allParts = [
     ...chosenAccounts.map((account) => ({
       id: `account-${account.bank}`,
       colour: barColour(account.bank, 'balance'),
@@ -394,7 +394,19 @@ function SpendingRoom({
       colour: barColour(suggestedCardBank(card.key), 'limit'),
       value: new Decimal(card.available),
     })),
-  ].filter((part) => share(part.value) >= 1);
+  ];
+  const parts = allParts.filter((part) => share(part.value) >= 1);
+  // No celular a barra é estreita e, com muito limite usado, os pedaços somem:
+  // lá ela mostra só a divisão do que dá para gastar (a barra inteira = soma).
+  const available = allParts.reduce(
+    (sum, part) => sum.plus(Decimal.max(part.value, 0)),
+    new Decimal(0),
+  );
+  const mobileShare = (value: Decimal) =>
+    available.gt(0)
+      ? Decimal.max(value, 0).div(available).times(100).toNumber()
+      : 0;
+  const mobileParts = allParts.filter((part) => mobileShare(part.value) >= 1);
   // Linha de baixo: só os grupos que estão na conta.
   const summary = [
     chosenAccounts.length ? { value: balance, label: 'Contas' } : null,
@@ -503,21 +515,38 @@ function SpendingRoom({
   );
   /* A linha embaixo repete os números em texto. */
   const roomBar = (
-    <div
-      aria-hidden="true"
-      className="flex h-1.5 gap-px overflow-hidden rounded-full bg-foreground/10"
-    >
-      {parts.map((part) => (
-        <span
-          key={part.id}
-          className="h-full"
-          style={{
-            width: `${share(part.value)}%`,
-            background: part.colour,
-          }}
-        />
-      ))}
-    </div>
+    <>
+      <div
+        aria-hidden="true"
+        className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-foreground/10 sm:hidden"
+      >
+        {mobileParts.map((part) => (
+          <span
+            key={part.id}
+            className="h-full first:rounded-l-full last:rounded-r-full"
+            style={{
+              width: `${mobileShare(part.value)}%`,
+              background: part.colour,
+            }}
+          />
+        ))}
+      </div>
+      <div
+        aria-hidden="true"
+        className="hidden h-1.5 gap-px overflow-hidden rounded-full bg-foreground/10 sm:flex"
+      >
+        {parts.map((part) => (
+          <span
+            key={part.id}
+            className="h-full"
+            style={{
+              width: `${share(part.value)}%`,
+              background: part.colour,
+            }}
+          />
+        ))}
+      </div>
+    </>
   );
   const roomValue = <Private>{money(room.toNumber())}</Private>;
   /** "Hoje ainda dá para gastar": número, fogo, termômetro e notas. */

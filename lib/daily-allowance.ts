@@ -40,12 +40,17 @@ export function allowanceForToday({
 
 /**
  * Gasto do dia como o valor o mede: a parte do usuário, sem "fora das
- * contas", parcelas ou futuros.
+ * contas", parcelas, compras marcadas como fora do valor do dia ou futuros.
  */
 export function spentByDayOf(entries: FinancialEntry[], now = Date.now()) {
   const spent: Record<string, Decimal> = {};
   for (const entry of entries) {
-    if (entry.entry_type !== 'expense' || entry.excluded_from_totals) continue;
+    if (
+      entry.entry_type !== 'expense' ||
+      entry.excluded_from_totals ||
+      entry.excluded_from_daily
+    )
+      continue;
     if (entry.installment_group_id || (entry.installment_total ?? 0) > 1)
       continue;
     if (Date.parse(entry.occurred_at) > now) continue;
