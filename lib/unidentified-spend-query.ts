@@ -2,7 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { provisionalSince } from './daily-allowance';
 import { saoDate } from './expense-insights';
 import {
+  applySplits,
   openingGap,
+  type PendingSplit,
   unidentifiedSpend,
   type CardMovement,
   type CardPayment,
@@ -163,5 +165,12 @@ export async function loadUnidentifiedSpend(
       same.amount = (Number(same.amount) + Number(gap.amount)).toFixed(2);
     else result.push(gap);
   }
-  return result;
+  // As divisões que o usuário fez (pending_spend_splits).
+  const { data: splits } = await scoped(
+    client
+      .from('pending_spend_splits')
+      .select('account, day, parts')
+      .gte('day', from.toISOString().slice(0, 10)),
+  );
+  return applySplits(result, (splits ?? []) as PendingSplit[]);
 }

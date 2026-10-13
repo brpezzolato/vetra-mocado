@@ -38,7 +38,8 @@ import {
 } from '@/lib/payment-cards';
 import { Private } from '@/components/private-value';
 import { myShare } from '@/lib/entry-share';
-import { isPendingSpend } from '@/lib/unidentified-spend';
+import { isPendingSpend, pendingKey } from '@/lib/unidentified-spend';
+import { PendingSpendDialog } from '@/components/pending-spend-dialog';
 
 // Faturas em blocos: painel (valor, datas, limite), histórico em barras que
 // trocam a fatura, resumo e destaques, categorias e compras por dia.
@@ -999,17 +1000,38 @@ export function InvoiceCenter({
  * conta na fatura, mas não abre.
  */
 function PendingSpendRow({ entry }: { entry: FinancialEntry }) {
+  const [open, setOpen] = useState(false);
+  const key = pendingKey(entry);
+  const split = entry.notes === 'Dividida por você';
   return (
-    <div className="flex items-center justify-between gap-3 py-3">
-      <span className="min-w-0">
-        <span className="block truncate text-sm">{entry.description}*</span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-          O limite já caiu · a compra chega em até 3 dias úteis
+    <>
+      <button
+        type="button"
+        disabled={!key}
+        aria-label={`${entry.description}: dividir ou corrigir a data`}
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between gap-3 py-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block truncate text-sm">{entry.description}*</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+            {split
+              ? 'Dividida por você · chega em até 3 dias úteis'
+              : 'O limite já caiu · toque para dividir'}
+          </span>
         </span>
-      </span>
-      <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
-        <Private>{money(entry.amount)}*</Private>
-      </span>
-    </div>
+        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+          <Private>{money(entry.amount)}*</Private>
+        </span>
+      </button>
+      {key && (
+        <PendingSpendDialog
+          account={key.account}
+          day={key.day}
+          open={open}
+          onOpenChange={setOpen}
+        />
+      )}
+    </>
   );
 }

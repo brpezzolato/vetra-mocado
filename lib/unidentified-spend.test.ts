@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applySplits,
   isPendingSpend,
   openingGap,
   pendingEntries,
+  pendingKey,
   unidentifiedSpend,
 } from './unidentified-spend';
 
@@ -250,5 +252,73 @@ describe('gasto ainda sem compra', () => {
     expect(
       openingGap(first, [...arrived, purchase('2026-10-07T20:00:00Z', 18.03)]),
     ).toBeNull();
+  });
+});
+
+describe('divisão da compra a chegar', () => {
+  const pending = {
+    day: '2026-10-13',
+    account: 'Nubank',
+    amount: '492.51',
+    at: '2026-10-13T12:53:55.092Z',
+  };
+  const split = {
+    account: 'Nubank',
+    day: '2026-10-13',
+    parts: [
+      { amount: '300.00', day: '2026-10-12', description: 'Mercado' },
+      { amount: '150.00', day: '2026-10-12', description: null },
+      { amount: '42.51', day: '2026-10-11' },
+    ],
+  };
+
+  it('troca a compra a chegar pelas partes, cada uma no seu dia', () => {
+    const items = applySplits([pending], [split]);
+    expect(items.map((item) => [item.day, item.amount])).toEqual([
+      ['2026-10-12', '300.00'],
+      ['2026-10-12', '150.00'],
+      ['2026-10-11', '42.51'],
+    ]);
+    expect(items[0]!.split).toEqual({
+      day: '2026-10-13',
+      total: '492.51',
+      description: 'Mercado',
+    });
+  });
+
+  it('o que as partes não cobrem continua como compra a chegar', () => {
+    const items = applySplits(
+      [pending],
+      [{ ...split, parts: split.parts.slice(0, 1) }],
+    );
+    expect(items.map((item) => [item.day, item.amount])).toEqual([
+      ['2026-10-12', '300.00'],
+      ['2026-10-13', '192.51'],
+    ]);
+  });
+
+  it('quando uma compra chega do banco, a parte que bate some', () => {
+    // A de R$ 150 chegou: falta chegar 342,51.
+    const items = applySplits([{ ...pending, amount: '342.51' }], [split]);
+    expect(items.map((item) => item.amount)).toEqual(['300.00', '42.51']);
+  });
+
+  it('sem combinação que feche, volta a compra a chegar inteira', () => {
+    const items = applySplits([{ ...pending, amount: '100.00' }], [split]);
+    expect(items).toEqual([{ ...pending, amount: '100.00' }]);
+  });
+
+  it('sem divisão, nada muda', () => {
+    expect(applySplits([pending], [])).toEqual([pending]);
+  });
+
+  it('a chave de edição aponta para o dia em que o app viu a queda', () => {
+    const [entry] = pendingEntries(applySplits([pending], [split]));
+    expect(entry!.description).toBe('Mercado');
+    expect(entry!.occurred_at.slice(0, 10)).toBe('2026-10-12');
+    expect(pendingKey(entry!)).toEqual({
+      account: 'Nubank',
+      day: '2026-10-13',
+    });
   });
 });

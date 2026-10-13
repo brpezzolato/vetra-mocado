@@ -45,7 +45,97 @@ export type UnidentifiedSpend = {
   at: string;
   /** Gasto anterior à primeira foto de um cartão novo (`openingGap`). */
   opening?: boolean;
+  /** Parte de uma divisão feita pelo usuário (`applySplits`). */
+  split?: {
+    /** Dia em que o app viu a queda: a chave da divisão. */
+    day: string;
+    /** O valor a chegar inteiro, quando a divisão foi aplicada. */
+    total: string;
+    /** O nome que o usuário deu à parte, se deu. */
+    description: string | null;
+  };
 };
+
+export type SplitPart = {
+  amount: string;
+  day: string;
+  description?: string | null;
+};
+
+export type PendingSplit = {
+  account: string;
+  day: string;
+  parts: SplitPart[];
+};
+
+const CENT_TOLERANCE = new Decimal('0.05');
+
+/** O primeiro subconjunto de `parts` (mantendo a ordem) que soma `target`. */
+function subsetSumming(parts: SplitPart[], target: Decimal) {
+  const n = parts.length;
+  for (let size = n; size >= 1; size--)
+    for (let mask = 0; mask < 1 << n; mask++) {
+      let count = 0;
+      for (let bit = mask; bit; bit &= bit - 1) count++;
+      if (count !== size) continue;
+      const chosen = parts.filter((_, index) => mask & (1 << index));
+      const sum = chosen.reduce(
+        (total, part) => total.plus(part.amount),
+        new Decimal(0),
+      );
+      if (sum.minus(target).abs().lte(CENT_TOLERANCE)) return chosen;
+    }
+  return null;
+}
+
+/**
+ * Troca cada compra a chegar dividida pelo usuário pelas partes dele.
+ * - Partes somam o valor atual: viram as compras (cada uma no seu dia).
+ * - Somam menos: partes + o resto, ainda como compra a chegar.
+ * - Somam mais (compras já chegaram): só as partes que somam o que falta.
+ * - Nada fecha: fica a compra a chegar inteira.
+ */
+export function applySplits(
+  items: UnidentifiedSpend[],
+  splits: PendingSplit[],
+): UnidentifiedSpend[] {
+  return items.flatMap((item) => {
+    const split = splits.find(
+      (candidate) =>
+        candidate.account === item.account && candidate.day === item.day,
+    );
+    if (!split?.parts.length) return [item];
+    const amount = new Decimal(item.amount);
+    const sum = split.parts.reduce(
+      (total, part) => total.plus(part.amount),
+      new Decimal(0),
+    );
+    const toItem = (part: SplitPart): UnidentifiedSpend => ({
+      day: part.day,
+      account: item.account,
+      amount: new Decimal(part.amount).toFixed(2),
+      at: `${part.day}T12:00:00-03:00`,
+      split: {
+        day: item.day,
+        total: item.amount,
+        description: part.description?.trim() || null,
+      },
+    });
+    if (sum.minus(amount).abs().lte(CENT_TOLERANCE))
+      return split.parts.map(toItem);
+    if (sum.lt(amount))
+      return [
+        ...split.parts.map(toItem),
+        {
+          ...item,
+          amount: amount.minus(sum).toFixed(2),
+          split: { day: item.day, total: item.amount, description: null },
+        },
+      ];
+    const remaining = subsetSumming(split.parts, amount);
+    return remaining ? remaining.map(toItem) : [item];
+  });
+}
 
 /** A hora que vale de uma foto: a dos dados, ou a da foto sem ela. */
 const seen = (snapshot: LimitSnapshot) => snapshot.data_at ?? snapshot.taken_at;
@@ -185,12 +275,12 @@ const PENDING_PREFIX = 'a-chegar:';
 export const PENDING_DESCRIPTION = 'Compra a chegar';
 
 export function pendingEntries(items: UnidentifiedSpend[]): FinancialEntry[] {
-  return items.map((item) => ({
-    id: `${PENDING_PREFIX}${item.account}:${item.day}`,
+  return items.map((item, index) => ({
+    id: `${PENDING_PREFIX}${item.account}:${item.split?.day ?? item.day}:${index}`,
     user_id: '',
     entry_type: 'expense',
     amount: item.amount,
-    description: PENDING_DESCRIPTION,
+    description: item.split?.description ?? PENDING_DESCRIPTION,
     category: 'A identificar',
     account: item.account,
     occurred_at: item.at,
@@ -200,6 +290,7 @@ export function pendingEntries(items: UnidentifiedSpend[]): FinancialEntry[] {
     ...(item.opening && {
       notes: 'Feita antes da primeira leitura do limite',
     }),
+    ...(item.split && { notes: 'Dividida por você' }),
     created_at: item.at,
     updated_at: item.at,
   }));
@@ -207,3 +298,11 @@ export function pendingEntries(items: UnidentifiedSpend[]): FinancialEntry[] {
 
 export const isPendingSpend = (entry: Pick<FinancialEntry, 'id'>) =>
   entry.id.startsWith(PENDING_PREFIX);
+
+/** A compra a chegar (cartão e dia em que o app viu a queda) de um lançamento. */
+export function pendingKey(entry: Pick<FinancialEntry, 'id'>) {
+  if (!isPendingSpend(entry)) return null;
+  const rest = entry.id.slice(PENDING_PREFIX.length);
+  const match = rest.match(/^(.*):(\d{4}-\d{2}-\d{2}):\d+$/);
+  return match ? { account: match[1]!, day: match[2]! } : null;
+}

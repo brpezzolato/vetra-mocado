@@ -501,9 +501,23 @@ export function demoTables(): Record<string, Row[]> {
     })),
     card_bills: bills,
     card_invoice_payments: [],
-    pluggy_card_links: [],
-    card_limit_snapshots: [],
+    // O limite do Nubank caiu R$ 86,50 entre ontem à noite e hoje de manhã,
+    // sem compra correspondente: aparece como "compra a chegar".
+    pluggy_card_links: [{ ...base, account: 'Nubank', kind: 'credit' }],
+    card_limit_snapshots: [
+      [addDays(today, -1), '22:58', 3437.6],
+      [today, '07:48', 3351.1],
+    ].map(([day, time, available]) => ({
+      ...base,
+      id: id('l'),
+      account: 'Nubank',
+      credit_limit: 4800,
+      available,
+      taken_at: at(day as string, time as string),
+      data_at: at(day as string, time as string),
+    })),
     card_payment_events: [],
+    pending_spend_splits: [],
     daily_allowances: allowances,
     recurring_expenses: SUBSCRIPTIONS.map(
       ([merchant, account, amount, day]) => {

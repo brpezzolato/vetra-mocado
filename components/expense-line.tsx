@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import Decimal from 'decimal.js';
 import { EyeOff } from 'lucide-react';
 import type { FinancialEntry } from '@/lib/financial-tracker';
@@ -6,7 +9,8 @@ import { resolvePaymentMethod, type PaymentCard } from '@/lib/payment-cards';
 import { PaymentCardIcon } from '@/components/payment-card-icon';
 import { Private } from '@/components/private-value';
 import { isSplit, myShare } from '@/lib/entry-share';
-import { isPendingSpend } from '@/lib/unidentified-spend';
+import { isPendingSpend, pendingKey } from '@/lib/unidentified-spend';
+import { PendingSpendDialog } from '@/components/pending-spend-dialog';
 
 /* Linha de lançamento comum ao app: arte do cartão, nome com categoria e
    hora, valor à direita. Agrupada por dia em `ExpenseDayList`. */
@@ -53,25 +57,9 @@ export function ExpenseLine({
   cards: PaymentCard[];
   onOpen: (entry: FinancialEntry) => void;
 }) {
-  // Gasto sem compra ainda (lib/unidentified-spend.ts): asterisco e não abre.
-  if (isPendingSpend(entry))
-    return (
-      <div className="flex w-full min-w-0 items-center gap-3.5 px-2 py-3">
-        <PaymentCardIcon bankId={resolvePaymentMethod(entry.account, cards)} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
-            {entry.description}*
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            {entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} ·
-            chega em até 3 dias úteis
-          </span>
-        </span>
-        <span className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">
-          <Private>−{money(entry.amount)}*</Private>
-        </span>
-      </div>
-    );
+  // Gasto sem compra ainda (lib/unidentified-spend.ts): asterisco; tocar
+  // abre a divisão (valores e datas das compras de verdade).
+  if (isPendingSpend(entry)) return <PendingLine entry={entry} cards={cards} />;
   const excluded = !!entry.excluded_from_totals;
   const income = entry.entry_type === 'income';
   // Compra dividida: o valor que aparece é a parte dele.
@@ -164,5 +152,50 @@ export function ExpenseDayList({
         </div>
       ))}
     </div>
+  );
+}
+
+function PendingLine({
+  entry,
+  cards,
+}: {
+  entry: FinancialEntry;
+  cards: PaymentCard[];
+}) {
+  const [open, setOpen] = useState(false);
+  const key = pendingKey(entry);
+  const split = entry.notes === 'Dividida por você';
+  return (
+    <>
+      <button
+        type="button"
+        disabled={!key}
+        onClick={() => setOpen(true)}
+        className="flex w-full min-w-0 items-center gap-3.5 rounded-xl px-2 py-3 text-left transition-colors hover:bg-muted/40 disabled:hover:bg-transparent"
+      >
+        <PaymentCardIcon bankId={resolvePaymentMethod(entry.account, cards)} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">
+            {entry.description}*
+          </span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+            {split
+              ? 'Dividida por você · chega em até 3 dias úteis'
+              : `${entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} · toque para dividir`}
+          </span>
+        </span>
+        <span className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">
+          <Private>−{money(entry.amount)}*</Private>
+        </span>
+      </button>
+      {key && (
+        <PendingSpendDialog
+          account={key.account}
+          day={key.day}
+          open={open}
+          onOpenChange={setOpen}
+        />
+      )}
+    </>
   );
 }

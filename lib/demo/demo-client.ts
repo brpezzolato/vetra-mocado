@@ -146,6 +146,7 @@ class DemoQuery implements PromiseLike<unknown> {
   private count = false;
   private mutation: 'insert' | 'upsert' | 'update' | 'delete' | null = null;
   private payload: Row | Row[] | null = null;
+  private conflict: string[] | undefined;
 
   constructor(private table: string) {}
 
@@ -160,9 +161,10 @@ class DemoQuery implements PromiseLike<unknown> {
     this.payload = values;
     return this;
   }
-  upsert(values: Row | Row[]) {
+  upsert(values: Row | Row[], options?: { onConflict?: string }) {
     this.mutation = 'upsert';
     this.payload = values;
+    this.conflict = options?.onConflict?.split(',').map((key) => key.trim());
     return this;
   }
   update(values: Row) {
@@ -292,14 +294,22 @@ class DemoQuery implements PromiseLike<unknown> {
     if (this.mutation === 'insert' || this.mutation === 'upsert') {
       const list = (
         Array.isArray(this.payload) ? this.payload : [this.payload ?? {}]
-      ).map((row) => ({
+      ).map((row): Row => ({
         id: crypto.randomUUID(),
         user_id: DEMO_USER_ID,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         ...row,
       }));
-      all.push(...list);
+      // upsert com onConflict: substitui a linha que tem as mesmas chaves.
+      const keys = this.mutation === 'upsert' ? this.conflict : undefined;
+      for (const row of list) {
+        const existing = keys
+          ? all.find((other) => keys.every((key) => other[key] === row[key]))
+          : undefined;
+        if (existing) Object.assign(existing, row);
+        else all.push(row);
+      }
       return this.shape === 'many' ? list : (list[0] ?? null);
     }
     const matching = all.filter((row) => this.filters.every((f) => f(row)));
