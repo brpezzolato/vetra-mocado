@@ -117,6 +117,11 @@ export function PendingSpendDialog({
     new Decimal(0),
   );
   const rest = total ? new Decimal(total).minus(sum) : new Decimal(0);
+  const over = rest.lt(-0.005);
+  const done = !over && rest.lte(0.005);
+  const distributed = total
+    ? Math.min(100, sum.div(total).times(100).toNumber())
+    : 0;
   const today = saoDate(new Date());
 
   const update = (index: number, patch: Partial<Row>) =>
@@ -192,20 +197,78 @@ export function PendingSpendDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* O que falta distribuir desce a cada valor digitado. */}
+        {total && (
+          <div className="rounded-2xl bg-muted/50 p-4" aria-live="polite">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                Total que caiu no limite
+              </span>
+              <span className="text-sm font-semibold tabular-nums">
+                <Private>{money(total)}</Private>
+              </span>
+            </div>
+            <div
+              aria-hidden="true"
+              className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10"
+            >
+              <span
+                className={`block h-full rounded-full transition-[width] duration-300 ${over ? 'bg-destructive' : 'bg-emerald-500'}`}
+                style={{ width: `${distributed}%` }}
+              />
+            </div>
+            <p
+              className={`mt-3 text-base font-semibold tracking-tight ${over ? 'text-destructive' : ''}`}
+            >
+              {over ? (
+                <>
+                  Passou <Private>{money(rest.negated())}</Private> do total
+                </>
+              ) : done ? (
+                'Tudo distribuído'
+              ) : (
+                <>
+                  Ainda restam <Private>{money(rest)}</Private> para distribuir
+                </>
+              )}
+            </p>
+            {!over && !done && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                O que sobrar segue como compra a chegar.
+              </p>
+            )}
+          </div>
+        )}
+
         <ul className="grid gap-3">
           {rows.map((row, index) => (
             <li key={index} className="grid gap-2 rounded-2xl border p-3">
               <div className="grid grid-cols-[1fr_auto] gap-2">
-                <Input
-                  aria-label={`Valor da compra ${index + 1}`}
-                  placeholder="R$ 0,00"
-                  inputMode="numeric"
-                  className="h-11 tabular-nums"
-                  value={row.amount}
-                  onChange={(event) =>
-                    update(index, { amount: moneyInput(event.target.value) })
-                  }
-                />
+                <div className="relative">
+                  <Input
+                    aria-label={`Valor da compra ${index + 1}`}
+                    placeholder={
+                      rest.gt(0.005) ? `Restam ${money(rest)}` : 'R$ 0,00'
+                    }
+                    inputMode="numeric"
+                    className={`h-11 tabular-nums ${!row.amount && rest.gt(0.005) ? 'pr-28' : ''}`}
+                    value={row.amount}
+                    onChange={(event) =>
+                      update(index, { amount: moneyInput(event.target.value) })
+                    }
+                  />
+                  {!row.amount && rest.gt(0.005) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-1/2 right-1.5 h-8 -translate-y-1/2 px-2.5 text-xs"
+                      onClick={() => update(index, { amount: money(rest) })}
+                    >
+                      Usar o resto
+                    </Button>
+                  )}
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -263,21 +326,6 @@ export function PendingSpendDialog({
           Mais uma compra
         </Button>
 
-        {total && (
-          <p
-            className={`text-xs ${rest.lt(-0.05) ? 'text-destructive' : 'text-muted-foreground'}`}
-          >
-            Separado <Private>{money(sum)}</Private> de{' '}
-            <Private>{money(total)}</Private>
-            {rest.gt(0.05) && (
-              <>
-                {' '}
-                · o resto (<Private>{money(rest)}</Private>) segue como compra a
-                chegar
-              </>
-            )}
-          </p>
-        )}
         {error && (
           <p role="alert" className="text-xs text-destructive">
             {error}
