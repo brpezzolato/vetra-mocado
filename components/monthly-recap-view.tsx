@@ -23,11 +23,7 @@ import { Private } from '@/components/private-value';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { saoDate } from '@/lib/expense-insights';
-import {
-  bestStreakInMonth,
-  spentByDayOf,
-  type AllowanceDay,
-} from '@/lib/daily-allowance';
+import { spentByDayOf, type AllowanceDay } from '@/lib/daily-allowance';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import {
   monthlyRecap,
@@ -102,8 +98,8 @@ export function MonthlyRecapView({
   const first = monthsWithEntries(entries).at(-1) ?? today;
   const [month, setMonth] = useState(() => recapDefaultMonth());
   const recap = useMemo(() => monthlyRecap(entries, month), [entries, month]);
-  // A sequência no azul do mês: dias seguidos com o gasto dentro do valor do
-  // dia (lib/daily-allowance.ts). Gasto do dia sem parcelas, como na home.
+  // Dias no azul do mês: com o gasto dentro do valor do dia
+  // (lib/daily-allowance.ts). Gasto do dia sem parcelas, como na home.
   const inTheBlue = useMemo(() => {
     const spentByDay = spentByDayOf(entries);
     const days = allowances.filter((item) => item.day.startsWith(month));
@@ -111,11 +107,7 @@ export function MonthlyRecapView({
     const blue = days.filter((item) =>
       new Decimal(spentByDay[item.day] ?? 0).lte(item.allowance),
     ).length;
-    return {
-      best: bestStreakInMonth(month, allowances, spentByDay),
-      blue,
-      total: days.length,
-    };
+    return { blue, total: days.length };
   }, [allowances, entries, month]);
 
   const { banks, rates, loading: vaultsLoading } = useVaultData();
@@ -316,12 +308,11 @@ export function MonthlyRecapView({
                 tone="bg-orange-500/12 text-orange-600 dark:text-orange-400"
               >
                 <p className="text-3xl font-bold tracking-tight">
-                  {inTheBlue.best} {inTheBlue.best === 1 ? 'dia' : 'dias'}{' '}
-                  seguidos
+                  {inTheBlue.blue} {inTheBlue.blue === 1 ? 'dia' : 'dias'}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  dentro do valor do dia · {inTheBlue.blue} de {inTheBlue.total}{' '}
-                  dias no azul
+                  dentro do valor do dia · de {inTheBlue.total}{' '}
+                  {inTheBlue.total === 1 ? 'dia' : 'dias'} com valor
                 </p>
               </RecapCard>
             )}

@@ -3,8 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   adjustAllowances,
   allowanceForToday,
-  allowanceStreak,
-  bestStreakInMonth,
+  daysInTheBlue,
   provisionalSince,
   settlesOn,
   spentByDayOf,
@@ -35,96 +34,53 @@ describe('valor do dia', () => {
   });
 });
 
-describe('sequência no azul', () => {
+describe('dias no azul', () => {
   const allowances = [
     { day: '2026-10-01', allowance: 50 },
     { day: '2026-10-02', allowance: 50 },
     { day: '2026-10-03', allowance: 50 },
-    // 04/10: o app não abriu — não conta nem quebra.
+    // 04/10: o app não abriu — não conta.
     { day: '2026-10-05', allowance: 50 },
     { day: '2026-10-06', allowance: 50 },
   ];
 
-  it('conta os dias seguidos no azul e guarda o recorde', () => {
-    const result = allowanceStreak({
+  it('soma todos os dias dentro do valor, desde o começo', () => {
+    const result = daysInTheBlue({
       today: '2026-10-06',
       allowances,
-      spentByDay: {
-        '2026-10-01': 80, // estourou
-        '2026-10-02': 10,
-        '2026-10-03': 50, // no limite ainda é azul
-        '2026-10-05': 0,
-        '2026-10-06': 20,
-      },
+      spentByDay: { '2026-10-01': 30, '2026-10-02': 50, '2026-10-05': 10 },
     });
-    expect(result.current).toBe(4);
-    expect(result.best).toBe(4);
+    expect(result.total).toBe(5);
   });
 
-  it('hoje estourado ainda não quebra a sequência, mas também não soma', () => {
-    const result = allowanceStreak({
+  it('um dia acima do valor só não soma; nada zera', () => {
+    const result = daysInTheBlue({
       today: '2026-10-06',
       allowances,
-      spentByDay: {
-        '2026-10-02': 10,
-        '2026-10-03': 10,
-        '2026-10-05': 10,
-        '2026-10-06': 90,
-      },
+      spentByDay: { '2026-10-02': 80, '2026-10-03': 51 },
     });
-    expect(result.current).toBe(4); // 01, 02, 03, 05
+    expect(result.total).toBe(3);
   });
 
-  it('um dia estourado gasta uma recuperação e não zera a sequência', () => {
-    const result = allowanceStreak({
-      today: '2026-10-06',
-      allowances,
-      spentByDay: { '2026-10-05': 70, '2026-10-06': 0 },
-    });
-    // 01, 02, 03 e 06 somam; 05 foi salvo e não soma.
-    expect(result.current).toBe(4);
-    expect(result.saved).toEqual(['2026-10-05']);
-    // A semana de 04 a 10/10 tinha 2 e usou 1.
-    expect(result.savesLeft).toBe(1);
+  it('hoje conta se, até agora, está no azul', () => {
+    const base = { today: '2026-10-06', allowances };
+    expect(
+      daysInTheBlue({ ...base, spentByDay: { '2026-10-06': 20 } }).total,
+    ).toBe(5);
+    expect(
+      daysInTheBlue({ ...base, spentByDay: { '2026-10-06': 70 } }).total,
+    ).toBe(4);
   });
 
-  it('o terceiro dia estourado na mesma semana zera', () => {
-    const week = ['04', '05', '06', '07', '08'].map((day) => ({
-      day: `2026-10-${day}`,
-      allowance: 50,
-    }));
-    const result = allowanceStreak({
-      today: '2026-10-08',
-      allowances: [...allowances.slice(0, 3), ...week],
-      spentByDay: { '2026-10-04': 90, '2026-10-05': 90, '2026-10-06': 90 },
-    });
-    // 04 e 05 salvos; 06 quebra; 07 e 08 recomeçam.
-    expect(result.current).toBe(2);
-    expect(result.best).toBe(3);
-    expect(result.savesLeft).toBe(0);
-  });
-
-  it('as recuperações voltam a cada semana (de domingo a sábado)', () => {
-    const result = allowanceStreak({
-      today: '2026-10-05',
-      allowances: [
-        { day: '2026-10-02', allowance: 50 },
-        { day: '2026-10-03', allowance: 50 },
-        { day: '2026-10-04', allowance: 50 },
-        { day: '2026-10-05', allowance: 50 },
-      ],
-      // 02 e 03 (semana de 27/09) usam as duas daquela semana; 04 é domingo,
-      // semana nova.
-      spentByDay: { '2026-10-02': 90, '2026-10-03': 90, '2026-10-04': 90 },
-    });
-    expect(result.savesLeft).toBe(1);
-  });
-
-  it('o melhor do mês para a retrospectiva, com a mesma regra', () => {
-    // 03 estourou, mas foi salvo: 01, 02, 05 e 06 seguem juntos.
-    expect(bestStreakInMonth('2026-10', allowances, { '2026-10-03': 99 })).toBe(
-      4,
-    );
+  it('no resumo, conta só até o dia escolhido', () => {
+    expect(
+      daysInTheBlue({
+        today: '2026-10-02',
+        now: '2026-10-06',
+        allowances,
+        spentByDay: {},
+      }).total,
+    ).toBe(2);
   });
 });
 
@@ -171,8 +127,8 @@ describe('janela de 3 dias úteis', () => {
     expect(second.changed).toEqual([{ day: '2026-10-06', allowance: '48.00' }]);
   });
 
-  it('a sequência com dias recentes é provisória; a antiga, não', () => {
-    const recent = allowanceStreak({
+  it('dias recentes deixam o total provisório; antigos, não', () => {
+    const recent = daysInTheBlue({
       today: '2026-10-07',
       allowances: [
         { day: '2026-10-05', allowance: 50 },
@@ -180,9 +136,9 @@ describe('janela de 3 dias úteis', () => {
       ],
       spentByDay: {},
     });
-    expect(recent.current).toBe(2);
+    expect(recent.total).toBe(2);
     expect(recent.provisional).toBe(true);
-    const old = allowanceStreak({
+    const old = daysInTheBlue({
       today: '2026-09-25',
       now: '2026-10-07',
       allowances: [
@@ -191,7 +147,7 @@ describe('janela de 3 dias úteis', () => {
       ],
       spentByDay: {},
     });
-    expect(old.current).toBe(2);
+    expect(old.total).toBe(2);
     expect(old.provisional).toBe(false);
   });
 });

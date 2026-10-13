@@ -16,7 +16,7 @@ import {
 import { AppHeader } from '@/components/app-header';
 import { EntryDetails } from '@/components/entry-details';
 import { ExpenseDayList } from '@/components/expense-line';
-import { StreakBadge } from '@/components/streak-badge';
+import { BlueDaysBadge } from '@/components/streak-badge';
 import { toTotalsView } from '@/lib/entry-share';
 import { NavigationBackButton } from '@/components/navigation-back-button';
 import { Private } from '@/components/private-value';
@@ -25,7 +25,7 @@ import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import { saoDate, type RecurringExpense } from '@/lib/expense-insights';
 import { monthCalendar, type CalendarEventKind } from '@/lib/month-calendar';
 import {
-  allowanceStreak,
+  daysInTheBlue,
   provisionalSince,
   settlesOn,
   spentByDayOf,
@@ -178,7 +178,7 @@ function DayAllowance({
     : spent.gt(0)
       ? 100
       : 0;
-  const streak = allowanceStreak({
+  const blueDays = daysInTheBlue({
     today: day,
     now: today,
     allowances,
@@ -198,16 +198,13 @@ function DayAllowance({
           </p>
         </div>
         <p className="shrink-0 text-right text-xs text-muted-foreground">
-          {streak.current > 0 ? (
-            <StreakBadge
-              current={streak.current}
-              best={streak.best}
-              provisional={streak.provisional}
-              savesLeft={streak.savesLeft}
-              withLabel
+          {blueDays.total > 0 ? (
+            <BlueDaysBadge
+              total={blueDays.total}
+              provisional={blueDays.provisional}
             />
           ) : (
-            'Sequência zerada'
+            'Nenhum dia no azul ainda'
           )}
           <br />
           {day === today ? 'até agora' : 'até este dia'}
@@ -234,9 +231,7 @@ function DayAllowance({
         {over ? (
           <>
             Passou <Private>{money(spent.minus(allowance))}</Private> do valor
-            do dia
-            {streak.saved.includes(day) &&
-              ' · recuperação usada: a sequência seguiu'}
+            do dia · este dia não soma no azul
           </>
         ) : (
           <>

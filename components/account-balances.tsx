@@ -8,7 +8,7 @@ import { Private } from '@/components/private-value';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SlidersHorizontal } from 'lucide-react';
-import { StreakRecord } from '@/components/streak-badge';
+import { BlueDaysCounter } from '@/components/streak-badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -23,8 +23,7 @@ import { saoDate, type RecurringExpense } from '@/lib/expense-insights';
 import {
   adjustAllowances,
   allowanceForToday,
-  allowanceStreak,
-  STREAK_SAVES_PER_WEEK,
+  daysInTheBlue,
   type AllowanceDay,
 } from '@/lib/daily-allowance';
 import { barColour } from '@/lib/bank-colors';
@@ -415,7 +414,7 @@ function SpendingRoom({
   ].filter((item) => item !== null);
   const nothing = !summary.length;
   // "Hoje você pode" (lib/daily-allowance.ts): valor do dia congelado,
-  // termômetro do gasto e sequência no azul.
+  // termômetro do gasto e dias no azul.
   const todayKey = saoDate(new Date());
   const spentToday = new Decimal(plan?.spentByDay[todayKey] ?? 0);
   const computed = plan
@@ -474,8 +473,9 @@ function SpendingRoom({
           short: Decimal.max(new Decimal(computed.free).negated(), 0),
         }
       : null;
-  const streak = plan
-    ? allowanceStreak({
+  // Dias no azul desde o começo (não é sequência: dia ruim só não soma).
+  const blueDays = plan
+    ? daysInTheBlue({
         today: todayKey,
         allowances: stored
           ? adjusted
@@ -484,14 +484,7 @@ function SpendingRoom({
             : adjusted,
         spentByDay: plan.spentByDay,
       })
-    : {
-        current: 0,
-        best: 0,
-        provisional: false,
-        settledBefore: todayKey,
-        saved: [] as string[],
-        savesLeft: STREAK_SAVES_PER_WEEK,
-      };
+    : { total: 0, provisional: false };
   // Primeira vez no dia: guarda o valor de hoje.
   const freezeValue = !stored && computed ? computed.perDay : null;
   useEffect(() => {
@@ -570,13 +563,11 @@ function SpendingRoom({
             </Private>
           </p>
         </div>
-        {/* Só fogo e número; recorde e "provisória" no title. */}
-        {streak.current > 0 && (
-          <StreakRecord
-            current={streak.current}
-            best={streak.best}
-            provisional={streak.provisional}
-            savesLeft={streak.savesLeft}
+        {/* Fogo e o total de dias no azul; "provisório" no title. */}
+        {blueDays.total > 0 && (
+          <BlueDaysCounter
+            total={blueDays.total}
+            provisional={blueDays.provisional}
           />
         )}
       </div>

@@ -497,7 +497,7 @@ export function EntryDetails({
                   <span className="text-xs text-muted-foreground">
                     Para presentes e gastos extraordinários: continua nos gastos
                     do mês e na fatura, mas não pesa no &ldquo;Hoje você
-                    pode&rdquo; nem quebra a sequência.
+                    pode&rdquo; nem tira o dia do azul.
                   </span>
                 </label>
                 <Switch

@@ -6,9 +6,6 @@ import Decimal from 'decimal.js';
 import type { UnidentifiedSpend } from './unidentified-spend';
 import { loadUnidentifiedSpend } from './unidentified-spend-query';
 
-/** Quantos dias de histórico a sequência no azul olha. */
-const HISTORY_DAYS = 120;
-
 /**
  * Entradas do "Posso gastar hoje?" além da barra: assinaturas, gasto por dia
  * e valores guardados. A conta roda na tela.
@@ -24,32 +21,34 @@ export async function loadSafeToSpendInputs(
   /** Gasto sem compra ainda (lib/unidentified-spend.ts); já em `spentByDay`. */
   unidentified: UnidentifiedSpend[];
 }> {
-  const since = saoDate(new Date(Date.now() - HISTORY_DAYS * 86_400_000));
-  const [{ data: subscriptions }, { data: entries }, { data: allowances }] =
-    await Promise.all([
-      admin
-        .from('recurring_expenses')
-        .select(
-          'id, merchant, account, amount, next_date, billing_day, active, paid_by_me, frequency',
-        )
-        .eq('user_id', userId)
-        .eq('active', true),
-      admin
-        .from('financial_entries')
-        .select(
-          'entry_type, amount, occurred_at, split_share, excluded_from_totals, excluded_from_daily, installment_group_id, installment_total',
-        )
-        .eq('user_id', userId)
-        .eq('entry_type', 'expense')
-        .eq('excluded_from_totals', false)
-        .gte('occurred_at', `${since}T00:00:00-03:00`)
-        .limit(5000),
-      admin
-        .from('daily_allowances')
-        .select('day, allowance')
-        .eq('user_id', userId)
-        .gte('day', since),
-    ]);
+  // Os dias no azul contam desde o começo: todos os valores do dia guardados,
+  // e os gastos a partir do primeiro deles.
+  const { data: allowances } = await admin
+    .from('daily_allowances')
+    .select('day, allowance')
+    .eq('user_id', userId)
+    .order('day');
+  const since =
+    (allowances?.[0]?.day as string | undefined) ?? saoDate(new Date());
+  const [{ data: subscriptions }, { data: entries }] = await Promise.all([
+    admin
+      .from('recurring_expenses')
+      .select(
+        'id, merchant, account, amount, next_date, billing_day, active, paid_by_me, frequency',
+      )
+      .eq('user_id', userId)
+      .eq('active', true),
+    admin
+      .from('financial_entries')
+      .select(
+        'entry_type, amount, occurred_at, split_share, excluded_from_totals, excluded_from_daily, installment_group_id, installment_total',
+      )
+      .eq('user_id', userId)
+      .eq('entry_type', 'expense')
+      .eq('excluded_from_totals', false)
+      .gte('occurred_at', `${since}T00:00:00-03:00`)
+      .limit(20000),
+  ]);
   const spent = spentByDayOf((entries ?? []) as FinancialEntry[]);
   // O que o limite mostra que já foi gasto e ainda não chegou: entra no dia,
   // e some sozinho quando a compra chega.

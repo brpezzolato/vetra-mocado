@@ -116,7 +116,7 @@ export function demoTables(): Record<string, Row[]> {
     });
 
   // Últimos 120 dias, de 0 a 3 gastos por dia; os últimos 12 abaixo do valor
-  // do dia (sequência no azul).
+  // do dia (dias no azul).
   for (let back = 120; back >= 0; back--) {
     const day = addDays(today, -back);
     // Hoje fica só com os dois gastos da manhã, logo abaixo.
@@ -447,7 +447,7 @@ export function demoTables(): Record<string, Row[]> {
       '22:01',
       'expense',
       'Dia fechado no azul',
-      'Você gastou R$ 64,20 de R$ 124,00. Sequência de 53 dias.',
+      'Você gastou R$ 64,20 de R$ 124,00. 53 dias no azul até agora.',
       '/financeiro',
       true,
     ),
@@ -588,7 +588,7 @@ const CHATS: [string, string, [string, string][]][] = [
       ['user', 'E dá pra pedir hoje?'],
       [
         'assistant',
-        'Dá. Hoje ainda sobram **R$ 70,60**: um pedido de até R$ 45 mantém a sua sequência de **49 dias no azul**.',
+        'Dá. Hoje ainda sobram **R$ 70,60**: um pedido de até R$ 45 mantém o dia no azul e você chega a **49 dias no azul**.',
       ],
     ],
   ],

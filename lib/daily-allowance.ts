@@ -127,48 +127,19 @@ const withinAllowance = (
   spent: Decimal.Value | undefined,
 ) => new Decimal(spent ?? 0).lte(allowance);
 
-/** Dias acima do valor por semana que não quebram a sequência. */
-export const STREAK_SAVES_PER_WEEK = 2;
-
-/** Domingo da semana do dia (semana de domingo a sábado). */
-export const weekOf = (day: string) => {
-  const date = new Date(`${day}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
-  return date.toISOString().slice(0, 10);
-};
-
 /**
- * Classifica cada dia: soma, salvo por recuperação ou quebra. Dia acima do
- * valor usa uma recuperação da semana, se houver, sem somar.
+ * Dias no azul desde o começo: cada dia com valor guardado em que o gasto
+ * ficou dentro dele. Um dia acima só não soma; nada zera. Hoje (ainda
+ * aberto) conta se até agora está no azul.
+ * `provisional`: algum dia contado ainda está na janela de 3 dias úteis.
  */
-function walkStreak(
-  days: AllowanceDay[],
-  spentByDay: Record<string, Decimal.Value>,
-) {
-  const used = new Map<string, number>();
-  return days.map((item) => {
-    if (withinAllowance(item.allowance, spentByDay[item.day]))
-      return { day: item.day, outcome: 'counts' as const };
-    const week = weekOf(item.day);
-    const spent = used.get(week) ?? 0;
-    if (spent < STREAK_SAVES_PER_WEEK) {
-      used.set(week, spent + 1);
-      return { day: item.day, outcome: 'saved' as const };
-    }
-    return { day: item.day, outcome: 'breaks' as const };
-  });
-}
-
-/**
- * Sequência atual (até ontem, mais hoje se no azul) e recorde.
- * `provisional`: inclui dias ainda na janela de 3 dias úteis.
- */
-export function allowanceStreak({
+export function daysInTheBlue({
   today,
   allowances,
   spentByDay,
   now = today,
 }: {
+  /** Até que dia contar (o resumo pode pedir um dia passado). */
   today: string;
   allowances: AllowanceDay[];
   /** yyyy-mm-dd → gasto do dia. */
@@ -177,78 +148,13 @@ export function allowanceStreak({
   now?: string;
 }) {
   const since = provisionalSince(now);
-  const days = [...allowances]
-    .sort((a, b) => a.day.localeCompare(b.day))
-    .filter((item) => item.day <= today);
-  // Hoje: só soma se já no azul; não gasta recuperação nem quebra.
-  const open = today === now && days.at(-1)?.day === today;
-  const closed = open ? days.slice(0, -1) : days;
-  let best = 0;
-  let run = 0;
-  let runStart: string | null = null;
-  const saved: string[] = [];
-  for (const step of walkStreak(closed, spentByDay)) {
-    if (step.outcome === 'counts') {
-      if (run === 0 && runStart === null) runStart = step.day;
-      run++;
-    } else if (step.outcome === 'saved') {
-      // Salva a sequência que vinha; sem sequência, não há o que salvar.
-      if (run > 0) saved.push(step.day);
-    } else {
-      run = 0;
-      runStart = null;
-      saved.length = 0;
-    }
-    best = Math.max(best, run);
+  let total = 0;
+  let provisional = false;
+  for (const item of allowances) {
+    if (item.day > today) continue;
+    if (!withinAllowance(item.allowance, spentByDay[item.day])) continue;
+    total++;
+    if (item.day >= since) provisional = true;
   }
-  if (open && withinAllowance(days.at(-1)!.allowance, spentByDay[today])) {
-    if (run === 0) runStart = today;
-    run++;
-    best = Math.max(best, run);
-  }
-  // As recuperações que restam na semana de hoje.
-  const week = weekOf(now);
-  const savesLeft = Math.max(
-    0,
-    STREAK_SAVES_PER_WEEK -
-      walkStreak(closed, spentByDay).filter(
-        (step) => step.outcome !== 'counts' && weekOf(step.day) === week,
-      ).length,
-  );
-  // Provisória se o dia mais recente ainda está na janela.
-  const lastCounted = days.at(-1)?.day;
-  const provisional =
-    (runStart !== null && today >= since) ||
-    (lastCounted !== undefined && lastCounted >= since);
-  return {
-    current: run,
-    best,
-    provisional,
-    settledBefore: since,
-    /** Os dias acima do valor que a sequência atual atravessou. */
-    saved,
-    savesLeft,
-  };
-}
-
-/** Maior sequência no azul dentro de um mês (retrospectiva). */
-export function bestStreakInMonth(
-  month: string,
-  allowances: AllowanceDay[],
-  spentByDay: Record<string, Decimal.Value>,
-) {
-  let best = 0;
-  let run = 0;
-  // A mesma regra da sequência: o dia acima do valor gasta uma recuperação.
-  for (const step of walkStreak(
-    [...allowances]
-      .filter((entry) => entry.day.startsWith(month))
-      .sort((a, b) => a.day.localeCompare(b.day)),
-    spentByDay,
-  )) {
-    if (step.outcome === 'counts') run++;
-    else if (step.outcome === 'breaks') run = 0;
-    best = Math.max(best, run);
-  }
-  return best;
+  return { total, provisional };
 }
