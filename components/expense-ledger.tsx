@@ -500,7 +500,7 @@ export function ExpenseLedger({
             <div className="lg:col-start-2 lg:row-span-3 lg:row-start-1">
               {/* O nome do filtro (a pílula só tem ícones). */}
               {listStatus !== 'all' && (
-                <div className="mb-4 flex items-center justify-between gap-3 px-1 lg:mb-6">
+                <div className="mt-6 mb-4 flex items-center justify-between gap-3 px-1 lg:mt-0 lg:mb-6">
                   <p className="text-sm">
                     <span className="font-semibold">
                       {
@@ -524,7 +524,7 @@ export function ExpenseLedger({
                 </div>
               )}
               {listStatus === 'pending' && (
-                <p className="mt-5 rounded-2xl bg-muted/50 p-4 lg:mt-0 lg:mb-6 text-xs leading-relaxed text-muted-foreground">
+                <p className="rounded-2xl bg-muted/50 p-4 text-xs lg:mb-6 leading-relaxed text-muted-foreground">
                   O limite do cartão já caiu e a compra ainda não chegou do
                   banco. Toque numa delas para dividir ou corrigir a data. Elas
                   entram no extrato quando chegam.

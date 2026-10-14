@@ -517,7 +517,21 @@ export function demoTables(): Record<string, Row[]> {
       data_at: at(day as string, time as string),
     })),
     card_payment_events: [],
-    pending_spend_splits: [],
+    // A compra a chegar já corrigida para ontem ("Dividida por você"): o
+    // gasto da noite não pesa no dia de hoje.
+    pending_spend_splits: [
+      {
+        ...base,
+        account: 'Nubank',
+        day: today,
+        parts: [
+          { amount: '86.50', day: addDays(today, -1), description: 'Mercado' },
+        ],
+        total: '86.50',
+        seen_until: at(today, '07:48'),
+        updated_at: at(today, '08:30'),
+      },
+    ],
     daily_allowances: allowances,
     recurring_expenses: SUBSCRIPTIONS.map(
       ([merchant, account, amount, day]) => {
