@@ -2,13 +2,19 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Decimal from 'decimal.js';
+import Image from 'next/image';
 import {
   ArrowDownRight,
   ArrowUpRight,
   Clock3,
+  EyeOff,
+  Layers,
+  List,
   Plus,
   Search,
+  Users,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import { createClient } from '@/lib/supabase/client';
@@ -23,6 +29,7 @@ import {
   resolvePaymentMethod,
   sortPaymentCardsByUsage,
   type PaymentCard,
+  type PaymentMethodId,
 } from '@/lib/payment-cards';
 import { countedAmount, isSplit } from '@/lib/entry-share';
 import { isInstallment, type CardCycle } from '@/lib/expense-insights';
@@ -42,8 +49,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 /* Extrato (/financeiro): o mês em destaque, busca, filtros por situação
    (pendentes, parcelas, divididas, fora das contas) e por cartão, e os
-   gastos por mês e dia. As compras a chegar (lib/unidentified-spend.ts) só
-   aparecem em "Pendentes": não somam no extrato até chegarem do banco. */
+   gastos por mês e dia. "Pendentes" são as compras a chegar
+   (lib/unidentified-spend.ts): só aparecem lá e não somam no extrato até
+   chegarem do banco. */
 
 const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
@@ -101,13 +109,22 @@ const sum = (entries: FinancialEntry[]) =>
 
 type Status = 'all' | 'pending' | 'installments' | 'split' | 'excluded';
 
-const STATUSES: { value: Status; label: string }[] = [
-  { value: 'all', label: 'Tudo' },
-  { value: 'pending', label: 'Pendentes' },
-  { value: 'installments', label: 'Parcelas' },
-  { value: 'split', label: 'Divididas' },
-  { value: 'excluded', label: 'Fora das contas' },
+const STATUSES: { value: Status; label: string; icon: LucideIcon }[] = [
+  { value: 'all', label: 'Tudo', icon: List },
+  { value: 'pending', label: 'Pendentes', icon: Clock3 },
+  { value: 'installments', label: 'Parcelas', icon: Layers },
+  { value: 'split', label: 'Divididas', icon: Users },
+  { value: 'excluded', label: 'Fora das contas', icon: EyeOff },
 ];
+
+/** O logo de cada banco no filtro por meio de pagamento. */
+const BANK_LOGO: Partial<Record<PaymentMethodId, string>> = {
+  nubank: '/logos/nubank-ui.webp',
+  itau: '/logos/itau-app.webp',
+  picpay: '/logos/picpay-ui.webp',
+  'mercado-pago': '/logos/mercado-pago-ui.webp',
+  pix: '/logos/pix.png',
+};
 
 export function ExpenseLedger({
   userId,
@@ -219,19 +236,9 @@ export function ExpenseLedger({
   const activeMethod =
     method && byMethod.some(([account]) => account === method) ? method : null;
 
-  const pendingList = useMemo(
-    () => [
-      ...arriving,
-      // Parcela futura também vem "pendente" do banco: fica em Parcelas.
-      ...expenses.filter(
-        (entry) => entry.bank_status === 'PENDING' && !isInstallment(entry),
-      ),
-    ],
-    [arriving, expenses],
-  );
   const byStatus: Record<Status, FinancialEntry[]> = {
     all: expenses,
-    pending: pendingList,
+    pending: arriving,
     installments: expenses.filter(isInstallment),
     split: expenses.filter(isSplit),
     excluded: expenses.filter((entry) => entry.excluded_from_totals),
@@ -300,7 +307,7 @@ export function ExpenseLedger({
       </div>
 
       <div className="app-container py-6 md:py-9">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-3xl lg:max-w-none">
           <div className="flex items-end justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-medium uppercase tracking-[.16em] text-muted-foreground">
@@ -322,272 +329,331 @@ export function ExpenseLedger({
             </p>
           )}
 
-          {/* O mês em destaque. */}
-          <section className="mt-6 rounded-3xl border bg-card p-5 md:p-6">
-            <p className="text-xs text-muted-foreground first-letter:uppercase">
-              {monthName(currentMonth)}
-              {activeMethod ? ` · ${activeMethod}` : ''}
-            </p>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <p className="text-4xl font-semibold tracking-tight tabular-nums">
-                <Private>{money(monthTotal)}</Private>
+          {/* Celular: uma coluna. Computador: resumo, busca, filtros e revisão
+              à esquerda; a lista à direita. */}
+          <div className="lg:mt-6 lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:items-start lg:gap-x-8 lg:gap-y-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
+            {/* O mês em destaque. */}
+            <section className="mt-6 rounded-3xl border bg-card p-5 md:p-6 lg:col-start-1 lg:row-start-1 lg:mt-0">
+              <p className="text-xs text-muted-foreground first-letter:uppercase">
+                {monthName(currentMonth)}
+                {activeMethod ? ` · ${activeMethod}` : ''}
               </p>
-              {change !== null && (
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-0.5 text-xs font-medium',
-                    change > 0
-                      ? 'text-destructive'
-                      : 'text-emerald-600 dark:text-emerald-400',
-                  )}
-                >
-                  {change > 0 ? (
-                    <ArrowUpRight className="size-3.5" aria-hidden="true" />
-                  ) : (
-                    <ArrowDownRight className="size-3.5" aria-hidden="true" />
-                  )}
-                  {Math.abs(change)}% vs. {shortMonth(lastMonth)} até o dia{' '}
-                  {today}
-                </span>
-              )}
-            </div>
-
-            {/* A divisão por meio de pagamento, na cor de cada um. */}
-            {methodsTotal.gt(0) && (
-              <div
-                aria-hidden="true"
-                className="mt-5 flex h-2 gap-0.5 overflow-hidden rounded-full"
-              >
-                {byMethod.map(([account, value]) => (
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <p className="text-4xl font-semibold tracking-tight tabular-nums">
+                  <Private>{money(monthTotal)}</Private>
+                </p>
+                {change !== null && (
                   <span
-                    key={account}
                     className={cn(
-                      'h-full rounded-full transition-opacity',
-                      activeMethod && activeMethod !== account && 'opacity-25',
+                      'inline-flex items-center gap-0.5 text-xs font-medium',
+                      change > 0
+                        ? 'text-destructive'
+                        : 'text-emerald-600 dark:text-emerald-400',
                     )}
-                    style={{
-                      width: `${value.div(methodsTotal).times(100).toNumber()}%`,
-                      backgroundColor:
-                        PAYMENT_METHOD_COLOUR[
-                          resolvePaymentMethod(account, sortedCards)
-                        ],
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            <dl className="mt-5 grid grid-cols-3 gap-3 border-t pt-4">
-              <Stat label="Compras">{thisMonth.length}</Stat>
-              <Stat label="Média">
-                <Private>
-                  {money(
-                    thisMonth.length
-                      ? monthTotal.div(thisMonth.length)
-                      : new Decimal(0),
-                  )}
-                </Private>
-              </Stat>
-              <Stat label="Maior" hint={biggest?.description}>
-                <Private>
-                  {money(biggest ? countedAmount(biggest) : new Decimal(0))}
-                </Private>
-              </Stat>
-            </dl>
-          </section>
-
-          {/* Busca e filtros. */}
-          <div className="mt-6 space-y-3">
-            <div className="relative">
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar gastos"
-                aria-label="Buscar gastos"
-                className="h-11 rounded-2xl pr-10 pl-10"
-              />
-              {query && (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setQuery('')}
-                  aria-label="Limpar busca"
-                  className="absolute top-1/2 right-1.5 -translate-y-1/2"
-                >
-                  <X />
-                </Button>
-              )}
-            </div>
-
-            <ScrollArea orientation="horizontal" className="-mx-1 w-auto">
-              <fieldset className="m-0 flex min-w-0 gap-2 border-0 px-1 pt-0 pb-1">
-                <legend className="sr-only">Situação</legend>
-                {STATUSES.map(({ value, label }) => {
-                  const count =
-                    value === 'all' ? null : byStatus[value].length || null;
-                  return (
-                    <Chip
-                      key={value}
-                      active={status === value}
-                      onClick={() => setStatus(value)}
-                    >
-                      {value === 'pending' && (
-                        <Clock3 className="size-3.5" aria-hidden="true" />
-                      )}
-                      {label}
-                      {count !== null && (
-                        <span className="tabular-nums opacity-70">{count}</span>
-                      )}
-                    </Chip>
-                  );
-                })}
-              </fieldset>
-            </ScrollArea>
-
-            {byMethod.length > 1 && (
-              <ScrollArea orientation="horizontal" className="-mx-1 w-auto">
-                <fieldset className="m-0 flex min-w-0 gap-2 border-0 px-1 pt-0 pb-1">
-                  <legend className="sr-only">Meio de pagamento</legend>
-                  <Chip active={!activeMethod} onClick={() => setMethod(null)}>
-                    Todos os meios
-                  </Chip>
-                  {byMethod.map(([account, value]) => (
-                    <Chip
-                      key={account}
-                      active={activeMethod === account}
-                      // Tocar no escolhido volta para todos.
-                      onClick={() =>
-                        setMethod(activeMethod === account ? null : account)
-                      }
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="size-2 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor:
-                            PAYMENT_METHOD_COLOUR[
-                              resolvePaymentMethod(account, sortedCards)
-                            ],
-                        }}
-                      />
-                      {account}
-                      <span className="tabular-nums opacity-70">
-                        <Private>{money(value)}</Private>
-                      </span>
-                    </Chip>
-                  ))}
-                </fieldset>
-              </ScrollArea>
-            )}
-          </div>
-
-          {status === 'pending' && (
-            <p className="mt-5 rounded-2xl bg-muted/50 p-4 text-xs leading-relaxed text-muted-foreground">
-              Compras que o banco ainda não confirmou. As marcadas com * são o
-              que o limite do cartão já mostra e a compra ainda não chegou:
-              toque para dividir ou corrigir a data. Elas entram no extrato
-              quando chegam do banco.
-            </p>
-          )}
-
-          {/* Os gastos, por mês e dia. */}
-          <div className="mt-6 space-y-6">
-            {byMonth.map(([month, items]) => {
-              const counted = items.filter(
-                (entry) => !entry.excluded_from_totals,
-              );
-              const daily = items.filter((entry) => !isInstallment(entry));
-              const installments = items.filter(isInstallment);
-              return (
-                <section key={month} aria-label={monthName(month)}>
-                  <div className="flex items-baseline justify-between gap-3 px-1">
-                    <h2 className="text-sm font-semibold first-letter:uppercase">
-                      {monthName(month)}
-                    </h2>
-                    <p className="shrink-0 text-xs text-muted-foreground">
-                      <Private>
-                        <span className="font-semibold tabular-nums text-foreground">
-                          {money(sum(counted))}
-                        </span>
-                      </Private>{' '}
-                      · {items.length} {items.length === 1 ? 'gasto' : 'gastos'}
-                    </p>
-                  </div>
-                  <div className="mt-2 rounded-3xl border bg-card px-3 pb-2 md:px-4">
-                    {daily.length > 0 && (
-                      <ExpenseDayList
-                        entries={daily}
-                        cards={sortedCards}
-                        onOpen={setSelected}
-                      />
-                    )}
-                    {/* Parcelas no fim do mês. */}
-                    {installments.length > 0 && (
-                      <>
-                        <p className="px-2 pt-3 pb-0.5 text-[11px] font-medium uppercase tracking-[.1em] text-muted-foreground">
-                          Parcelas
-                        </p>
-                        <ExpenseDayList
-                          entries={installments}
-                          cards={sortedCards}
-                          onOpen={setSelected}
-                          days={false}
-                        />
-                      </>
-                    )}
-                  </div>
-                </section>
-              );
-            })}
-            {!byMonth.length && (
-              <div className="rounded-3xl border border-dashed p-8 text-center">
-                <p className="text-sm font-medium">
-                  {needle
-                    ? 'Nada encontrado'
-                    : status === 'pending'
-                      ? 'Nenhuma compra pendente'
-                      : 'Nenhum gasto aqui'}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {status === 'pending' && !needle
-                    ? 'Tudo o que você gastou já chegou do banco.'
-                    : 'Tente outro filtro ou outra busca.'}
-                </p>
-                {filtered && (
-                  <Button
-                    variant="glass-quiet"
-                    size="sm"
-                    className="mt-4"
-                    onClick={() => {
-                      setStatus('all');
-                      setMethod(null);
-                      setQuery('');
-                    }}
                   >
-                    Limpar filtros
+                    {change > 0 ? (
+                      <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <ArrowDownRight className="size-3.5" aria-hidden="true" />
+                    )}
+                    {Math.abs(change)}% vs. {shortMonth(lastMonth)} até o dia{' '}
+                    {today}
+                  </span>
+                )}
+              </div>
+
+              {/* A divisão por meio de pagamento, na cor de cada um. */}
+              {methodsTotal.gt(0) && (
+                <div
+                  aria-hidden="true"
+                  className="mt-5 flex h-2 gap-0.5 overflow-hidden rounded-full"
+                >
+                  {byMethod.map(([account, value]) => (
+                    <span
+                      key={account}
+                      className={cn(
+                        'h-full rounded-full transition-opacity',
+                        activeMethod &&
+                          activeMethod !== account &&
+                          'opacity-25',
+                      )}
+                      style={{
+                        width: `${value.div(methodsTotal).times(100).toNumber()}%`,
+                        backgroundColor:
+                          PAYMENT_METHOD_COLOUR[
+                            resolvePaymentMethod(account, sortedCards)
+                          ],
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <dl className="mt-5 grid grid-cols-3 gap-3 border-t pt-4">
+                <Stat label="Compras">{thisMonth.length}</Stat>
+                <Stat label="Média">
+                  <Private>
+                    {money(
+                      thisMonth.length
+                        ? monthTotal.div(thisMonth.length)
+                        : new Decimal(0),
+                    )}
+                  </Private>
+                </Stat>
+                <Stat label="Maior" hint={biggest?.description}>
+                  <Private>
+                    {money(biggest ? countedAmount(biggest) : new Decimal(0))}
+                  </Private>
+                </Stat>
+              </dl>
+            </section>
+
+            {/* Busca e filtros. */}
+            <div className="mt-6 space-y-3 lg:col-start-1 lg:row-start-2 lg:mt-0">
+              <div className="relative">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Buscar gastos"
+                  aria-label="Buscar gastos"
+                  className="h-11 rounded-2xl pr-10 pl-10"
+                />
+                {query && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setQuery('')}
+                    aria-label="Limpar busca"
+                    className="absolute top-1/2 right-1.5 -translate-y-1/2"
+                  >
+                    <X />
                   </Button>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* Duplicatas e recorrências, para revisar. */}
-          <div className="mt-10 space-y-4">
-            <h2 className="px-1 text-[11px] font-medium uppercase tracking-[.16em] text-muted-foreground">
-              Revisar
-            </h2>
-            <ExpenseAssistant
-              weekly={false}
-              userId={userId}
-              entries={expenses}
-              cards={sortedCards}
-              onChanged={reload}
-            />
+              {/* Situação em ícones; o ligado abre o nome. */}
+              <fieldset className="m-0 flex min-w-0 items-center gap-1 rounded-full border-0 bg-muted/70 p-1">
+                <legend className="sr-only">Situação</legend>
+                {STATUSES.map(({ value, label, icon: Icon }) => {
+                  const active = status === value;
+                  const count = value === 'all' ? 0 : byStatus[value].length;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={active}
+                      aria-label={count ? `${label}, ${count}` : label}
+                      title={label}
+                      onClick={() => setStatus(value)}
+                      className={cn(
+                        'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-[flex-grow,background-color,color] duration-300 focus-visible:outline-2 focus-visible:-outline-offset-2',
+                        active
+                          ? 'flex-none bg-background px-3 text-foreground shadow-sm'
+                          : 'flex-1 text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      <span className="relative shrink-0">
+                        <Icon className="size-4" aria-hidden="true" />
+                        {count > 0 && !active && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute -top-2 left-2.5 min-w-4 rounded-full bg-foreground/15 px-1 text-center text-[10px] leading-4 tabular-nums text-foreground"
+                          >
+                            {count > 99 ? '99+' : count}
+                          </span>
+                        )}
+                      </span>
+                      {active && (
+                        <span aria-hidden="true" className="truncate">
+                          {label}
+                          {count > 0 && (
+                            <span className="ml-1 tabular-nums opacity-60">
+                              {count}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </fieldset>
+
+              {byMethod.length > 1 && (
+                <>
+                  {/* Celular: carrossel. */}
+                  <ScrollArea
+                    orientation="horizontal"
+                    className="-mx-1 w-auto lg:hidden"
+                  >
+                    <fieldset className="m-0 flex min-w-0 gap-2 border-0 px-1 pt-0 pb-1">
+                      <legend className="sr-only">Meio de pagamento</legend>
+                      <Chip
+                        active={!activeMethod}
+                        onClick={() => setMethod(null)}
+                      >
+                        Todos
+                      </Chip>
+                      {byMethod.map(([account]) => (
+                        <Chip
+                          key={account}
+                          active={activeMethod === account}
+                          className="pl-1.5"
+                          // Tocar no escolhido volta para todos.
+                          onClick={() =>
+                            setMethod(activeMethod === account ? null : account)
+                          }
+                        >
+                          <BankMark
+                            bankId={resolvePaymentMethod(account, sortedCards)}
+                            name={account}
+                          />
+                          {account}
+                        </Chip>
+                      ))}
+                    </fieldset>
+                  </ScrollArea>
+                  {/* Computador: quebra em linhas, sem rolagem. */}
+                  <fieldset className="m-0 hidden min-w-0 flex-wrap gap-2 border-0 p-0 lg:flex">
+                    <legend className="sr-only">Meio de pagamento</legend>
+                    <Chip
+                      active={!activeMethod}
+                      onClick={() => setMethod(null)}
+                    >
+                      Todos
+                    </Chip>
+                    {byMethod.map(([account]) => (
+                      <Chip
+                        key={account}
+                        active={activeMethod === account}
+                        className="pl-1.5"
+                        // Tocar no escolhido volta para todos.
+                        onClick={() =>
+                          setMethod(activeMethod === account ? null : account)
+                        }
+                      >
+                        <BankMark
+                          bankId={resolvePaymentMethod(account, sortedCards)}
+                          name={account}
+                        />
+                        {account}
+                      </Chip>
+                    ))}
+                  </fieldset>
+                </>
+              )}
+            </div>
+
+            {/* A lista. */}
+            <div className="lg:col-start-2 lg:row-span-3 lg:row-start-1">
+              {status === 'pending' && (
+                <p className="mt-5 rounded-2xl bg-muted/50 p-4 lg:mt-0 lg:mb-6 text-xs leading-relaxed text-muted-foreground">
+                  O limite do cartão já caiu e a compra ainda não chegou do
+                  banco. Toque numa delas para dividir ou corrigir a data. Elas
+                  entram no extrato quando chegam.
+                </p>
+              )}
+
+              {/* Os gastos, por mês e dia. */}
+              <div className="mt-6 space-y-6 lg:mt-0">
+                {byMonth.map(([month, items]) => {
+                  const counted = items.filter(
+                    (entry) => !entry.excluded_from_totals,
+                  );
+                  const daily = items.filter((entry) => !isInstallment(entry));
+                  const installments = items.filter(isInstallment);
+                  return (
+                    <section key={month} aria-label={monthName(month)}>
+                      <div className="flex items-baseline justify-between gap-3 px-1">
+                        <h2 className="text-sm font-semibold first-letter:uppercase">
+                          {monthName(month)}
+                        </h2>
+                        <p className="shrink-0 text-xs text-muted-foreground">
+                          <Private>
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {money(sum(counted))}
+                            </span>
+                          </Private>{' '}
+                          · {items.length}{' '}
+                          {items.length === 1 ? 'gasto' : 'gastos'}
+                        </p>
+                      </div>
+                      <div className="mt-2 rounded-3xl border bg-card px-3 pb-2 md:px-4">
+                        {daily.length > 0 && (
+                          <ExpenseDayList
+                            entries={daily}
+                            cards={sortedCards}
+                            onOpen={setSelected}
+                          />
+                        )}
+                        {/* Parcelas no fim do mês. */}
+                        {installments.length > 0 && (
+                          <>
+                            <p className="px-2 pt-3 pb-0.5 text-[11px] font-medium uppercase tracking-[.1em] text-muted-foreground">
+                              Parcelas
+                            </p>
+                            <ExpenseDayList
+                              entries={installments}
+                              cards={sortedCards}
+                              onOpen={setSelected}
+                              days={false}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
+                {!byMonth.length && (
+                  <div className="rounded-3xl border border-dashed p-8 text-center">
+                    <p className="text-sm font-medium">
+                      {needle
+                        ? 'Nada encontrado'
+                        : status === 'pending'
+                          ? 'Nenhuma compra pendente'
+                          : 'Nenhum gasto aqui'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {status === 'pending' && !needle
+                        ? 'Tudo o que você gastou já chegou do banco.'
+                        : 'Tente outro filtro ou outra busca.'}
+                    </p>
+                    {filtered && (
+                      <Button
+                        variant="glass-quiet"
+                        size="sm"
+                        className="mt-4"
+                        onClick={() => {
+                          setStatus('all');
+                          setMethod(null);
+                          setQuery('');
+                        }}
+                      >
+                        Limpar filtros
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Duplicatas e recorrências, para revisar. */}
+            <div className="mt-10 space-y-4 lg:col-start-1 lg:row-start-3 lg:mt-0">
+              <h2 className="px-1 text-[11px] font-medium uppercase tracking-[.16em] text-muted-foreground">
+                Revisar
+              </h2>
+              <ExpenseAssistant
+                weekly={false}
+                userId={userId}
+                entries={expenses}
+                cards={sortedCards}
+                onChanged={reload}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -624,10 +690,12 @@ export function ExpenseLedger({
 function Chip({
   active,
   onClick,
+  className,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -638,10 +706,38 @@ function Chip({
       className={cn(
         'vetra-glass flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:-outline-offset-2',
         active && 'vetra-glass-primary',
+        className,
       )}
     >
       {children}
     </button>
+  );
+}
+
+/** Logo do banco num círculo; sem logo, a inicial na cor da marca. */
+function BankMark({ bankId, name }: { bankId: PaymentMethodId; name: string }) {
+  const logo = BANK_LOGO[bankId];
+  return logo ? (
+    <span
+      aria-hidden="true"
+      className="grid size-6 shrink-0 place-items-center overflow-hidden rounded-full bg-background"
+    >
+      <Image
+        src={logo}
+        alt=""
+        width={16}
+        height={16}
+        className="size-4 object-contain"
+      />
+    </span>
+  ) : (
+    <span
+      aria-hidden="true"
+      className="grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
+      style={{ backgroundColor: PAYMENT_METHOD_COLOUR[bankId] }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
   );
 }
 

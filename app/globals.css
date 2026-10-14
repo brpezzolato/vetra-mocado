@@ -537,6 +537,9 @@ html[data-vetra-privacy='true'] [data-vetra-private] .recharts-wrapper {
 
 .vetra-loading-exit-box {
   position: absolute;
+  /* Tapa o recorte do véu enquanto as barras sobem e somem; some com a logo
+     no começo da revelação. */
+  background: var(--background);
 }
 
 /* Barras de vidro sobre fundo opaco: o app não vaza enquanto a logo está inteira. */
@@ -547,15 +550,15 @@ html[data-vetra-privacy='true'] [data-vetra-private] .recharts-wrapper {
 .vetra-loading-exit.is-revealing .vetra-loading-exit-veil {
   will-change: transform, opacity;
   animation:
-    vetra-exit-grow var(--reveal) forwards,
-    vetra-exit-veil var(--reveal) forwards;
+    vetra-exit-grow var(--reveal) var(--reveal-delay, 0ms) both,
+    vetra-exit-veil var(--reveal) var(--reveal-delay, 0ms) both;
 }
 
 .vetra-loading-exit.is-revealing .vetra-loading-exit-mark {
   will-change: transform, opacity;
   animation:
-    vetra-exit-grow var(--reveal) forwards,
-    vetra-exit-mark var(--reveal) forwards;
+    vetra-exit-grow var(--reveal) var(--reveal-delay, 0ms) both,
+    vetra-exit-mark var(--reveal) var(--reveal-delay, 0ms) both;
 }
 
 @keyframes vetra-exit-grow {

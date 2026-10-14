@@ -223,10 +223,11 @@ export function playLoadingExit(
       done = true;
       if (options.quick && !waited && !held) return end();
       settle();
-      window.setTimeout(() => {
-        stage.classList.add('is-revealing');
-        window.setTimeout(end, REVEAL_MS + 80);
-      }, SETTLE_MS);
+      // O atraso vai no CSS: com a página ocupada montando, um timer aqui
+      // chegava segundos depois e o logo ficava parado.
+      stage.style.setProperty('--reveal-delay', `${SETTLE_MS}ms`);
+      stage.classList.add('is-revealing');
+      window.setTimeout(end, SETTLE_MS + REVEAL_MS + 80);
     });
   };
   reveal();
