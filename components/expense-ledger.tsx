@@ -118,9 +118,12 @@ const STATUSES: { value: Status; label: string; icon: LucideIcon }[] = [
   { value: 'excluded', label: 'Fora das contas', icon: EyeOff },
 ];
 
+/** Logos de fundo cheio: preenchem a bolinha inteira. */
+const FULL_BLEED = new Set<PaymentMethodId>(['flash']);
+
 /** O logo de cada banco no filtro por meio de pagamento. */
 const BANK_LOGO: Partial<Record<PaymentMethodId, string>> = {
-  flash: '/logos/flash-ui.webp',
+  flash: '/logos/flash-f-ui.webp',
   nubank: '/logos/nubank-ui.webp',
   itau: '/logos/itau-app.webp',
   picpay: '/logos/picpay-ui.webp',
@@ -705,9 +708,13 @@ function BankMark({ bankId, name }: { bankId: PaymentMethodId; name: string }) {
       <Image
         src={logo}
         alt=""
-        width={14}
-        height={14}
-        className="size-3.5 object-contain"
+        width={FULL_BLEED.has(bankId) ? 24 : 14}
+        height={FULL_BLEED.has(bankId) ? 24 : 14}
+        className={
+          FULL_BLEED.has(bankId)
+            ? 'size-full object-cover'
+            : 'size-3.5 object-contain'
+        }
       />
     </span>
   ) : (
