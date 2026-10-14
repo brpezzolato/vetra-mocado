@@ -6,7 +6,9 @@ import Image from 'next/image';
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Check,
   Clock3,
+  CreditCard,
   EyeOff,
   Layers,
   List,
@@ -45,7 +47,6 @@ import { ExpenseAssistant } from '@/components/expense-assistant';
 import { Private } from '@/components/private-value';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 /* Extrato (/financeiro): o mês em destaque, busca, filtros por situação
    (pendentes, parcelas, divididas, fora das contas) e por cartão, e os
@@ -117,37 +118,9 @@ const STATUSES: { value: Status; label: string; icon: LucideIcon }[] = [
   { value: 'excluded', label: 'Fora das contas', icon: EyeOff },
 ];
 
-/** Bandeira e categoria do cartão: saem do nome curto. */
-const NETWORK = /\b(mastercard|master|visa|elo|amex|hipercard)\b/giu;
-const TIER = /\b(gold|platinum|black|infinite|signature|internacional)\b/giu;
-
-/** Nomes curtos sem repetir: "Nubank Mastercard Gold" vira "Nubank". */
-function shortNames(accounts: string[]) {
-  const strip = (name: string, patterns: RegExp[]) =>
-    patterns
-      .reduce((text, pattern) => text.replace(pattern, ''), name)
-      .replace(/\s+/g, ' ')
-      .trim() || name;
-  const unique = (names: string[]) =>
-    names.map((name) => names.filter((other) => other === name).length === 1);
-  const short = accounts.map((name) => strip(name, [NETWORK, TIER]));
-  const shortOk = unique(short);
-  const network = accounts.map((name) => strip(name, [NETWORK]));
-  const networkOk = unique(network);
-  return new Map(
-    accounts.map((name, index) => [
-      name,
-      shortOk[index]
-        ? short[index]!
-        : networkOk[index]
-          ? network[index]!
-          : name,
-    ]),
-  );
-}
-
 /** O logo de cada banco no filtro por meio de pagamento. */
 const BANK_LOGO: Partial<Record<PaymentMethodId, string>> = {
+  flash: '/logos/flash-ui.webp',
   nubank: '/logos/nubank-ui.webp',
   itau: '/logos/itau-app.webp',
   picpay: '/logos/picpay-ui.webp',
@@ -261,7 +234,6 @@ export function ExpenseLedger({
     (total, [, value]) => total.plus(value),
     new Decimal(0),
   );
-  const cardNames = shortNames(byMethod.map(([account]) => account));
   // O filtro pode sobreviver ao meio; cai para todos.
   const activeMethod =
     method && byMethod.some(([account]) => account === method) ? method : null;
@@ -439,7 +411,7 @@ export function ExpenseLedger({
             </section>
 
             {/* Busca e filtros. */}
-            <div className="mt-6 space-y-4 lg:col-start-1 lg:row-start-2 lg:mt-0">
+            <div className="mt-6 flex flex-col gap-4 lg:col-start-1 lg:row-start-2 lg:mt-0">
               <div className="relative">
                 <Search
                   aria-hidden="true"
@@ -513,37 +485,43 @@ export function ExpenseLedger({
                 })}
               </fieldset>
 
-              {/* Cartões na pílula da home, em carrossel. */}
+              {/* Cartões em lista: logo e nome; o escolhido com ✓. */}
               {byMethod.length > 1 && (
-                <ScrollArea orientation="horizontal" className="w-auto">
-                  <fieldset className="m-0 flex w-max min-w-full gap-1 rounded-full border-0 bg-muted/70 p-1">
-                    <legend className="sr-only">Cartão</legend>
-                    <PillOption
-                      active={!activeMethod}
-                      onClick={() => setMethod(null)}
-                    >
-                      Todos
-                    </PillOption>
-                    {byMethod.map(([account]) => (
-                      <PillOption
-                        key={account}
-                        active={activeMethod === account}
-                        label={account}
-                        className="pl-1.5"
-                        // Tocar no escolhido volta para todos.
-                        onClick={() =>
-                          setMethod(activeMethod === account ? null : account)
-                        }
+                <fieldset className="m-0 min-w-0 rounded-3xl border bg-card p-1">
+                  <legend className="sr-only">Cartão</legend>
+                  <CardRow
+                    active={!activeMethod}
+                    onClick={() => setMethod(null)}
+                    mark={
+                      <span
+                        aria-hidden="true"
+                        className="grid size-6 shrink-0 place-items-center rounded-full bg-muted"
                       >
+                        <CreditCard className="size-3.5" />
+                      </span>
+                    }
+                  >
+                    Todos os cartões
+                  </CardRow>
+                  {byMethod.map(([account]) => (
+                    <CardRow
+                      key={account}
+                      active={activeMethod === account}
+                      // Tocar no escolhido volta para todos.
+                      onClick={() =>
+                        setMethod(activeMethod === account ? null : account)
+                      }
+                      mark={
                         <BankMark
                           bankId={resolvePaymentMethod(account, sortedCards)}
                           name={account}
                         />
-                        {cardNames.get(account) ?? account}
-                      </PillOption>
-                    ))}
-                  </fieldset>
-                </ScrollArea>
+                      }
+                    >
+                      {account}
+                    </CardRow>
+                  ))}
+                </fieldset>
               )}
             </div>
 
@@ -685,37 +663,33 @@ export function ExpenseLedger({
   );
 }
 
-/** Opção da pílula (como as abas da home): a ligada fica branca. */
-function PillOption({
+/** Linha da lista de cartões: a escolhida em destaque, com ✓. */
+function CardRow({
   active,
   onClick,
-  label,
-  className,
+  mark,
   children,
 }: {
   active: boolean;
   onClick: () => void;
-  /** O nome inteiro, quando o rótulo é encurtado. */
-  label?: string;
-  className?: string;
+  mark: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-pressed={active}
-      aria-label={label}
-      title={label}
       onClick={onClick}
       className={cn(
-        'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2',
+        'flex h-11 w-full min-w-0 items-center gap-3 rounded-2xl px-3 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2',
         active
-          ? 'bg-foreground font-semibold text-background shadow-sm'
-          : 'text-muted-foreground hover:text-foreground',
-        className,
+          ? 'bg-muted font-semibold text-foreground'
+          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
       )}
     >
-      {children}
+      {mark}
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {active && <Check aria-hidden="true" className="size-4 shrink-0" />}
     </button>
   );
 }
