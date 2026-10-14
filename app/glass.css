@@ -416,12 +416,12 @@
 
 /* ── EXPERIMENTO (14/10/2026): sem liquid glass ──────────────────────────────
    Pedido do Bruno, "para ver como fica sem". Neutraliza todo o vidro num lugar
-   só: fundo chapado, borda fina, sem aro, brilho, sombra nem blur. Para voltar
-   ao vidro, apague este bloco inteiro. */
+   só: botão sem fundo (só a borda fina), sem aro, brilho, sombra nem blur; o
+   ligado/principal fica sólido. Para voltar ao vidro, apague este bloco. */
 .vetra-glass,
 .vetra-glass-pane,
 .vetra-glass-lens {
-  background-color: var(--muted);
+  background-color: transparent;
   border: 1px solid var(--border);
   box-shadow: none;
   -webkit-backdrop-filter: none;
@@ -434,7 +434,7 @@
 }
 
 .vetra-glass:active {
-  background-color: color-mix(in oklch, var(--muted) 80%, var(--foreground));
+  background-color: var(--muted);
 }
 
 .vetra-glass-primary,
@@ -461,7 +461,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .vetra-glass:hover {
-    background-color: color-mix(in oklch, var(--muted) 88%, var(--foreground));
+    background-color: color-mix(in oklch, var(--muted) 60%, transparent);
   }
   .vetra-glass-primary:hover {
     background-color: color-mix(in oklch, var(--primary) 90%, transparent);
