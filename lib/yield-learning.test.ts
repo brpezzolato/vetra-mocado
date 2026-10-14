@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { bankPolicy, type PiggyBank, type DailyRate } from './domain';
 import { calculate, isoDate, makeCalendar, parseDate } from './finance';
 import { calibrationSource } from './yield-calibration';
-import { buildPortfolioSeries } from './portfolio';
 
 // Synthetic rates and credits: demonstrates learning, NOT a Mercado Pago rule.
 // The credits are what a bank truncating each daily net would post, which the
@@ -108,12 +107,6 @@ describe('learning integrated with the ledger', () => {
     expect(
       learned.netBalance.eq(learned.dailyBalances.at(-1)!.netBalance),
     ).toBe(true);
-    const series = buildPortfolioSeries([bank], rates, now, options);
-    expect(series.calibrationApplied).toBe(true);
-    expect(series.projectedTotal.eq(learned.netBalance)).toBe(true);
-    expect(series.projectedGain.eq(learned.netBalance.minus('1001.20'))).toBe(
-      true,
-    );
   });
   it('never consumes future observations, future registrations or future CDI for training', () => {
     const { bank, rates, days, options } = fixture();

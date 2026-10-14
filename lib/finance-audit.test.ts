@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import Decimal from 'decimal.js';
 import { bankPolicy, type PiggyBank, type TransactionRow } from './domain';
-import { calculate, parseDate, iofExemptionAt, settleBalance } from './finance';
 import {
-  buildPortfolioSeries,
+  calculate,
+  isoDate,
+  parseDate,
+  iofExemptionAt,
+  settleBalance,
+} from './finance';
+import {
+  buildBankSeries,
   calculatePortfolio,
   portfolioEarnings,
 } from './portfolio';
@@ -80,10 +86,6 @@ describe('auditoria de regressões financeiras', () => {
     expect(result.dailyBalances.at(-1)?.netBalance.eq(result.netBalance)).toBe(
       true,
     );
-    // The chart reads the shipping profile, so it is checked against that.
-    const shipped = calculate(bank, rates, clock, { now: clock });
-    const series = buildPortfolioSeries([bank], rates, clock);
-    expect(series.points[6].value.eq(shipped.netBalance)).toBe(true);
     bank.transactions.push(
       movement('out', '1400.20', '2026-09-04T15:00:00-03:00', 'withdrawal'),
     );
@@ -125,13 +127,6 @@ describe('auditoria de regressões financeiras', () => {
       true,
     );
   });
-  it('projeção não reapresenta um aporte futuro como rentabilidade', () => {
-    const bank = vault([movement('future', '500', '2026-09-08T12:00:00Z')]);
-    const series = buildPortfolioSeries([bank], [], now);
-    expect(series.points[6].value.toFixed(2)).toBe('0.00');
-    expect(series.projectedTotal.toFixed(2)).toBe('500.00');
-    expect(series.projectedGain.toFixed(2)).toBe('0.00');
-  });
   it('resgate por múltiplos lotes separa impostos e conserva centavos', () => {
     const bank = vault(
       [
@@ -168,20 +163,41 @@ describe('auditoria de regressões financeiras', () => {
       { date: '2024-09-04', rate: '0.05' },
       { date: '2026-09-03', rate: '0.05' },
     ];
-    const series = buildPortfolioSeries([bank], rates, now);
+    const series = buildBankSeries([bank], rates, now);
     expect(series.points).toHaveLength(14);
     expect(
-      series.points[6].value.eq(
+      series.points[13].value.eq(
         calculate(bank, rates, now, options).netBalance,
       ),
     ).toBe(true);
   });
   it('não conta aportes como ganho no gráfico', () => {
     const bank = vault([movement('in', '1835', '2026-09-04T12:00:00Z')]);
-    const series = buildPortfolioSeries([bank], [], now);
-    expect(series.points[6].value.toFixed(2)).toBe('1835.00');
-    expect(series.points[6].dailyNetGain.toFixed(2)).toBe('0.00');
-    expect(series.projectedGain.toFixed(2)).toBe('0.00');
+    const series = buildBankSeries([bank], [], now);
+    expect(series.points[13].value.toFixed(2)).toBe('1835.00');
+    expect(series.points[13].dailyNetGain.toFixed(2)).toBe('0.00');
+  });
+  it('o gráfico para no último saldo do banco, sem dia previsto', () => {
+    const base = vault([movement('in', '1000', '2026-09-01T12:00:00Z')]);
+    const bank = {
+      ...base,
+      snapshots: [
+        {
+          id: 's1',
+          user_id: base.user_id,
+          piggy_bank_id: base.id,
+          snapshot_date: '2026-09-02',
+          gross_balance: '1000.10',
+          net_balance: '1000.10',
+          source: 'pluggy',
+          created_at: '2026-09-02T12:00:00Z',
+        },
+      ],
+    } as PiggyBank;
+    const series = buildBankSeries([bank], [], now);
+    expect(series.lastDate).toBe('2026-09-02');
+    expect(isoDate(series.points.at(-1)!.date)).toBe('2026-09-02');
+    expect(series.points.every((point) => !point.today)).toBe(true);
   });
   it('exibe patrimônio e ganhos unificados como soma exata das duas views', () => {
     const mp = vault([movement('a', '1835', '2026-09-01T12:00:00Z')]);
@@ -193,9 +209,9 @@ describe('auditoria de regressões financeiras', () => {
       date,
       rate: '0.051660',
     }));
-    const a = buildPortfolioSeries([mp], rates, now);
-    const b = buildPortfolioSeries([nu], rates, now);
-    const all = buildPortfolioSeries([mp, nu], rates, now);
+    const a = buildBankSeries([mp], rates, now);
+    const b = buildBankSeries([nu], rates, now);
+    const all = buildBankSeries([mp, nu], rates, now);
     for (let i = 0; i < all.points.length; i++) {
       expect(
         all.points[i].value.eq(a.points[i].value.plus(b.points[i].value)),
@@ -207,14 +223,11 @@ describe('auditoria de regressões financeiras', () => {
       ).toBe(true);
     }
     const portfolio = calculatePortfolio([mp, nu], rates, now, options);
-    expect(all.points[6].value.eq(portfolio.netBalance)).toBe(true);
+    expect(all.points[13].value.eq(portfolio.netBalance)).toBe(true);
     expect(
-      all.points[6].dailyNetGain.eq(
+      all.points[13].dailyNetGain.eq(
         portfolioEarnings(portfolio, '2026-09-04', '2026-09-04'),
       ),
-    ).toBe(true);
-    expect(
-      all.projectedGain.eq(all.projectedTotal.minus(portfolio.netBalance)),
     ).toBe(true);
   });
   it('ganho desde o início permanece após resgatar tudo', () => {

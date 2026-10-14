@@ -49,7 +49,7 @@ import {
 import { bankPolicy } from '@/lib/domain';
 import { calculate, iofExemptionAt } from '@/lib/finance';
 import {
-  buildPortfolioSeries as portfolioSeries,
+  buildBankSeries,
   calculatePortfolio,
   calculateRealized,
   portfolioEarnings,
@@ -296,7 +296,7 @@ export default function VetraDashboard({
   // Só o saldo do banco; sem o de hoje, o painel avisa em vez de estimar.
   const staleDate = staleBankDate(scopedBanks);
   const series = useMemo(
-    () => portfolioSeries(scopedBanks, rates),
+    () => buildBankSeries(scopedBanks, rates),
     [scopedBanks, rates],
   );
   const accent =
@@ -649,21 +649,23 @@ export default function VetraDashboard({
                           : 'Não informado'
                       }
                     />
+                    {/* Imposto só o que o banco informou; sem ele, nada de
+                        estimativa. */}
                     <Metric
-                      label={
-                        current.taxesFromBank ? 'IR (banco)' : 'IR estimado'
-                      }
+                      label="IR"
                       value={
-                        current.taxDetailsIncomplete
-                          ? 'Não informado'
-                          : `− ${money(current.incomeTax)}`
+                        current.taxesFromBank && !current.taxDetailsIncomplete
+                          ? `− ${money(current.incomeTax)}`
+                          : 'Não informado'
                       }
                     />
                     <Metric
-                      label={
-                        current.taxesFromBank ? 'IOF (banco)' : 'IOF estimado'
+                      label="IOF"
+                      value={
+                        current.taxesFromBank
+                          ? `− ${money(current.iof)}`
+                          : 'Não informado'
                       }
-                      value={`− ${money(current.iof)}`}
                     />
                     <Metric
                       label="Saldo líquido"
@@ -918,10 +920,10 @@ function PeriodMetric({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * Gráfico de rendimento dos cofrinhos: rendimento líquido de hoje, saldo
- * em linha pequena e colunas por dia útil (hoje em cor, passado em tom
- * médio, previsto apagado). Tocar mostra o valor. 7 colunas no celular, 14
- * no computador.
+ * Gráfico de rendimento dos cofrinhos: o rendimento líquido do último dia que
+ * o banco informou, o saldo e colunas por dia útil (o último em cor). Só dado
+ * do banco, nada previsto. Tocar mostra o valor. 7 colunas no celular, 14 no
+ * computador.
  */
 function PortfolioChart({
   label,
@@ -931,11 +933,11 @@ function PortfolioChart({
 }: {
   label: string;
   total: Decimal;
-  series: ReturnType<typeof portfolioSeries>;
-  /** Coluna de hoje: o card é escuro nos dois temas, então a cor tem de ler no escuro. */
+  series: ReturnType<typeof buildBankSeries>;
+  /** Coluna do último dia: o card é escuro nos dois temas, então a cor tem de ler no escuro. */
   accent: string;
 }) {
-  const TODAY = 6;
+  const LAST = series.points.length - 1;
   // Só dias úteis: o IOF do fim de semana cai na segunda.
   const rows = series.points.map((point, index) => {
     const previous = series.points[index - 1];
@@ -945,14 +947,13 @@ function PortfolioChart({
         )
       : 1;
     return {
-      label: index === TODAY ? 'Hoje' : shortDate(point.date),
+      label: point.today ? 'Hoje' : shortDate(point.date),
       gain: point.dailyNetGain.toNumber(),
-      projected: point.projected,
-      today: index === TODAY,
+      last: index === LAST,
       weekend: gapDays > 1,
     };
   });
-  const todayGain = series.points[TODAY].dailyNetGain;
+  const lastPoint = series.points[LAST];
   // Every column starts at zero; a small floor keeps a zero day visible.
   const peak = Math.max(...rows.map((row) => row.gain), 0);
 
@@ -960,10 +961,12 @@ function PortfolioChart({
     <section className="mb-7 overflow-hidden rounded-3xl bg-hero p-5 text-hero-foreground sm:p-6 md:p-8">
       <p className="text-xs text-hero-foreground/55">{label}</p>
       <p className="mt-2 text-3xl font-semibold">
-        <Private>+{money(todayGain)}</Private>
+        <Private>+{money(lastPoint.dailyNetGain)}</Private>
       </p>
       <p className="mt-1 text-sm text-hero-foreground/55">
-        {series.points[TODAY].projected ? 'Previsto para hoje' : 'Rendeu hoje'}{' '}
+        {lastPoint.today
+          ? 'Rendeu hoje'
+          : `Rendeu em ${shortDate(lastPoint.date)}`}{' '}
         · saldo <Private>{money(total)}</Private>
       </p>
 
@@ -973,7 +976,7 @@ function PortfolioChart({
           return (
             <div
               key={index}
-              className={`${index < TODAY - 3 || index > TODAY + 3 ? 'hidden md:grid' : 'grid'} min-w-0 gap-2`}
+              className={`${index < LAST - 6 ? 'hidden md:grid' : 'grid'} min-w-0 gap-2`}
             >
               <div className="flex h-28 items-end md:h-40">
                 {/* Popover, não Tooltip: o tooltip do Base UI não abre no toque. */}
@@ -983,11 +986,11 @@ function PortfolioChart({
                     delay={0}
                     render={
                       <button
-                        aria-label={`${row.label}${row.projected ? ', previsto' : ''}: ${money(row.gain)}`}
-                        className={`w-full rounded-t-md ${row.today ? '' : row.projected ? 'bg-hero-foreground/10' : 'bg-hero-foreground/25'}`}
+                        aria-label={`${row.label}: ${money(row.gain)}`}
+                        className={`w-full rounded-t-md ${row.last ? '' : 'bg-hero-foreground/25'}`}
                         style={{
                           height: `${height}%`,
-                          background: row.today ? accent : undefined,
+                          background: row.last ? accent : undefined,
                         }}
                       />
                     }
@@ -996,10 +999,7 @@ function PortfolioChart({
                     side="top"
                     className="w-auto gap-0.5 p-2 text-xs"
                   >
-                    <span className="font-medium">
-                      {row.label}
-                      {row.projected && ' · previsto'}
-                    </span>
+                    <span className="font-medium">{row.label}</span>
                     <span>
                       <Private>+{money(row.gain)}</Private>
                       {row.weekend && ' (com o fim de semana)'}
@@ -1008,7 +1008,7 @@ function PortfolioChart({
                 </Popover>
               </div>
               <span
-                className={`block truncate text-center text-[10px] tabular-nums ${row.today ? 'font-semibold text-hero-foreground' : 'text-hero-foreground/50'}`}
+                className={`block truncate text-center text-[10px] tabular-nums ${row.last ? 'font-semibold text-hero-foreground' : 'text-hero-foreground/50'}`}
               >
                 {row.label}
               </span>
@@ -1016,14 +1016,6 @@ function PortfolioChart({
           );
         })}
       </div>
-
-      <p className="mt-5 text-xs text-hero-foreground/55">
-        Próximos 7 dias úteis:{' '}
-        <span className="font-medium text-hero-foreground">
-          <Private>+{money(series.projectedGain)}</Private>
-        </span>{' '}
-        previsto
-      </p>
     </section>
   );
 }

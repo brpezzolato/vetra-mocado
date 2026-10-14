@@ -5,11 +5,7 @@ import Decimal from 'decimal.js';
 import { CalendarClock } from 'lucide-react';
 import type { DailyRate, PiggyBank } from '@/lib/domain';
 import { calculateRealized } from '@/lib/portfolio';
-import {
-  makeCalendar,
-  parseDate,
-  iofExemptionAt,
-} from '@/lib/finance';
+import { iofExemptionAt } from '@/lib/finance';
 import {
   Dialog,
   DialogContent,
@@ -70,60 +66,26 @@ export function VaultDetailsDialog({
                 : 'Não informado'
             }
           />
+          {/* Imposto só o que o banco informou. */}
           <DetailMetric
-            label="IR estimado"
+            label="IR"
             value={
-              result.taxDetailsIncomplete
-                ? 'Não informado'
-                : money(result.incomeTax)
+              result.taxesFromBank && !result.taxDetailsIncomplete
+                ? money(result.incomeTax)
+                : 'Não informado'
             }
           />
-          <DetailMetric label="IOF estimado" value={money(result.iof)} />
+          <DetailMetric
+            label="IOF"
+            value={result.taxesFromBank ? money(result.iof) : 'Não informado'}
+          />
           <DetailMetric
             label="Saldo líquido"
             value={money(result.netBalance)}
           />
         </div>
+        {/* Os números vêm do banco; as regras do produto, do site dele. */}
         <div className="rounded-2xl border bg-muted/30 p-4 text-sm">
-          <p className="font-medium">Política de rendimento</p>
-          <div className="mt-3 grid gap-2 text-muted-foreground sm:grid-cols-2">
-            <p>
-              {bank.cdi_percentage}% do CDI até{' '}
-              <Private>
-                {bank.rate_limit ? money(bank.rate_limit) : 'sem limite'}
-              </Private>
-            </p>
-            <p>Excedente: {bank.excess_rate}% do CDI</p>
-            <p>IR: {bank.tax_rule}</p>
-            <p>IOF: {bank.iof_rule}</p>
-            <p className="sm:col-span-2">Regra {bank.policy_version}</p>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            {bank.bank === 'Mercado Pago'
-              ? 'Créditos líquidos confirmados entram no saldo uma única vez, sem novo desconto de IR. Dias sem extrato continuam estimados pelo CDI. O prazo público de primeiro crédito (até 2 dias úteis) não substitui o horário efetivo do seu extrato.'
-              : 'A taxa, o limite de aportes e a validade da Turbo dependem da oferta aceita no aplicativo. Resgate automático ou renovação precisa ser registrado para reiniciar corretamente os prazos tributários.'}
-          </p>
-          {bank.bank === 'Mercado Pago' &&
-            !result.confirmedCreditCount &&
-            bank.transactions.some((item) => item.kind === 'deposit') && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Prazo público indicativo do primeiro crédito:{' '}
-                {dateBR(
-                  makeCalendar(rates)
-                    .move(
-                      parseDate(
-                        bank.transactions
-                          .filter((item) => item.kind === 'deposit')
-                          .map((item) => item.occurred_at)
-                          .sort()[0],
-                      ),
-                      2,
-                    )
-                    .toISOString(),
-                )}
-                .
-              </p>
-            )}
           <a
             href={
               bank.bank === 'Mercado Pago'
@@ -132,7 +94,7 @@ export function VaultDetailsDialog({
             }
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-block text-xs underline underline-offset-4"
+            className="inline-block text-xs underline underline-offset-4"
           >
             Consultar regras oficiais do produto
           </a>

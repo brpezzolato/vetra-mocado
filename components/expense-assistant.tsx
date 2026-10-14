@@ -208,9 +208,6 @@ export function WeeklyExpenseSummary({
               + {money(reserveGain)}
             </p>
           </div>
-          <span className="hidden text-right text-[11px] text-muted-foreground sm:block">
-            Estimativa do motor
-          </span>
         </div>
       )}
 
