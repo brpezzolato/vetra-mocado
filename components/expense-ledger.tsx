@@ -117,6 +117,35 @@ const STATUSES: { value: Status; label: string; icon: LucideIcon }[] = [
   { value: 'excluded', label: 'Fora das contas', icon: EyeOff },
 ];
 
+/** Bandeira e categoria do cartão: saem do nome curto. */
+const NETWORK = /\b(mastercard|master|visa|elo|amex|hipercard)\b/giu;
+const TIER = /\b(gold|platinum|black|infinite|signature|internacional)\b/giu;
+
+/** Nomes curtos sem repetir: "Nubank Mastercard Gold" vira "Nubank". */
+function shortNames(accounts: string[]) {
+  const strip = (name: string, patterns: RegExp[]) =>
+    patterns
+      .reduce((text, pattern) => text.replace(pattern, ''), name)
+      .replace(/\s+/g, ' ')
+      .trim() || name;
+  const unique = (names: string[]) =>
+    names.map((name) => names.filter((other) => other === name).length === 1);
+  const short = accounts.map((name) => strip(name, [NETWORK, TIER]));
+  const shortOk = unique(short);
+  const network = accounts.map((name) => strip(name, [NETWORK]));
+  const networkOk = unique(network);
+  return new Map(
+    accounts.map((name, index) => [
+      name,
+      shortOk[index]
+        ? short[index]!
+        : networkOk[index]
+          ? network[index]!
+          : name,
+    ]),
+  );
+}
+
 /** O logo de cada banco no filtro por meio de pagamento. */
 const BANK_LOGO: Partial<Record<PaymentMethodId, string>> = {
   nubank: '/logos/nubank-ui.webp',
@@ -232,6 +261,7 @@ export function ExpenseLedger({
     (total, [, value]) => total.plus(value),
     new Decimal(0),
   );
+  const cardNames = shortNames(byMethod.map(([account]) => account));
   // O filtro pode sobreviver ao meio; cai para todos.
   const activeMethod =
     method && byMethod.some(([account]) => account === method) ? method : null;
@@ -409,7 +439,7 @@ export function ExpenseLedger({
             </section>
 
             {/* Busca e filtros. */}
-            <div className="mt-6 space-y-3 lg:col-start-1 lg:row-start-2 lg:mt-0">
+            <div className="mt-6 space-y-4 lg:col-start-1 lg:row-start-2 lg:mt-0">
               <div className="relative">
                 <Search
                   aria-hidden="true"
@@ -453,7 +483,7 @@ export function ExpenseLedger({
                       className={cn(
                         'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-[flex-grow,background-color,color] duration-300 focus-visible:outline-2 focus-visible:-outline-offset-2',
                         active
-                          ? 'flex-none bg-background px-3 text-foreground shadow-sm'
+                          ? 'flex-none bg-foreground px-3 font-semibold text-background shadow-sm'
                           : 'flex-1 text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -483,53 +513,22 @@ export function ExpenseLedger({
                 })}
               </fieldset>
 
+              {/* Cartões na pílula da home, em carrossel. */}
               {byMethod.length > 1 && (
-                <>
-                  {/* Celular: carrossel. */}
-                  <ScrollArea
-                    orientation="horizontal"
-                    className="-mx-1 w-auto lg:hidden"
-                  >
-                    <fieldset className="m-0 flex min-w-0 gap-2 border-0 px-1 pt-0 pb-1">
-                      <legend className="sr-only">Meio de pagamento</legend>
-                      <Chip
-                        active={!activeMethod}
-                        onClick={() => setMethod(null)}
-                      >
-                        Todos
-                      </Chip>
-                      {byMethod.map(([account]) => (
-                        <Chip
-                          key={account}
-                          active={activeMethod === account}
-                          className="pl-1.5"
-                          // Tocar no escolhido volta para todos.
-                          onClick={() =>
-                            setMethod(activeMethod === account ? null : account)
-                          }
-                        >
-                          <BankMark
-                            bankId={resolvePaymentMethod(account, sortedCards)}
-                            name={account}
-                          />
-                          {account}
-                        </Chip>
-                      ))}
-                    </fieldset>
-                  </ScrollArea>
-                  {/* Computador: quebra em linhas, sem rolagem. */}
-                  <fieldset className="m-0 hidden min-w-0 flex-wrap gap-2 border-0 p-0 lg:flex">
-                    <legend className="sr-only">Meio de pagamento</legend>
-                    <Chip
+                <ScrollArea orientation="horizontal" className="w-auto">
+                  <fieldset className="m-0 flex w-max min-w-full gap-1 rounded-full border-0 bg-muted/70 p-1">
+                    <legend className="sr-only">Cartão</legend>
+                    <PillOption
                       active={!activeMethod}
                       onClick={() => setMethod(null)}
                     >
                       Todos
-                    </Chip>
+                    </PillOption>
                     {byMethod.map(([account]) => (
-                      <Chip
+                      <PillOption
                         key={account}
                         active={activeMethod === account}
+                        label={account}
                         className="pl-1.5"
                         // Tocar no escolhido volta para todos.
                         onClick={() =>
@@ -540,11 +539,11 @@ export function ExpenseLedger({
                           bankId={resolvePaymentMethod(account, sortedCards)}
                           name={account}
                         />
-                        {account}
-                      </Chip>
+                        {cardNames.get(account) ?? account}
+                      </PillOption>
                     ))}
                   </fieldset>
-                </>
+                </ScrollArea>
               )}
             </div>
 
@@ -686,15 +685,18 @@ export function ExpenseLedger({
   );
 }
 
-/** Chip de filtro: vidro, preenchido quando ligado. */
-function Chip({
+/** Opção da pílula (como as abas da home): a ligada fica branca. */
+function PillOption({
   active,
   onClick,
+  label,
   className,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  /** O nome inteiro, quando o rótulo é encurtado. */
+  label?: string;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -702,10 +704,14 @@ function Chip({
     <button
       type="button"
       aria-pressed={active}
+      aria-label={label}
+      title={label}
       onClick={onClick}
       className={cn(
-        'vetra-glass flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:-outline-offset-2',
-        active && 'vetra-glass-primary',
+        'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2',
+        active
+          ? 'bg-foreground font-semibold text-background shadow-sm'
+          : 'text-muted-foreground hover:text-foreground',
         className,
       )}
     >
@@ -725,9 +731,9 @@ function BankMark({ bankId, name }: { bankId: PaymentMethodId; name: string }) {
       <Image
         src={logo}
         alt=""
-        width={16}
-        height={16}
-        className="size-4 object-contain"
+        width={14}
+        height={14}
+        className="size-3.5 object-contain"
       />
     </span>
   ) : (
