@@ -38,8 +38,10 @@ export function loadingHidden() {
 
 /* A tela só aparece montada: o logo segue cobrindo enquanto houver esqueleto
    (`data-slot="skeleton"`) visível, até `READY_MAX_MS`. */
-const READY_MAX_MS = 6000;
-const READY_FRAMES = 3;
+const READY_MAX_MS = 4000;
+/** Checagens seguidas sem esqueleto, a cada `READY_EVERY_MS`. */
+const READY_CHECKS = 2;
+const READY_EVERY_MS = 90;
 
 /** Algum esqueleto à vista: a tela ainda está carregando dados. */
 function pendingOnScreen() {
@@ -63,6 +65,8 @@ function pendingOnScreen() {
 /** Chama `done` com a tela sem esqueleto por alguns quadros seguidos.
  * `waited`: houve esqueleto no caminho. */
 function whenScreenReady(done: (waited: boolean) => void) {
+  // Em intervalo, não a cada quadro: medir força layout e disputa a thread
+  // com a tela montando.
   const start = performance.now();
   let clear = 0;
   let waited = false;
@@ -71,9 +75,9 @@ function whenScreenReady(done: (waited: boolean) => void) {
       clear = 0;
       waited = true;
     } else clear += 1;
-    if (clear >= READY_FRAMES || performance.now() - start > READY_MAX_MS)
+    if (clear >= READY_CHECKS || performance.now() - start > READY_MAX_MS)
       return done(waited);
-    requestAnimationFrame(check);
+    window.setTimeout(check, READY_EVERY_MS);
   };
   requestAnimationFrame(check);
 }
@@ -89,6 +93,17 @@ function barsAt(rect: DOMRect) {
     ([x, height]) =>
       `<rect x="${(rect.left + x * k).toFixed(2)}" y="${(rect.top + (BAR_BASE - height) * k).toFixed(2)}" width="${(BAR_WIDTH * k).toFixed(2)}" height="${(height * k).toFixed(2)}" rx="${(BAR_RADIUS * k).toFixed(2)}" fill="#000" filter="url(#vetra-exit-soft)"/>`,
   ).join('');
+}
+
+/** Em que ponto da Subida cada barra está (ms), para continuar dali. */
+function risePhases(source?: Element | null) {
+  return [...(source?.querySelectorAll?.('.bl-bar') ?? [])].map((bar) => {
+    // Tempo da animação menos o atraso de cada barra (0, 120, 240 ms).
+    const animation = bar.getAnimations()[0];
+    const time = animation?.currentTime;
+    if (typeof time !== 'number') return null;
+    return time - Number(animation?.effect?.getTiming().delay ?? 0);
+  });
 }
 
 /** Onde cada barra do carregamento está agora (a Subida as anima). */
@@ -147,7 +162,8 @@ export function playLoadingExit(
   box.style.top = `${rect.top}px`;
   box.style.width = `${rect.width}px`;
   box.style.height = `${rect.height}px`;
-  box.innerHTML = `<span class="bl" data-v="still" style="font-size:${rect.width / 48}px">${BARS.map(
+  // Enquanto a tela monta, as barras seguem subindo no ritmo do carregamento.
+  box.innerHTML = `<span class="bl" data-v="rise" style="font-size:${rect.width / 48}px">${BARS.map(
     (_, index) =>
       `<span class="bl-bar${index === 2 ? ' bl-solid' : ''}"></span>`,
   ).join('')}</span>`;
@@ -156,19 +172,30 @@ export function playLoadingExit(
   stage.append(veil, layer);
   document.body.append(stage);
 
-  // As barras terminam de subir de onde o carregamento as deixou.
-  const from = liveBars(options.source);
-  box.querySelectorAll('.bl-bar').forEach((bar, index) => {
-    const start = from[index];
-    if (!start?.transform || start.transform === 'none') return;
-    bar.animate(
-      [
-        { transform: start.transform, opacity: start.opacity },
-        { transform: 'none', opacity: 1 },
-      ],
-      { duration: SETTLE_MS, easing: 'cubic-bezier(0.3, 0.7, 0.2, 1)' },
-    );
+  // Mesma fase da Subida do carregamento, sem pulo na troca.
+  const bars = [...box.querySelectorAll<HTMLElement>('.bl-bar')];
+  const phases = risePhases(options.source);
+  bars.forEach((bar, index) => {
+    const phase = phases[index];
+    if (phase != null) bar.style.animationDelay = `${-phase}ms`;
   });
+  /** As barras param e terminam de subir de onde estão. */
+  const settle = () => {
+    const from = liveBars(box);
+    box.firstElementChild?.setAttribute('data-v', 'still');
+    bars.forEach((bar, index) => {
+      bar.style.animationDelay = '';
+      const start = from[index];
+      if (!start?.transform || start.transform === 'none') return;
+      bar.animate(
+        [
+          { transform: start.transform, opacity: start.opacity },
+          { transform: 'none', opacity: 1 },
+        ],
+        { duration: SETTLE_MS, easing: 'cubic-bezier(0.3, 0.7, 0.2, 1)' },
+      );
+    });
+  };
 
   activeStage = stage;
   let held = false;
@@ -195,11 +222,14 @@ export function playLoadingExit(
       }
       done = true;
       if (options.quick && !waited && !held) return end();
-      stage.classList.add('is-revealing');
-      window.setTimeout(end, REVEAL_MS + 80);
+      settle();
+      window.setTimeout(() => {
+        stage.classList.add('is-revealing');
+        window.setTimeout(end, REVEAL_MS + 80);
+      }, SETTLE_MS);
     });
   };
-  window.setTimeout(reveal, options.quick ? 0 : SETTLE_MS);
+  reveal();
 }
 
 /**
