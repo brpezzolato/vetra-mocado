@@ -23,9 +23,10 @@ import {
 } from 'lucide-react';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import { createClient } from '@/lib/supabase/client';
-import { MATCH_LABEL, type MerchantAlias } from '@/lib/merchant-aliases';
+import type { MerchantAlias } from '@/lib/merchant-aliases';
 import { IncomeRules } from '@/components/income-rules';
 import { MerchantAliasDialog } from '@/components/merchant-alias-dialog';
+import { NameRulesSection } from '@/components/name-rules-section';
 import { refreshMountedWidgets } from '@/lib/manual-refresh';
 import {
   duplicatePairs,
@@ -385,28 +386,22 @@ export function ExpenseAssistant({
         </section>
       )}
       {settings && (
-        <details open className="group rounded-2xl border bg-card p-5">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold [&::-webkit-details-marker]:hidden after:content-[\'＋\'] group-open:after:content-[\'−\']">
-            Regras de nome · {nameRules.length}{' '}
-            {nameRules.length === 1 ? 'regra' : 'regras'}
-          </summary>
-          <p className="my-3 text-sm text-muted-foreground">
-            Quando o nome de uma compra contiver um texto, ela passa a se chamar
-            como você quiser (e, se quiser, cai numa categoria). Vale para toda
-            compra nova, do banco, do Atalho ou à mão, e pode corrigir as
-            antigas. Também dá para criar a partir de uma compra, em “Criar
-            regra a partir desta compra”.
-          </p>
-          <Button
-            type="button"
-            variant="glass"
-            size="sm"
-            className="mb-3"
-            disabled={busy}
-            onClick={() => setCreatingNameRule(true)}
-          >
-            Nova regra
-          </Button>
+        <>
+          <NameRulesSection
+            rules={nameRules}
+            busy={busy}
+            onCreate={() => setCreatingNameRule(true)}
+            onEdit={setEditingNameRule}
+            onDelete={(rule) =>
+              void run(async () => {
+                const result = await db
+                  .from('merchant_aliases')
+                  .delete()
+                  .eq('id', rule.id);
+                if (result.error) throw result.error;
+              })
+            }
+          />
           {(creatingNameRule || editingNameRule) && (
             <MerchantAliasDialog
               key={editingNameRule?.id ?? 'nova'}
@@ -425,53 +420,7 @@ export function ExpenseAssistant({
               }}
             />
           )}
-          {nameRules.length ? (
-            <ul className="space-y-3">
-              {nameRules.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm"
-                >
-                  <span className="min-w-0 break-words">
-                    Quando o nome {MATCH_LABEL[r.match]} “{r.pattern}” →{' '}
-                    <span className="font-medium">{r.name}</span>
-                    {r.category ? ` · ${r.category}` : ''}
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => setEditingNameRule(r)}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(async () => {
-                          const result = await db
-                            .from('merchant_aliases')
-                            .delete()
-                            .eq('id', r.id);
-                          if (result.error) throw result.error;
-                        })
-                      }
-                    >
-                      Remover regra
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma regra ainda.
-            </p>
-          )}
-        </details>
+        </>
       )}
       {settings && <IncomeRules />}
       {settings && (
