@@ -21,7 +21,11 @@ import type { PaymentCard } from './payment-cards';
 import type { FinancialAgentVault } from './financial-agent-query';
 import type { FinancialEntry } from './financial-tracker';
 import { FLASH_ACCOUNT } from './flash-statement';
-import { calculatePortfolio, staleBankDate } from './portfolio';
+import {
+  buildPortfolioSeries,
+  calculatePortfolio,
+  staleBankDate,
+} from './portfolio';
 import { normalizedBank } from './vault-shape';
 
 /**
@@ -177,8 +181,8 @@ export function spendingFacts(entries: Entry[], today: string) {
 }
 
 /**
- * Cofrinhos pelo banco: saldo, impostos (se o banco informa) e rendimento de
- * hoje e do mês. Sem previsão. Sem CDI, o texto avisa.
+ * Cofrinhos pelo motor: saldo, rendimento de hoje e do mês, previsão de 7
+ * dias úteis. Sem CDI, o texto avisa.
  */
 export function vaultFacts(
   vaults: FinancialAgentVault[],
@@ -202,19 +206,16 @@ export function vaultFacts(
             : total,
         new Decimal(0),
       );
+    const series = buildPortfolioSeries([bank], rates, now);
     const stale = staleBankDate([bank], now);
     const asOf = stale
       ? `saldo líquido do banco em ${stale.slice(8)}/${stale.slice(5, 7)} (o banco ainda não informou o de hoje; diga que está desatualizado)`
       : 'saldo líquido hoje';
-    // Imposto só o que o banco informa (o Mercado Pago mostra só o líquido).
-    const taxes = portfolio.taxesFromBank
-      ? ` (bruto ${money(portfolio.grossBalance)}, IOF ${money(portfolio.iof)}, IR ${money(portfolio.incomeTax)})`
-      : ' (o banco não informa bruto nem impostos)';
-    return `- ${vault.name} (${vault.bank}, ${vault.product}): ${asOf} ${money(portfolio.netBalance)}${taxes}; rendeu hoje ${money(earned(today))}; rendeu no mês ${money(earned(monthStart))}.`;
+    return `- ${vault.name} (${vault.bank}, ${vault.product}, ${vault.cdi_percentage}% do CDI): ${asOf} ${money(portfolio.netBalance)} (bruto ${money(portfolio.grossBalance)}, IOF ${money(portfolio.iof)}, IR ${money(portfolio.incomeTax)}); rendeu hoje ${money(earned(today))}; rendeu no mês ${money(earned(monthStart))}; previsão em 7 dias úteis ${money(series.projectedTotal)} (+${money(series.projectedGain)}, estimativa).`;
   });
   const total = calculatePortfolio(active.map(normalizedBank), rates, now);
   return [
-    'COFRINHOS (saldo, impostos e rendimentos são só os informados pelo banco, os mesmos números da tela; o Vetra não faz previsão de rendimento, então não estime valores futuros):',
+    'COFRINHOS (saldo, impostos e rendimentos são só os informados pelo banco, os mesmos números da tela; o motor do Vetra entra apenas na previsão dos próximos dias):',
     ...lines,
     `Total dos cofrinhos: ${money(total.netBalance)} líquido.`,
   ].join('\n');

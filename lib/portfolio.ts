@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import type { DailyRate, PiggyBank } from './domain';
 import { calculate, isoDate, makeCalendar, parseDate } from './finance';
+import { learnForecast } from './forecast-learning';
 
 /**
  * Só rendimento, nunca negativo: dia negativo é dinheiro que saiu sem
@@ -29,9 +30,9 @@ export function lastBankDate(bank: PiggyBank): string | null {
 }
 
 /**
- * Até quando o cofrinho é realizado: o último saldo do banco. Tudo vem do
- * banco; não há previsão. Banco atrasado mostra o último saldo com aviso
- * (`staleBankDate`).
+ * Até quando o cofrinho é realizado: o último saldo do banco. O presente vem
+ * só do banco; o motor fica para a previsão. Banco atrasado mostra o último
+ * saldo com aviso (`staleBankDate`).
  */
 export function realizedAsOf(bank: PiggyBank, asOf = new Date()): Date {
   const last = lastBankDate(bank);
@@ -125,42 +126,117 @@ export function portfolioEarnings(
   );
 }
 
-/**
- * O gráfico de rendimento: os últimos 14 dias úteis até o último saldo que o
- * banco informou (o mais antigo entre os cofrinhos). Só o realizado: dia que
- * o banco ainda não informou não aparece, nada é previsto.
- */
-export function buildBankSeries(
+export function buildPortfolioSeries(
   banks: PiggyBank[],
   rates: DailyRate[],
   now = new Date(),
+  options: Parameters<typeof calculate>[3] = {},
 ) {
   const calendar = makeCalendar(rates);
-  const today = isoDate(now);
-  const known = (banks.map(lastBankDate).filter(Boolean) as string[]).sort();
-  const last = known[0] && known[0] < today ? known[0] : today;
-  const anchor = parseDate(last);
-  const days = Array.from({ length: 14 }, (_, index) =>
-    calendar.move(anchor, index - 13),
-  );
-  const portfolio = calculatePortfolio(banks, rates, now);
-  const ledgers = portfolio.results.map(
+  const anchor = parseDate(isoDate(now));
+  // Depois do último saldo do banco já é previsão.
+  const bankDates = banks.map(lastBankDate).filter(Boolean) as string[];
+  const lastKnown = bankDates.length ? bankDates.sort()[0] : null;
+  const projectedAfter = (date: Date) =>
+    lastKnown !== null && isoDate(date) > lastKnown;
+  const skeleton = [
+    ...Array.from({ length: 6 }, (_, index) => {
+      const date = calendar.move(anchor, index - 6);
+      return { date, projected: projectedAfter(date) };
+    }),
+    { date: anchor, projected: projectedAfter(anchor) },
+    ...Array.from({ length: 7 }, (_, index) => ({
+      date: calendar.move(anchor, index + 1),
+      projected: true,
+    })),
+  ];
+  // One replay per vault builds every chart point.
+  const projection = calculatePortfolio(banks, rates, skeleton[13].date, {
+    ...options,
+    now,
+    mode: 'projection',
+  });
+  const ledgers = projection.results.map(
     ({ result }) =>
       new Map(result.dailyBalances.map((balance) => [balance.date, balance])),
   );
-  const points = days.map((date, index) => {
-    // O ganho do dia útil inclui o fim de semana e o feriado antes dele.
-    const from =
-      index > 0 ? new Date(days[index - 1].getTime() + 86_400_000) : date;
+  // A previsão é corrigida por um fator aprendido com o erro do motor nos
+  // últimos saldos (lib/forecast-learning.ts).
+  const learning = projection.results.map(({ bank, result }) =>
+    learnForecast(result.snapshotAudits, bank.snapshots, bank.transactions),
+  );
+  const correction = (from: string, to: string, gross: boolean) =>
+    projection.results.reduce((sum, { bank, result }, index) => {
+      const factor = learning[index].factor;
+      if (factor.eq(1)) return sum;
+      const known = lastBankDate(bank) ?? '';
+      const projected = result.earnings.reduce((total, entry) => {
+        if (entry.date <= known || entry.date < from || entry.date > to)
+          return total;
+        const amount = new Decimal(
+          gross ? (entry.grossAmount ?? entry.netAmount) : entry.netAmount,
+        );
+        return amount.gt(0) ? total.plus(amount) : total;
+      }, new Decimal(0));
+      return sum.plus(projected.mul(factor.minus(1)));
+    }, new Decimal(0));
+  const learnedSamples = learning.reduce((sum, item) => sum + item.samples, 0);
+  // Precisão da carteira: média das precisões, pesada pelas amostras.
+  const accuracyWeight = learning.reduce(
+    (sum, item) => (item.accuracy ? sum + item.samples : sum),
+    0,
+  );
+  const accuracy = accuracyWeight
+    ? learning
+        .reduce(
+          (sum, item) =>
+            item.accuracy ? sum.plus(item.accuracy.mul(item.samples)) : sum,
+          new Decimal(0),
+        )
+        .div(accuracyWeight)
+    : null;
+  const points = skeleton.map((point, index) => {
+    const intervalStart =
+      point.projected && index > 0
+        ? new Date(skeleton[index - 1].date.getTime() + 86400000)
+        : point.date;
     return {
-      date,
-      today: isoDate(date) === today,
-      value: ledgers.reduce(
-        (sum, ledger) => sum.plus(ledger.get(isoDate(date))?.netBalance ?? 0),
-        new Decimal(0),
+      ...point,
+      taxDetailsIncomplete: ledgers.some(
+        (ledger) => ledger.get(isoDate(point.date))?.taxDetailsIncomplete,
       ),
-      dailyNetGain: portfolioEarnings(portfolio, isoDate(from), isoDate(date)),
+      value: ledgers
+        .reduce(
+          (sum, ledger) =>
+            sum.plus(ledger.get(isoDate(point.date))?.netBalance ?? 0),
+          new Decimal(0),
+        )
+        .plus(correction('', isoDate(point.date), false)),
+      grossValue: ledgers
+        .reduce(
+          (sum, ledger) =>
+            sum.plus(ledger.get(isoDate(point.date))?.grossBalance ?? 0),
+          new Decimal(0),
+        )
+        .plus(correction('', isoDate(point.date), true)),
+      // Cash flows never enter yield; future dates include weekend/holiday tax release.
+      dailyNetGain: portfolioEarnings(
+        projection,
+        isoDate(intervalStart),
+        isoDate(point.date),
+      ).plus(correction(isoDate(intervalStart), isoDate(point.date), false)),
     };
   });
-  return { points, lastDate: last };
+  return {
+    points,
+    calibrationApplied: projection.calibrationApplied,
+    projectedTotal: points[13].value,
+    projectedGrossTotal: points[13].grossValue,
+    projectedGain: points
+      .slice(7)
+      .reduce((sum, point) => sum.plus(point.dailyNetGain), new Decimal(0)),
+    dailyGain: points[7].dailyNetGain,
+    /** Saldos usados para corrigir a previsão e a precisão (0 a 1). */
+    learning: { samples: learnedSamples, accuracy },
+  };
 }

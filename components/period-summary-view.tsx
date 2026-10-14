@@ -494,10 +494,12 @@ export function PeriodSummaryView({
       net: result.earnings
         .filter((entry) => entry.date === day)
         .reduce((sum, entry) => sum.plus(entry.netAmount), new Decimal(0)),
+      estimated: result.estimatedDates.includes(day),
     }));
     return {
       total: perVault.reduce((sum, item) => sum.plus(item.net), new Decimal(0)),
       perVault,
+      estimated: perVault.some((item) => item.estimated),
     };
   }, [banks, rates, day]);
 
@@ -666,7 +668,8 @@ export function PeriodSummaryView({
                           : '—',
                       tone: vaultYield ? 'positive' : 'default',
                       hint: vaultYield
-                        ? vaultYield.perVault.map(vaultLabel).join(' · ')
+                        ? vaultYield.perVault.map(vaultLabel).join(' · ') +
+                          (vaultYield.estimated ? ' · estimativa' : '')
                         : vaultsLoading
                           ? 'Calculando…'
                           : 'Sem cofrinhos ou sem CDI',

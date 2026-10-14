@@ -9,7 +9,7 @@ import {
 import { calculate, parseDate } from './finance';
 import {
   calculatePortfolio,
-  buildBankSeries,
+  buildPortfolioSeries,
   portfolioEarnings,
 } from './portfolio';
 import { mergeEarningStatement } from './earning-statement';
@@ -191,12 +191,16 @@ describe('Mercado Pago: créditos líquidos conciliados no motor', () => {
         .eq(result.lifetimeNetGain),
     ).toBe(true);
   });
-  it('dashboard e gráfico partem do mesmo saldo, sem retributar créditos', () => {
+  it('dashboard, gráfico e previsão partem do mesmo saldo, sem retributar créditos', () => {
     const portfolio = calculatePortfolio([bank()], rates, now, { now });
-    const chart = buildBankSeries([bank()], rates, now);
-    expect(chart.points[13].value.eq(portfolio.netBalance)).toBe(true);
-    expect(chart.points[13].dailyNetGain.toFixed(2)).toBe('0.88');
+    const chart = buildPortfolioSeries([bank()], rates, now);
+    expect(chart.points[6].value.eq(portfolio.netBalance)).toBe(true);
+    expect(chart.points[6].dailyNetGain.toFixed(2)).toBe('0.88');
     expect(portfolioEarnings(portfolio).toFixed(2)).toBe('2.62');
+    expect(chart.points[7].dailyNetGain.toFixed(2)).toBe('0.88');
+    expect(
+      chart.projectedTotal.minus(portfolio.netBalance).eq(chart.projectedGain),
+    ).toBe(true);
   });
   it('reproduz retirada integral sem resíduos nem cobrança adicional sobre o crédito', () => {
     const subject = bank();
@@ -210,7 +214,7 @@ describe('Mercado Pago: créditos líquidos conciliados no motor', () => {
     expect(result.redemptions[0].incomeTax.toFixed(2)).toBe('0.00');
     expect(result.lifetimeNetGain.toFixed(2)).toBe('2.62');
     expect(
-      buildBankSeries([subject], rates, now).points[13].value.toFixed(2),
+      buildPortfolioSeries([subject], rates, now).projectedTotal.toFixed(2),
     ).toBe('0.00');
   });
   it('retirada parcial fecha em centavos e os créditos remanescentes continuam sem dupla tributação', () => {
