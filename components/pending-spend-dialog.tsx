@@ -61,6 +61,8 @@ export function PendingSpendDialog({
 }) {
   const client = useMemo(() => createClient(), []);
   const [total, setTotal] = useState<string | null>(null);
+  // Hora da foto que mostrou a queda: a divisão vale até ela.
+  const [seenUntil, setSeenUntil] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,7 +76,7 @@ export function PendingSpendDialog({
         loadUnidentifiedSpend(client),
         client
           .from('pending_spend_splits')
-          .select('parts')
+          .select('parts, seen_until')
           .eq('account', account)
           .eq('day', day)
           .maybeSingle(),
@@ -84,12 +86,15 @@ export function PendingSpendDialog({
         (item) =>
           item.account === account && (item.split?.day ?? item.day) === day,
       );
-      const amount =
-        mine.find((item) => item.split)?.split?.total ??
-        mine[0]?.amount ??
-        null;
+      const divided = mine.find((item) => item.split);
+      const plain = mine.find((item) => !item.split);
+      const amount = divided?.split?.total ?? plain?.amount ?? null;
       setTotal(amount);
-      const parts = (split.data?.parts ?? []) as SplitPart[];
+      setSeenUntil(
+        divided ? (split.data?.seen_until ?? divided.at) : (plain?.at ?? null),
+      );
+      // Divisão já cumprida (as compras chegaram): começa do zero.
+      const parts = divided ? ((split.data?.parts ?? []) as SplitPart[]) : [];
       setSaved(parts.length > 0);
       setRows(
         parts.length
@@ -160,6 +165,8 @@ export function PendingSpendDialog({
             account,
             day,
             parts,
+            total: new Decimal(total).toFixed(2),
+            seen_until: seenUntil,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id,account,day' },

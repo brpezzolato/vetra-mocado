@@ -3,6 +3,7 @@ import { provisionalSince } from './daily-allowance';
 import { saoDate } from './expense-insights';
 import {
   applySplits,
+  type ArrivedMovement,
   openingGap,
   type PendingSplit,
   unidentifiedSpend,
@@ -63,7 +64,7 @@ export async function loadUnidentifiedSpend(
       client
         .from('financial_entries')
         .select(
-          'account, occurred_at, amount, entry_type, installment_number, installment_purchase_total',
+          'account, occurred_at, created_at, amount, entry_type, installment_number, installment_purchase_total',
         )
         .in('account', accounts)
         .gte('occurred_at', from.toISOString()),
@@ -169,8 +170,12 @@ export async function loadUnidentifiedSpend(
   const { data: splits } = await scoped(
     client
       .from('pending_spend_splits')
-      .select('account, day, parts')
+      .select('account, day, parts, total, seen_until, updated_at')
       .gte('day', from.toISOString().slice(0, 10)),
   );
-  return applySplits(result, (splits ?? []) as PendingSplit[]);
+  return applySplits(
+    result,
+    (splits ?? []) as PendingSplit[],
+    (movements ?? []) as ArrivedMovement[],
+  );
 }

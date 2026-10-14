@@ -66,7 +66,15 @@ export type PendingSplit = {
   account: string;
   day: string;
   parts: SplitPart[];
+  /** O valor dividido. Sem ele (divisão antiga), vale o valor atual. */
+  total?: number | string | null;
+  /** A hora da foto que mostrou a queda dividida. */
+  seen_until?: string | null;
+  updated_at?: string | null;
 };
+
+/** Compra do cartão com a hora em que chegou ao app. */
+export type ArrivedMovement = CardMovement & { created_at?: string | null };
 
 const CENT_TOLERANCE = new Decimal('0.05');
 
@@ -90,6 +98,9 @@ function subsetSumming(parts: SplitPart[], target: Decimal) {
 
 /**
  * Troca cada compra a chegar dividida pelo usuário pelas partes dele.
+ * A divisão cobre só a queda que o usuário viu (`total`): as compras feitas
+ * até ela que chegaram depois abatem o total, e o que cair no limite além
+ * disso é compra nova, no próprio dia.
  * - Partes somam o valor atual: viram as compras (cada uma no seu dia).
  * - Somam menos: partes + o resto, ainda como compra a chegar.
  * - Somam mais (compras já chegaram): só as partes que somam o que falta.
@@ -98,56 +109,97 @@ function subsetSumming(parts: SplitPart[], target: Decimal) {
 export function applySplits(
   items: UnidentifiedSpend[],
   splits: PendingSplit[],
+  movements: ArrivedMovement[] = [],
 ): UnidentifiedSpend[] {
-  return items.flatMap((item) => {
+  return items.flatMap((whole) => {
     const split = splits.find(
       (candidate) =>
-        candidate.account === item.account && candidate.day === item.day,
+        candidate.account === whole.account && candidate.day === whole.day,
     );
-    if (!split?.parts.length) return [item];
-    const amount = new Decimal(item.amount);
-    const sum = split.parts.reduce(
-      (total, part) => total.plus(part.amount),
-      new Decimal(0),
-    );
-    const toItem = (part: SplitPart): UnidentifiedSpend => ({
-      day: part.day,
-      account: item.account,
-      amount: new Decimal(part.amount).toFixed(2),
-      at: `${part.day}T12:00:00-03:00`,
-      split: {
-        day: item.day,
-        total: item.amount,
-        description: part.description?.trim() || null,
-      },
-    });
-    if (sum.minus(amount).abs().lte(CENT_TOLERANCE))
-      return split.parts.map(toItem);
-    if (sum.lt(amount))
-      return [
-        ...split.parts.map(toItem),
-        {
-          ...item,
-          amount: amount.minus(sum).toFixed(2),
-          split: { day: item.day, total: item.amount, description: null },
-        },
-      ];
-    const remaining = subsetSumming(split.parts, amount);
-    if (remaining) return remaining.map(toItem);
-    // Nada fecha: o que falta chegar fica no dia da maior parte, para a
-    // correção de data não se perder quando parte das compras chega.
-    const main = split.parts.reduce((best, part) =>
-      new Decimal(part.amount).gt(best.amount) ? part : best,
-    );
+    if (!split?.parts.length) return [whole];
+    // Quanto da queda dividida ainda falta chegar; o resto é compra nova.
+    let item = whole;
+    const fresh: UnidentifiedSpend[] = [];
+    if (split.total != null && split.seen_until && split.updated_at) {
+      const since = Date.parse(split.updated_at);
+      const until = Date.parse(split.seen_until);
+      const arrived = movements
+        .filter(
+          (movement) =>
+            movement.account === whole.account &&
+            movement.created_at &&
+            Date.parse(movement.created_at) > since &&
+            Date.parse(movement.occurred_at) <= until,
+        )
+        .reduce(
+          (sum, movement) => sum.plus(limitUse(movement)),
+          new Decimal(0),
+        );
+      const left = Decimal.max(new Decimal(split.total).minus(arrived), 0);
+      const extra = new Decimal(whole.amount).minus(left);
+      if (extra.gt(0)) {
+        if (extra.gte(1)) fresh.push({ ...whole, amount: extra.toFixed(2) });
+        // Divisão cumprida: só a compra nova segue.
+        if (left.lt(1)) return fresh;
+        item = { ...whole, amount: left.toFixed(2) };
+      }
+    }
+    return [...splitInto(item, split), ...fresh];
+  });
+}
+
+/** As partes de uma divisão para o valor que ainda falta chegar. */
+function splitInto(
+  item: UnidentifiedSpend,
+  split: PendingSplit,
+): UnidentifiedSpend[] {
+  const amount = new Decimal(item.amount);
+  const sum = split.parts.reduce(
+    (total, part) => total.plus(part.amount),
+    new Decimal(0),
+  );
+  const toItem = (part: SplitPart): UnidentifiedSpend => ({
+    day: part.day,
+    account: item.account,
+    amount: new Decimal(part.amount).toFixed(2),
+    at: `${part.day}T12:00:00-03:00`,
+    split: {
+      day: item.day,
+      total: item.amount,
+      description: part.description?.trim() || null,
+    },
+  });
+  if (sum.minus(amount).abs().lte(CENT_TOLERANCE))
+    return split.parts.map(toItem);
+  if (sum.lt(amount))
     return [
+      ...split.parts.map(toItem),
       {
-        ...toItem(main),
-        amount: item.amount,
+        ...item,
+        amount: amount.minus(sum).toFixed(2),
         split: { day: item.day, total: item.amount, description: null },
       },
     ];
-  });
+  const remaining = subsetSumming(split.parts, amount);
+  if (remaining) return remaining.map(toItem);
+  // Nada fecha: o que falta chegar fica no dia da maior parte, para a
+  // correção de data não se perder quando parte das compras chega.
+  const main = split.parts.reduce((best, part) =>
+    new Decimal(part.amount).gt(best.amount) ? part : best,
+  );
+  return [
+    {
+      ...toItem(main),
+      amount: item.amount,
+      split: { day: item.day, total: item.amount, description: null },
+    },
+  ];
 }
+
+/** Dias seguidos no calendário (yyyy-mm-dd). */
+const neighbours = (a: string, b: string) =>
+  Math.abs(Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) ===
+  86_400_000;
 
 /** A hora que vale de uma foto: a dos dados, ou a da foto sem ela. */
 const seen = (snapshot: LimitSnapshot) => snapshot.data_at ?? snapshot.taken_at;
@@ -219,21 +271,23 @@ export function unidentifiedSpend({
         at: seen(end),
       });
     }
-    // A compra pode ter hora num dia vizinho ao da queda. O negativo abate a
-    // sobra dos dias seguintes e depois dos anteriores; o total da janela é
-    // sempre queda − compras.
-    let carry = new Decimal(0);
-    for (const item of raw) {
-      const net = item.missing.plus(carry);
-      item.missing = Decimal.max(net, 0);
-      carry = Decimal.min(net, 0);
-    }
-    for (const item of [...raw].reverse()) {
-      if (carry.isZero()) break;
-      const net = item.missing.plus(carry);
-      item.missing = Decimal.max(net, 0);
-      carry = Decimal.min(net, 0);
-    }
+    // A compra pode ter hora num dia vizinho ao da queda: o negativo de um
+    // dia abate a sobra do dia seguinte e depois a do anterior. Só vizinho:
+    // compra no 1º dia da janela cuja queda foi antes dela (129,00 em
+    // 08/10/2026, queda em 07/10) apagava compras de dias depois.
+    raw.forEach((item, index) => {
+      let owed = item.missing.negated();
+      if (owed.lte(0)) return;
+      for (const other of [raw[index + 1], raw[index - 1]]) {
+        if (!other || !neighbours(item.day, other.day) || other.missing.lte(0))
+          continue;
+        const taken = Decimal.min(other.missing, owed);
+        other.missing = other.missing.minus(taken);
+        owed = owed.minus(taken);
+        if (owed.lte(0)) break;
+      }
+      item.missing = new Decimal(0);
+    });
     // Centavos de arredondamento não são compra.
     for (const item of raw)
       if (item.missing.gte(1))

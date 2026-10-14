@@ -54,6 +54,30 @@ describe('gasto ainda sem compra', () => {
     ]);
   });
 
+  it('compra cuja queda foi antes da janela não apaga dias distantes', () => {
+    // 129,00 carimbada em 08/10 00h (queda em 07/10, fora da janela); em
+    // 13/10 o limite caiu 17,60 sem compra.
+    const expense = (occurred_at: string, amount: number) => ({
+      account: 'Nubank',
+      occurred_at,
+      amount,
+      entry_type: 'expense' as const,
+    });
+    const result = unidentifiedSpend({
+      days: ['2026-10-08', '2026-10-09', '2026-10-12', '2026-10-13'],
+      snapshots: [
+        shot('2026-10-07T20:00:00Z', 900),
+        shot('2026-10-08T20:00:00Z', 900),
+        shot('2026-10-09T20:00:00Z', 900),
+        shot('2026-10-12T20:00:00Z', 900),
+        shot('2026-10-13T20:00:00Z', 882.4),
+      ],
+      movements: [expense('2026-10-08T03:00:00Z', 129)],
+      payments: [],
+    });
+    expect(result).toMatchObject([{ day: '2026-10-13', amount: '17.60' }]);
+  });
+
   it('pagamento de fatura e mudança de limite não parecem compra', () => {
     expect(
       unidentifiedSpend({
@@ -326,6 +350,45 @@ describe('divisão da compra a chegar', () => {
         item.amount,
       ]),
     ).toEqual([['2026-10-12', '200.00']]);
+  });
+
+  it('a divisão cobre só a queda dividida: compra nova fica no próprio dia', () => {
+    // Caso de 13–14/10/2026: R$ 492,51 de segunda corrigidos para 12/10; as
+    // compras chegaram depois, e na terça à noite o limite caiu R$ 17,60.
+    const fix = {
+      account: 'Nubank',
+      day: '2026-10-13',
+      parts: [{ amount: '492.51', day: '2026-10-12' }],
+      total: '492.51',
+      seen_until: '2026-10-13T12:53:55Z',
+      updated_at: '2026-10-13T14:05:37Z',
+    };
+    const arrived = (amount: string, occurred: string, created: string) => ({
+      account: 'Nubank',
+      amount,
+      occurred_at: occurred,
+      created_at: created,
+      entry_type: 'expense' as const,
+    });
+    const movements = [
+      arrived('19.99', '2026-10-13T01:41:54Z', '2026-10-13T16:08:38Z'),
+      arrived('86.92', '2026-10-12T17:20:22Z', '2026-10-14T10:48:56Z'),
+      arrived('367.70', '2026-10-12T21:23:54Z', '2026-10-14T10:48:56Z'),
+      arrived('17.90', '2026-10-13T00:45:18Z', '2026-10-14T10:48:56Z'),
+    ];
+    const tuesday = { ...pending, amount: '17.60', at: '2026-10-14T02:19:00Z' };
+    // Tudo da segunda chegou: os 17,60 são de terça, sem divisão.
+    expect(applySplits([tuesday], [fix], movements)).toEqual([tuesday]);
+    // Só parte chegou: o resto da segunda segue em 12/10 e o novo à parte.
+    const items = applySplits(
+      [{ ...tuesday, amount: '403.19' }],
+      [fix],
+      movements.slice(0, 2),
+    );
+    expect(items.map((item) => [item.day, item.amount, !!item.split])).toEqual([
+      ['2026-10-12', '385.60', true],
+      ['2026-10-13', '17.59', false],
+    ]);
   });
 
   it('sem divisão, nada muda', () => {
