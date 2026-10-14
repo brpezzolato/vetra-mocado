@@ -6,7 +6,8 @@ import { refreshWidgetsOnce } from '@/lib/manual-refresh';
 
 /* A home se atualiza sozinha: a cada `PULSE_MS` (e ao voltar ao app) uma
    consulta leve (contagem, última alteração e última foto do limite) diz se
-   algo mudou; se mudou, chama `refreshWidgetsOnce`. Não chama a Pluggy. */
+   algo mudou; se mudou, chama `refreshWidgetsOnce` e recarrega o sininho
+   (quando algo muda nos dados). Não chama a Pluggy. */
 
 export const PULSE_MS = 30_000;
 
@@ -41,7 +42,11 @@ export function useEntriesPulse() {
           limits.data?.[0]?.taken_at ?? '',
         ].join(':');
         // A primeira leitura só marca o ponto de partida.
-        if (last !== null && signature !== last) await refreshWidgetsOnce();
+        // Mudou: atualiza a tela e o sininho (o robô costuma trazer aviso).
+        if (last !== null && signature !== last) {
+          await refreshWidgetsOnce();
+          window.dispatchEvent(new Event('vetra:notifications'));
+        }
         last = signature;
       } finally {
         busy = false;
