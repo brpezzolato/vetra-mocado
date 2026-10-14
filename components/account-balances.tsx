@@ -367,16 +367,10 @@ function SpendingRoom({
   const sum = (values: number[]) =>
     values.reduce((total, value) => total.plus(value), new Decimal(0));
   const balance = sum(chosenAccounts.map((account) => account.balance));
-  const limit = sum(chosenCards.map((card) => card.limit));
   const free = sum(chosenCards.map((card) => card.available));
   const flash = sum(chosenBenefits.map((benefit) => benefit.balance));
   const room = balance.plus(free).plus(flash);
-  // Saldo negativo não ocupa barra; entra só no número.
-  const whole = Decimal.max(balance, 0).plus(flash).plus(limit);
-  const share = (value: Decimal) =>
-    whole.gt(0) ? Decimal.max(value, 0).div(whole).times(100).toNumber() : 0;
   // Um pedaço por item na cor do banco; limite livre num tom mais claro.
-  // Pedaço abaixo de 1% vira só um risco.
   const allParts = [
     ...chosenAccounts.map((account) => ({
       id: `account-${account.bank}`,
@@ -394,18 +388,19 @@ function SpendingRoom({
       value: new Decimal(card.available),
     })),
   ];
-  const parts = allParts.filter((part) => share(part.value) >= 1);
-  // No celular a barra é estreita e, com muito limite usado, os pedaços somem:
-  // lá ela mostra só a divisão do que dá para gastar (a barra inteira = soma).
+  // A barra é a divisão do que dá para gastar (a barra inteira = a soma),
+  // no celular e no computador. Contra o limite total, com muito limite usado
+  // os pedaços sumiam. Saldo negativo não ocupa barra; entra só no número.
   const available = allParts.reduce(
     (sum, part) => sum.plus(Decimal.max(part.value, 0)),
     new Decimal(0),
   );
-  const mobileShare = (value: Decimal) =>
+  const barShare = (value: Decimal) =>
     available.gt(0)
       ? Decimal.max(value, 0).div(available).times(100).toNumber()
       : 0;
-  const mobileParts = allParts.filter((part) => mobileShare(part.value) >= 1);
+  // Pedaço abaixo de 1% não aparece.
+  const barParts = allParts.filter((part) => barShare(part.value) >= 1);
   // Linha de baixo: só os grupos que estão na conta.
   const summary = [
     chosenAccounts.length ? { value: balance, label: 'Contas' } : null,
@@ -511,29 +506,14 @@ function SpendingRoom({
     <>
       <div
         aria-hidden="true"
-        className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-foreground/10 sm:hidden"
+        className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-foreground/10"
       >
-        {mobileParts.map((part) => (
+        {barParts.map((part) => (
           <span
             key={part.id}
             className="h-full first:rounded-l-full last:rounded-r-full"
             style={{
-              width: `${mobileShare(part.value)}%`,
-              background: part.colour,
-            }}
-          />
-        ))}
-      </div>
-      <div
-        aria-hidden="true"
-        className="hidden h-1.5 gap-px overflow-hidden rounded-full bg-foreground/10 sm:flex"
-      >
-        {parts.map((part) => (
-          <span
-            key={part.id}
-            className="h-full"
-            style={{
-              width: `${share(part.value)}%`,
+              width: `${barShare(part.value)}%`,
               background: part.colour,
             }}
           />
