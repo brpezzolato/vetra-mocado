@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import Decimal from 'decimal.js';
 import Image from 'next/image';
 import {
@@ -47,6 +47,7 @@ import { ExpenseAssistant } from '@/components/expense-assistant';
 import { Private } from '@/components/private-value';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PillSwitch } from '@/components/pill-switch';
 
 /* Extrato (/financeiro): o mês em destaque, busca, filtros por situação
    (pendentes, parcelas, divididas, fora das contas) e por cartão, e os
@@ -118,17 +119,17 @@ const STATUSES: { value: Status; label: string; icon: LucideIcon }[] = [
   { value: 'excluded', label: 'Fora das contas', icon: EyeOff },
 ];
 
-/** Logos de fundo cheio: preenchem a bolinha inteira. */
-const FULL_BLEED = new Set<PaymentMethodId>(['flash']);
+/** Símbolos soltos (sem nome escrito) ficam um pouco maiores na bolinha. */
+const SYMBOL = new Set<PaymentMethodId>(['flash', 'pix']);
 
 /** O logo de cada banco no filtro por meio de pagamento. */
 const BANK_LOGO: Partial<Record<PaymentMethodId, string>> = {
-  flash: '/logos/flash-f-ui.webp',
+  flash: '/logos/flash-f-pink-ui.webp',
   nubank: '/logos/nubank-ui.webp',
   itau: '/logos/itau-app.webp',
   picpay: '/logos/picpay-ui.webp',
   'mercado-pago': '/logos/mercado-pago-ui.webp',
-  pix: '/logos/pix.png',
+  pix: '/logos/pix-symbol-ui.webp',
 };
 
 export function ExpenseLedger({
@@ -156,6 +157,8 @@ export function ExpenseLedger({
   const [entryOpen, setEntryOpen] = useState(false);
   const [selected, setSelected] = useState<FinancialEntry | null>(null);
   const [status, setStatus] = useState<Status>('all');
+  // A lista segue o filtro em segundo plano: a pílula responde na hora.
+  const listStatus = useDeferredValue(status);
   // `null` = todos os meios de pagamento.
   const [method, setMethod] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -249,8 +252,8 @@ export function ExpenseLedger({
     excluded: expenses.filter((entry) => entry.excluded_from_totals),
   };
 
-  const needle = fold(query.trim());
-  const visible = byStatus[status]
+  const needle = fold(useDeferredValue(query).trim());
+  const visible = byStatus[listStatus]
     .filter((entry) => !activeMethod || entry.account === activeMethod)
     .filter(
       (entry) =>
@@ -441,52 +444,17 @@ export function ExpenseLedger({
                 )}
               </div>
 
-              {/* Situação em ícones; o ligado abre o nome. */}
-              <fieldset className="m-0 flex min-w-0 items-center gap-1 rounded-full border-0 bg-muted/70 p-1">
-                <legend className="sr-only">Situação</legend>
-                {STATUSES.map(({ value, label, icon: Icon }) => {
-                  const active = status === value;
-                  const count = value === 'all' ? 0 : byStatus[value].length;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      aria-pressed={active}
-                      aria-label={count ? `${label}, ${count}` : label}
-                      title={label}
-                      onClick={() => setStatus(value)}
-                      className={cn(
-                        'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-[flex-grow,background-color,color] duration-300 focus-visible:outline-2 focus-visible:-outline-offset-2',
-                        active
-                          ? 'flex-none bg-foreground px-3 font-semibold text-background shadow-sm'
-                          : 'flex-1 text-muted-foreground hover:text-foreground',
-                      )}
-                    >
-                      <span className="relative shrink-0">
-                        <Icon className="size-4" aria-hidden="true" />
-                        {count > 0 && !active && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute -top-2 left-2.5 min-w-4 rounded-full bg-foreground/15 px-1 text-center text-[10px] leading-4 tabular-nums text-foreground"
-                          >
-                            {count > 99 ? '99+' : count}
-                          </span>
-                        )}
-                      </span>
-                      {active && (
-                        <span aria-hidden="true" className="truncate">
-                          {label}
-                          {count > 0 && (
-                            <span className="ml-1 tabular-nums opacity-60">
-                              {count}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </fieldset>
+              {/* Situação em pílula (como a da home): toque ou arraste. */}
+              <PillSwitch
+                label="Situação"
+                value={status}
+                onChange={setStatus}
+                options={STATUSES.map((option) => ({
+                  ...option,
+                  count:
+                    option.value === 'all' ? 0 : byStatus[option.value].length,
+                }))}
+              />
 
               {/* Cartões em lista: logo e nome; o escolhido com ✓. */}
               {byMethod.length > 1 && (
@@ -530,7 +498,32 @@ export function ExpenseLedger({
 
             {/* A lista. */}
             <div className="lg:col-start-2 lg:row-span-3 lg:row-start-1">
-              {status === 'pending' && (
+              {/* O nome do filtro (a pílula só tem ícones). */}
+              {listStatus !== 'all' && (
+                <div className="mb-4 flex items-center justify-between gap-3 px-1 lg:mb-6">
+                  <p className="text-sm">
+                    <span className="font-semibold">
+                      {
+                        STATUSES.find((option) => option.value === listStatus)
+                          ?.label
+                      }
+                    </span>
+                    <span className="text-muted-foreground">
+                      {' '}
+                      · {byStatus[listStatus].length}{' '}
+                      {byStatus[listStatus].length === 1 ? 'compra' : 'compras'}
+                    </span>
+                  </p>
+                  <Button
+                    variant="glass-quiet"
+                    size="sm"
+                    onClick={() => setStatus('all')}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              )}
+              {listStatus === 'pending' && (
                 <p className="mt-5 rounded-2xl bg-muted/50 p-4 lg:mt-0 lg:mb-6 text-xs leading-relaxed text-muted-foreground">
                   O limite do cartão já caiu e a compra ainda não chegou do
                   banco. Toque numa delas para dividir ou corrigir a data. Elas
@@ -593,12 +586,12 @@ export function ExpenseLedger({
                     <p className="text-sm font-medium">
                       {needle
                         ? 'Nada encontrado'
-                        : status === 'pending'
+                        : listStatus === 'pending'
                           ? 'Nenhuma compra pendente'
                           : 'Nenhum gasto aqui'}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {status === 'pending' && !needle
+                      {listStatus === 'pending' && !needle
                         ? 'Tudo o que você gastou já chegou do banco.'
                         : 'Tente outro filtro ou outra busca.'}
                     </p>
@@ -708,13 +701,12 @@ function BankMark({ bankId, name }: { bankId: PaymentMethodId; name: string }) {
       <Image
         src={logo}
         alt=""
-        width={FULL_BLEED.has(bankId) ? 24 : 14}
-        height={FULL_BLEED.has(bankId) ? 24 : 14}
-        className={
-          FULL_BLEED.has(bankId)
-            ? 'size-full object-cover'
-            : 'size-3.5 object-contain'
-        }
+        width={16}
+        height={16}
+        className={cn(
+          'object-contain',
+          SYMBOL.has(bankId) ? 'size-4' : 'size-3.5',
+        )}
       />
     </span>
   ) : (
