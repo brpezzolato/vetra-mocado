@@ -21,7 +21,6 @@ export default async function SettingsPage() {
   ]);
   return (
     <FinancialTracker
-      settings
       userId={user.id}
       initialEntries={(entries.data ?? []) as FinancialEntry[]}
       initialTokens={(tokens.data ?? []) as ShortcutToken[]}

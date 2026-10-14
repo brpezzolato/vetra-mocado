@@ -228,6 +228,7 @@ export function ExpenseAssistant({
   cards,
   settings = false,
   aiEnabled = false,
+  weekly = true,
 }: {
   userId: string;
   entries: FinancialEntry[];
@@ -235,6 +236,8 @@ export function ExpenseAssistant({
   onChanged: () => Promise<void>;
   settings?: boolean;
   aiEnabled?: boolean;
+  /** O resumo semanal (o extrato não repete o da home). */
+  weekly?: boolean;
 }) {
   const db = useMemo(() => createClient(), []);
   const [rules, setRules] = useState<Rule[]>([]),
@@ -328,7 +331,7 @@ export function ExpenseAssistant({
   return (
     <div className="mt-7 min-w-0 space-y-5">
       {/* Nas Configurações não: o resumo da semana já está na home. */}
-      {!settings && <WeeklyExpenseSummary entries={entries} />}
+      {!settings && weekly && <WeeklyExpenseSummary entries={entries} />}
       {error && (
         <p
           role="alert"
