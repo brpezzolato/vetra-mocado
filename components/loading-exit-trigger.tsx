@@ -9,7 +9,8 @@ import {
 
 /* Envolve a logo do carregamento e dispara a saída (lib/loading-exit.ts) ao
    desmontar. Layout effect: a limpeza roda antes da pintura, senão o app
-   piscava um quadro. Carregamento de menos de 350 ms só some. */
+   piscava um quadro. A saída espera a tela montar; carregamento de menos de
+   350 ms com a tela pronta só some. */
 const MIN_VISIBLE_MS = 350;
 
 export function LoadingExitTrigger({
@@ -36,10 +37,9 @@ export function LoadingExitTrigger({
       window.removeEventListener('resize', measure);
       // Já há uma saída esperando: só a libera.
       if (loadingHidden()) return;
-      const elapsedMs = performance.now() - shownAt;
-      if (elapsedMs < MIN_VISIBLE_MS) return;
+      const quick = performance.now() - shownAt < MIN_VISIBLE_MS;
       // As barras: a saída parte de onde a Subida as deixou.
-      playLoadingExit(rect, { source: element });
+      playLoadingExit(rect, { source: element, quick });
     };
   }, []);
 

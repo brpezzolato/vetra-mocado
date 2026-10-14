@@ -36,6 +36,48 @@ export function loadingHidden() {
   return true;
 }
 
+/* A tela só aparece montada: o logo segue cobrindo enquanto houver esqueleto
+   (`data-slot="skeleton"`) visível, até `READY_MAX_MS`. */
+const READY_MAX_MS = 6000;
+const READY_FRAMES = 3;
+
+/** Algum esqueleto à vista: a tela ainda está carregando dados. */
+function pendingOnScreen() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  for (const node of document.querySelectorAll('[data-slot="skeleton"]')) {
+    const rect = node.getBoundingClientRect();
+    if (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < height &&
+      rect.left < width
+    )
+      return true;
+  }
+  return false;
+}
+
+/** Chama `done` com a tela sem esqueleto por alguns quadros seguidos.
+ * `waited`: houve esqueleto no caminho. */
+function whenScreenReady(done: (waited: boolean) => void) {
+  const start = performance.now();
+  let clear = 0;
+  let waited = false;
+  const check = () => {
+    if (pendingOnScreen()) {
+      clear = 0;
+      waited = true;
+    } else clear += 1;
+    if (clear >= READY_FRAMES || performance.now() - start > READY_MAX_MS)
+      return done(waited);
+    requestAnimationFrame(check);
+  };
+  requestAnimationFrame(check);
+}
+
 /** Tempo para as barras terminarem de subir. */
 const SETTLE_MS = 280;
 const REVEAL_MS = 950;
@@ -59,7 +101,8 @@ function liveBars(source?: Element | null) {
 
 export function playLoadingExit(
   rect: DOMRect,
-  options: { source?: Element | null } = {},
+  /** `quick`: carregamento curto; com a tela pronta, some sem animação. */
+  options: { source?: Element | null; quick?: boolean } = {},
 ) {
   if (typeof window === 'undefined' || rect.width <= 0) return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -128,18 +171,51 @@ export function playLoadingExit(
   });
 
   activeStage = stage;
+  let held = false;
+  let done = false;
+  const end = () => {
+    stage.remove();
+    if (activeStage === stage) activeStage = null;
+  };
   const reveal = () => {
     // Outro carregamento entrou por baixo: o palco espera o último sair.
     if (mountedLoadings > 0) {
+      held = true;
       revealWhenClear = reveal;
       return;
     }
     revealWhenClear = null;
-    stage.classList.add('is-revealing');
-    window.setTimeout(() => {
-      stage.remove();
-      if (activeStage === stage) activeStage = null;
-    }, REVEAL_MS + 80);
+    // E a tela que ficou por baixo termina de montar.
+    whenScreenReady((waited) => {
+      if (done) return;
+      if (mountedLoadings > 0) {
+        held = true;
+        revealWhenClear = reveal;
+        return;
+      }
+      done = true;
+      if (options.quick && !waited && !held) return end();
+      stage.classList.add('is-revealing');
+      window.setTimeout(end, REVEAL_MS + 80);
+    });
   };
-  window.setTimeout(reveal, SETTLE_MS);
+  window.setTimeout(reveal, options.quick ? 0 : SETTLE_MS);
+}
+
+/**
+ * Navegação sem carregamento (tela já em cache) que chega com esqueleto:
+ * cobre com o logo antes da pintura e revela quando a tela montar.
+ */
+export function coverUntilReady() {
+  if (typeof window === 'undefined') return;
+  if (activeStage || mountedLoadings > 0 || !pendingOnScreen()) return;
+  // O mesmo lugar e tamanho do logo do carregamento (centro, 112 px).
+  const size = 112;
+  const rect = new DOMRect(
+    (window.innerWidth - size) / 2,
+    (window.innerHeight - size) / 2,
+    size,
+    size,
+  );
+  playLoadingExit(rect);
 }

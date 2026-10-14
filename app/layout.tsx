@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { LoadingActivity } from '@/components/loading-activity';
+import { LoadingRouteGate } from '@/components/loading-route-gate';
 import { AppLock } from '@/components/app-lock';
 
 export const viewport: Viewport = {
@@ -74,6 +75,7 @@ export default function RootLayout({
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
       >
         <LoadingActivity />
+        <LoadingRouteGate />
         <AppLock>{children}</AppLock>
       </body>
     </html>
