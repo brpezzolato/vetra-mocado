@@ -12,6 +12,11 @@ import { BlueDaysCounter } from '@/components/streak-badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -370,22 +375,33 @@ function SpendingRoom({
   const free = sum(chosenCards.map((card) => card.available));
   const flash = sum(chosenBenefits.map((benefit) => benefit.balance));
   const room = balance.plus(free).plus(flash);
-  // Um pedaço por item na cor do banco; limite livre num tom mais claro.
-  const allParts = [
+  // Um pedaço por item na cor do banco; limite livre num tom mais claro. O
+  // nome aparece no hover e no toque (`limit`: o total do cartão).
+  const allParts: {
+    id: string;
+    label: string;
+    colour: string;
+    value: Decimal;
+    limit?: number;
+  }[] = [
     ...chosenAccounts.map((account) => ({
       id: `account-${account.bank}`,
+      label: `Conta ${BANKS[account.bank].name}`,
       colour: barColour(account.bank, 'balance'),
       value: new Decimal(account.balance),
     })),
     ...chosenBenefits.map((benefit) => ({
       id: `benefit-${benefit.key}`,
+      label: `Flash · ${benefit.label}`,
       colour: barColour('flash', 'balance'),
       value: new Decimal(benefit.balance),
     })),
     ...chosenCards.map((card) => ({
       id: `card-${card.key}`,
+      label: card.key,
       colour: barColour(suggestedCardBank(card.key), 'limit'),
       value: new Decimal(card.available),
+      limit: card.limit,
     })),
   ];
   // A barra é a divisão do que dá para gastar (a barra inteira = a soma),
@@ -501,25 +517,56 @@ function SpendingRoom({
       <SlidersHorizontal />
     </Button>
   );
-  /* A linha embaixo repete os números em texto. */
+  /* A linha embaixo repete os números em texto. Cada pedaço mostra o nome e o
+     valor: no hover (mouse) e no toque. Popover, não Tooltip: o tooltip do
+     Base UI não abre no toque. O botão tem 24 px de altura para o dedo; só o
+     miolo de 8 px é pintado. */
   const roomBar = (
-    <>
-      <div
+    <div className="relative -my-2 flex h-6 items-center gap-0.5">
+      <span
         aria-hidden="true"
-        className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-foreground/10"
-      >
-        {barParts.map((part) => (
-          <span
-            key={part.id}
-            className="h-full first:rounded-l-full last:rounded-r-full"
-            style={{
-              width: `${barShare(part.value)}%`,
-              background: part.colour,
-            }}
-          />
-        ))}
-      </div>
-    </>
+        className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-foreground/10"
+      />
+      {barParts.map((part, index) => (
+        <Popover key={part.id}>
+          <PopoverTrigger
+            openOnHover
+            delay={0}
+            aria-label={`${part.label}: ${money(part.value.toNumber())}`}
+            className="group relative flex h-6 min-w-0 items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            style={{ width: `${barShare(part.value)}%` }}
+          >
+            <span
+              className={cn(
+                'block h-2 w-full transition-[filter] group-hover:brightness-125 group-data-[popup-open]:brightness-125',
+                index === 0 && 'rounded-l-full',
+                index === barParts.length - 1 && 'rounded-r-full',
+              )}
+              style={{ background: part.colour }}
+            />
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-auto gap-0.5 p-2 text-xs">
+            <span className="flex items-center gap-1.5 font-medium">
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: part.colour }}
+              />
+              {part.label}
+            </span>
+            <span className="tabular-nums">
+              <Private>{money(part.value.toNumber())}</Private>
+              {part.limit !== undefined && (
+                <span className="text-muted-foreground">
+                  {' '}
+                  livres de <Private>{money(part.limit)}</Private>
+                </span>
+              )}
+            </span>
+          </PopoverContent>
+        </Popover>
+      ))}
+    </div>
   );
   const roomValue = <Private>{money(room.toNumber())}</Private>;
   /** "Hoje ainda dá para gastar": número, fogo, termômetro e notas. */
