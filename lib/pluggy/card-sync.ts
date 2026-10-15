@@ -27,6 +27,7 @@ import {
   type IncomeSource,
 } from './income-entries';
 import { discoverCreditCards } from './card-discovery';
+import { syncCheckingBillPayments } from './bill-payments';
 import type { PluggyBill, PluggyTransaction } from './types';
 import { saoPauloDay } from './vault-movements';
 
@@ -390,6 +391,11 @@ export async function syncCardsFromPluggy(
       result.errors++;
     }
   }
+  // Pagamento de fatura que só aparece na corrente (Itaú), depois das fotos
+  // do limite desta rodada.
+  await syncCheckingBillPayments(admin, pluggy, links).catch(() => {
+    result.errors++;
+  });
   return result;
 }
 
