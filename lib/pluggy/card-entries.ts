@@ -125,14 +125,24 @@ const sameOperation = (a: PluggyTransaction, b: PluggyTransaction) =>
   Math.abs(Date.parse(a.date) - Date.parse(b.date)) <= 3 * 86_400_000;
 
 /**
- * Pagamentos de fatura ("Credit card payment"). Chegam antes da fatura
- * publicada; a "compra a chegar" precisa saber que o limite subiu.
+ * Crédito no cartão que é pagamento de fatura, não estorno: "Credit card
+ * payment", ou o nome começando por "Pagamento"/"Pagto". O Itaú manda o
+ * pagamento como "PAGAMENTO COM SALDO" em "Transfers" (16/10/2026); como
+ * estorno ele abatia a fatura e ainda contava como pago.
+ */
+export const isBillPayment = (transaction: PluggyTransaction) =>
+  transaction.type === 'CREDIT' &&
+  (transaction.category === 'Credit card payment' ||
+    /^(pagamento|pagto)\b/i.test(transaction.description.trim()));
+
+/**
+ * Pagamentos de fatura. Chegam antes da fatura publicada; a "compra a
+ * chegar" precisa saber que o limite subiu.
  */
 export function cardPayments(transactions: PluggyTransaction[]) {
   const paid = transactions.filter(
     (transaction) =>
-      transaction.type === 'CREDIT' &&
-      transaction.category === 'Credit card payment' &&
+      isBillPayment(transaction) &&
       Number.isFinite(transaction.amount) &&
       transaction.amount !== 0,
   );
@@ -167,7 +177,7 @@ export function mapCardTransactions(
       return false;
     if (options.kind === 'debit_purchases')
       return transaction.operationType === 'CARTAO';
-    return transaction.category !== 'Credit card payment';
+    return !isBillPayment(transaction);
   });
   const posted = relevant.filter(
     (transaction) => transaction.status === 'POSTED',

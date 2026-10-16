@@ -127,26 +127,35 @@ export async function syncCheckingBillPayments(
       );
     if (!payments.length) continue;
     const names = cards.map((card) => card.account);
-    const [{ data: shots }, { data: events }, { data: cycles }] =
-      await Promise.all([
-        admin
-          .from('card_limit_snapshots')
-          .select('account, taken_at, data_at, credit_limit, available')
-          .eq('user_id', userId)
-          .in('account', names)
-          .gte('taken_at', new Date(Date.parse(from) - DAY).toISOString()),
-        admin
-          .from('card_payment_events')
-          .select('account, transaction_id, paid_on, amount')
-          .eq('user_id', userId)
-          .in('account', names),
-        admin
-          .from('card_cycles')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('kind', 'credit')
-          .in('account', names),
-      ]);
+    const [
+      { data: shots },
+      { data: events },
+      { data: cycles },
+      { data: recorded },
+    ] = await Promise.all([
+      admin
+        .from('card_limit_snapshots')
+        .select('account, taken_at, data_at, credit_limit, available')
+        .eq('user_id', userId)
+        .in('account', names)
+        .gte('taken_at', new Date(Date.parse(from) - DAY).toISOString()),
+      admin
+        .from('card_payment_events')
+        .select('account, transaction_id, paid_on, amount')
+        .eq('user_id', userId)
+        .in('account', names),
+      admin
+        .from('card_cycles')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('kind', 'credit')
+        .in('account', names),
+      admin
+        .from('card_invoice_payments')
+        .select('account, paid_at, amount, pluggy_transaction_id')
+        .eq('user_id', userId)
+        .in('account', names),
+    ]);
     const points: LimitPoint[] = (shots ?? []).map((shot) => ({
       account: shot.account as string,
       seen: (shot.data_at ?? shot.taken_at) as string,
@@ -156,15 +165,17 @@ export async function syncCheckingBillPayments(
       const account = paidCard(payment, names, points);
       if (!account) continue;
       const day = saoPauloDay(payment.date);
-      // O banco já mostrou este pagamento no cartão (Nubank): não duplica.
-      const seen = (events ?? []).some(
-        (event) =>
-          event.account === account &&
-          event.transaction_id !== payment.id &&
-          event.paid_on === day &&
-          Math.abs(Number(event.amount) - payment.amount) <= TOLERANCE,
+      const same = (row: { account: string; amount: unknown }, on: string) =>
+        row.account === account &&
+        on === day &&
+        Math.abs(Number(row.amount) - payment.amount) <= TOLERANCE;
+      // Já lançado na fatura (à mão ou por outra transação): não duplica.
+      const paidAlready = (recorded ?? []).some(
+        (row) =>
+          row.pluggy_transaction_id !== payment.id &&
+          same(row, saoPauloDay(row.paid_at as string)),
       );
-      if (seen) continue;
+      if (paidAlready) continue;
       const cycle = (cycles ?? []).find((item) => item.account === account) as
         CardCycle | undefined;
       if (!cycle) continue;
@@ -183,16 +194,24 @@ export async function syncCheckingBillPayments(
           { onConflict: 'user_id,pluggy_transaction_id' },
         );
       if (paymentError) continue;
-      await admin.from('card_payment_events').upsert(
-        {
-          user_id: userId,
-          account,
-          transaction_id: payment.id,
-          paid_on: day,
-          amount: payment.amount.toFixed(2),
-        },
-        { onConflict: 'user_id,transaction_id' },
+      // O cartão às vezes já mostra o mesmo pagamento (Nubank; Itaú como
+      // "PAGAMENTO COM SALDO"): o evento fica um só.
+      const eventAlready = (events ?? []).some(
+        (event) =>
+          event.transaction_id !== payment.id &&
+          same(event, event.paid_on as string),
       );
+      if (!eventAlready)
+        await admin.from('card_payment_events').upsert(
+          {
+            user_id: userId,
+            account,
+            transaction_id: payment.id,
+            paid_on: day,
+            amount: payment.amount.toFixed(2),
+          },
+          { onConflict: 'user_id,transaction_id' },
+        );
       saved++;
     }
   }

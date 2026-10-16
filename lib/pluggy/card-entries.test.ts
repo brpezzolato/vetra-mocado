@@ -488,6 +488,37 @@ describe('pagamentos de fatura na lista do cartão', () => {
     ).toEqual([{ transactionId: 'p', paidOn: '2026-11-06', amount: '44.71' }]);
   });
 
+  it('o "PAGAMENTO COM SALDO" do Itaú é pagamento, não estorno', () => {
+    // 16/10/2026: R$ 62,39 em "Transfers"; como estorno abatia a fatura e
+    // ainda contava como pago.
+    const payment = tx({
+      id: 'itau',
+      type: 'CREDIT',
+      amount: -62.39,
+      description: 'PAGAMENTO COM SALDO',
+      category: 'Transfers',
+      date: '2026-10-16T18:40:07Z',
+      installment: null,
+    });
+    const refund = tx({
+      id: 'estorno',
+      type: 'CREDIT',
+      amount: 10,
+      description: 'Estorno Loja X',
+      category: 'Shopping',
+      installment: null,
+    });
+    expect(cardPayments([payment, refund])).toEqual([
+      { transactionId: 'itau', paidOn: '2026-10-16', amount: '62.39' },
+    ]);
+    const entries = mapCardTransactions([payment, refund], {
+      account: 'Itaú Crédito',
+      kind: 'credit',
+      billDue: new Map(),
+    });
+    expect(entries.map((entry) => entry.externalId)).toEqual(['estorno']);
+  });
+
   it('o pagamento que o Nubank manda pendente e lançado conta uma vez', () => {
     const twin = (id: string, status: string) => ({
       id,
