@@ -16,6 +16,8 @@ export type PluggyAccount = {
   productName: string | null;
   /** Saldo; na corrente, o disponível. */
   balance: number | null;
+  /** Cheque especial em uso (`bankData.overdraftUsedLimit`); nulo fora da corrente. */
+  overdraftUsed: number | null;
   /**
    * Chave do banco deduzida do nome da conta (o conector é sempre
    * "MeuPluggy"). O nome em si não sai do client.

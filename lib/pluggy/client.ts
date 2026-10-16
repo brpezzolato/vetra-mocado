@@ -81,6 +81,10 @@ function toAccount(raw: Json): PluggyAccount {
       ? numOrNull(credit.availableCreditLimit)
       : null,
     balance: numOrNull(raw.balance),
+    overdraftUsed:
+      raw.bankData && typeof raw.bankData === 'object'
+        ? numOrNull((raw.bankData as Json).overdraftUsedLimit)
+        : null,
     bank: bankFromName(`${str(raw.name)} ${str(raw.marketingName)}`),
   };
 }

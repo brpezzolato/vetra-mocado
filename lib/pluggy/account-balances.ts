@@ -19,6 +19,16 @@ export type CardLimitBalance = {
   available: number;
 };
 
+/**
+ * Negativo sem cheque especial em uso é dinheiro na aplicação automática que
+ * o banco resgata depois (Itaú "Aplic Aut Mais", 16/10/2026): a Pluggy não
+ * traz a aplicação, então o saldo conta como zero. Com cheque especial em
+ * uso (ou sem a informação), o negativo fica.
+ */
+export function coveredBalance(balance: number, overdraftUsed: number | null) {
+  return balance < 0 && overdraftUsed === 0 ? 0 : balance;
+}
+
 export async function loadAccountBalances(
   admin: SupabaseClient,
   pluggy: PluggyClient,
@@ -83,7 +93,10 @@ export async function loadAccountsAndLimits(
         account.bank !== null &&
         account.balance !== null,
     )
-    .map((account) => ({ bank: account.bank!, balance: account.balance! }))
+    .map((account) => ({
+      bank: account.bank!,
+      balance: coveredBalance(account.balance!, account.overdraftUsed),
+    }))
     // Do maior saldo para o menor.
     .sort(
       (a, b) =>
