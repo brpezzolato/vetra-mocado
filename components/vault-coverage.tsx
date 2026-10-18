@@ -260,11 +260,16 @@ export function VaultCoverage({
               {rows.length ? (
                 <ul className="divide-y rounded-3xl border bg-card">
                   {rows.map(({ card, current, next }) => (
-                    <li key={card.account} className="grid gap-2 p-4">
-                      <div className="flex items-center gap-3">
-                        <PaymentCardIcon bankId={card.bank_id} />
+                    <li
+                      key={card.account}
+                      className="grid grid-cols-[minmax(0,1fr)] gap-2 p-4"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="shrink-0">
+                          <PaymentCardIcon bankId={card.bank_id} />
+                        </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
+                          <span className="block text-sm font-medium leading-snug break-words">
                             {card.account}
                           </span>
                           <span className="block text-xs text-muted-foreground">
@@ -273,7 +278,7 @@ export function VaultCoverage({
                               : `Vence ${dayMonth(current.due)}`}
                           </span>
                         </span>
-                        <span className="text-sm font-semibold tabular-nums">
+                        <span className="shrink-0 text-sm font-semibold tabular-nums">
                           <Private>{money(owed(current))}</Private>
                         </span>
                       </div>
