@@ -240,6 +240,7 @@ export function AppHeader({
         { href: '/assinaturas', label: 'Assinaturas', icon: Repeat2 },
         { href: '/beneficios', label: 'Benefícios (Flash)', icon: Wallet },
         { href: '/simulador', label: 'Simulador de compra', icon: Calculator },
+        { href: '/cobertura', label: 'Cofrinho × faturas', icon: PiggyBank },
       ],
     },
   ];
