@@ -26,6 +26,8 @@ export type FinancialEntry = {
   bank_status?: 'POSTED' | 'PENDING' | null;
   /** Fora das contas: continua na fatura e na lista, sai de todo o resto. */
   excluded_from_totals?: boolean;
+  /** Só na compra a chegar: passou de 3 dias úteis sem chegar. */
+  pending_overdue?: boolean;
   /** Não conta no valor do dia (presente, gasto extraordinário). */
   excluded_from_daily?: boolean;
   /** Compra dividida: a parte do usuário (`amount` é o valor cheio). Ver lib/entry-share.ts. */

@@ -179,11 +179,17 @@ function PendingLine({
           <span className="block truncate text-sm font-medium">
             {entry.description}*
           </span>
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            {split
-              ? 'Dividida por você · chega em até 3 dias úteis'
-              : `${entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} · toque para dividir`}
-          </span>
+          {entry.pending_overdue ? (
+            <span className="mt-0.5 block truncate text-xs font-medium text-amber-700 dark:text-amber-300">
+              Passou de 3 dias sem chegar · toque para decidir
+            </span>
+          ) : (
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              {split
+                ? 'Dividida por você · chega em até 7 dias'
+                : `${entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} · toque para dividir`}
+            </span>
+          )}
         </span>
         <span className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">
           <Private>−{money(entry.amount)}*</Private>

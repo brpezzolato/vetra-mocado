@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Decimal from 'decimal.js';
-import { Plus, Trash2 } from 'lucide-react';
+import { Clock, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/date-input';
@@ -67,6 +67,8 @@ export function PendingSpendDialog({
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Passou de 3 dias úteis sem chegar: o usuário decide se tira.
+  const [overdue, setOverdue] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -90,6 +92,7 @@ export function PendingSpendDialog({
       const plain = mine.find((item) => !item.split);
       const amount = divided?.split?.total ?? plain?.amount ?? null;
       setTotal(amount);
+      setOverdue(mine.some((item) => item.overdue));
       setSeenUntil(
         divided ? (split.data?.seen_until ?? divided.at) : (plain?.at ?? null),
       );
@@ -191,6 +194,17 @@ export function PendingSpendDialog({
     await refreshWidgetsOnce();
   }
 
+  async function dismiss() {
+    setBusy(true);
+    const { error: failure } = await client
+      .from('pending_spend_dismissals')
+      .upsert({ account, day }, { onConflict: 'user_id,account,day' });
+    setBusy(false);
+    if (failure) return setError('Não foi possível excluir. Tente de novo.');
+    onOpenChange(false);
+    await refreshWidgetsOnce();
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -203,6 +217,30 @@ export function PendingSpendDialog({
             chegarem do banco, somem daqui sozinhas.
           </DialogDescription>
         </DialogHeader>
+
+        {overdue && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Clock className="size-4 text-amber-600 dark:text-amber-400" />
+              Já passou de 3 dias e não chegou
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Alguns bancos, como o PicPay, demoram. Ela fica esperando até 7
+              dias; se você sabe que não vai chegar, pode excluir agora.
+            </p>
+            <Button
+              type="button"
+              variant="glass-quiet"
+              size="sm"
+              className="mt-3 gap-1.5"
+              disabled={busy}
+              onClick={() => void dismiss()}
+            >
+              <Trash2 className="size-3.5" />
+              Excluir compra a chegar
+            </Button>
+          </div>
+        )}
 
         {/* O que falta distribuir desce a cada valor digitado. */}
         {total && (

@@ -3,7 +3,7 @@ import { saoDate } from './expense-insights';
 import type { FinancialEntry } from './financial-tracker';
 
 /* Gasto no cartão que já aconteceu e ainda não chegou como compra (a Pluggy
-   leva até 3 dias úteis). Por dia:
+   leva até 3 dias úteis; o PicPay, mais). Por dia:
      subida do usado (limite − disponível)
    + pagamentos de fatura e estornos do dia (liberam limite)
    − compras que já chegaram no mesmo intervalo
@@ -45,6 +45,8 @@ export type UnidentifiedSpend = {
   at: string;
   /** Gasto anterior à primeira foto de um cartão novo (`openingGap`). */
   opening?: boolean;
+  /** Passou de 3 dias úteis sem a compra chegar: o usuário decide se tira. */
+  overdue?: boolean;
   /** Parte de uma divisão feita pelo usuário (`applySplits`). */
   split?: {
     /** Dia em que o app viu a queda: a chave da divisão. */
@@ -353,6 +355,7 @@ export function pendingEntries(items: UnidentifiedSpend[]): FinancialEntry[] {
     source: 'pluggy',
     external_id: null,
     bank_status: 'PENDING',
+    ...(item.overdue && { pending_overdue: true }),
     ...(item.opening && {
       notes: 'Feita antes da primeira leitura do limite',
     }),

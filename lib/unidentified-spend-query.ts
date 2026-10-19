@@ -13,8 +13,13 @@ import {
   type UnidentifiedSpend,
 } from './unidentified-spend';
 
+/** Quantos dias a compra a chegar fica esperando (o PicPay demora). */
+export const PENDING_WINDOW_DAYS = 7;
+
 /**
- * Gasto sem compra na janela de 3 dias úteis. Com service role, passe
+ * Gasto sem compra nos últimos `PENDING_WINDOW_DAYS` dias. Passados 3 dias
+ * úteis (`provisionalSince`) sem chegar, vem com `overdue` para o usuário
+ * decidir se descarta (pending_spend_dismissals). Com service role, passe
  * `userId`; com a sessão, o RLS filtra.
  */
 export async function loadUnidentifiedSpend(
@@ -32,7 +37,10 @@ export async function loadUnidentifiedSpend(
       : query;
 
   // Os dias da janela, e uma folga antes para achar a foto que abre o 1º.
-  const first = provisionalSince(today);
+  const start = new Date(`${today}T12:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - PENDING_WINDOW_DAYS);
+  const first = start.toISOString().slice(0, 10);
+  const settled = provisionalSince(today);
   const days: string[] = [];
   const cursor = new Date(`${first}T12:00:00Z`);
   while (cursor.toISOString().slice(0, 10) <= today) {
@@ -173,9 +181,26 @@ export async function loadUnidentifiedSpend(
       .select('account, day, parts, total, seen_until, updated_at')
       .gte('day', from.toISOString().slice(0, 10)),
   );
+  const { data: dismissed } = await scoped(
+    client
+      .from('pending_spend_dismissals')
+      .select('account, day')
+      .gte('day', first),
+  );
+  const gone = new Set(
+    (dismissed ?? []).map((row) => `${row.account}|${row.day}`),
+  );
   return applySplits(
     result,
     (splits ?? []) as PendingSplit[],
     (movements ?? []) as ArrivedMovement[],
-  );
+  )
+    .filter(
+      (item) => !gone.has(`${item.account}|${item.split?.day ?? item.day}`),
+    )
+    .map((item) =>
+      (item.split?.day ?? item.day) < settled
+        ? { ...item, overdue: true }
+        : item,
+    );
 }
