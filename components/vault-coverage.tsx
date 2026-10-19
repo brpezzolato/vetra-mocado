@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 
 const ALL = 'all';
 const QUICK = [100, 500, 1000];
+const DEPOSIT_KEY = 'vetra:coverage-deposit';
 
 const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', {
@@ -128,13 +129,28 @@ export function VaultCoverage({
   const setAmount = (value: Decimal) => {
     setDeposit(value);
     setTyped(value.gt(0) ? money(value) : '');
+    // Fica guardado neste aparelho até limpar ou trocar o valor.
+    try {
+      if (value.gt(0)) localStorage.setItem(DEPOSIT_KEY, value.toFixed(2));
+      else localStorage.removeItem(DEPOSIT_KEY);
+    } catch {}
   };
   const onType = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 12);
-    const next = digits ? new Decimal(digits).div(100) : new Decimal(0);
-    setDeposit(next);
-    setTyped(digits ? money(next) : '');
+    setAmount(digits ? new Decimal(digits).div(100) : new Decimal(0));
   };
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(DEPOSIT_KEY);
+    } catch {}
+    if (!stored || !/^\d+(\.\d{1,2})?$/.test(stored)) return;
+    const value = new Decimal(stored);
+    queueMicrotask(() => {
+      setDeposit(value);
+      setTyped(money(value));
+    });
+  }, []);
 
   const chips = [
     { id: ALL, label: 'Todos', logo: null as string | null },
