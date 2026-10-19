@@ -311,6 +311,17 @@ export function FinanceOverview({
         .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
     [entries],
   );
+  // Últimos gastos: parcela de compra antiga (2ª em diante) não é gasto do
+  // dia; fica só em Faturas e no Financeiro. A 1ª é a compra e aparece.
+  const recentEntries = useMemo(
+    () =>
+      expenseEntries.filter(
+        (entry) =>
+          !(entry.installment_group_id || entry.installment_total) ||
+          (entry.installment_number ?? 1) <= 1,
+      ),
+    [expenseEntries],
+  );
   const sortedCards = useMemo(
     () =>
       sortPaymentCardsByUsage(
@@ -326,7 +337,7 @@ export function FinanceOverview({
     return [
       <RecentExpenses
         key="gastos"
-        entries={expenseEntries}
+        entries={recentEntries}
         cards={sortedCards}
         available={available}
         onOpen={setSelectedEntry}
@@ -400,7 +411,7 @@ export function FinanceOverview({
       </div>,
     ];
   }, [
-    expenseEntries,
+    recentEntries,
     sortedCards,
     available,
     entries,
