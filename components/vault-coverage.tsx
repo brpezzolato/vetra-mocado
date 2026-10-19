@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 const ALL = 'all';
 const QUICK = [100, 500, 1000];
 const DEPOSIT_KEY = 'vetra:coverage-deposit';
+const VAULT_KEY = 'vetra:coverage-vault';
 
 const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', {
@@ -78,6 +79,8 @@ export function VaultCoverage({
     [banks, rates],
   );
   const vault = portfolio.results.find(({ bank }) => bank.id === vaultId);
+  // Guardado mas arquivado (ou ainda carregando): conta como "Todos".
+  const activeId = vault ? vaultId : ALL;
   const saved = vault ? vault.result.netBalance : portfolio.netBalance;
   const vaultName = vault ? vault.bank.name : 'Todos os cofrinhos';
 
@@ -125,6 +128,13 @@ export function VaultCoverage({
     : new Decimal(1);
   const missing = Decimal.max(before.negated(), 0);
 
+  // O cofrinho visto por último volta ao abrir a tela (neste aparelho).
+  const chooseVault = (id: string) => {
+    setVaultId(id);
+    try {
+      localStorage.setItem(VAULT_KEY, id);
+    } catch {}
+  };
   const [typed, setTyped] = useState('');
   const setAmount = (value: Decimal) => {
     setDeposit(value);
@@ -141,9 +151,12 @@ export function VaultCoverage({
   };
   useEffect(() => {
     let stored: string | null = null;
+    let vaultStored: string | null = null;
     try {
       stored = localStorage.getItem(DEPOSIT_KEY);
+      vaultStored = localStorage.getItem(VAULT_KEY);
     } catch {}
+    if (vaultStored) queueMicrotask(() => setVaultId(vaultStored));
     if (!stored || !/^\d+(\.\d{1,2})?$/.test(stored)) return;
     const value = new Decimal(stored);
     queueMicrotask(() => {
@@ -189,10 +202,10 @@ export function VaultCoverage({
                 key={chip.id}
                 type="button"
                 size="sm"
-                variant={vaultId === chip.id ? 'glass' : 'glass-quiet'}
-                aria-pressed={vaultId === chip.id}
+                variant={activeId === chip.id ? 'glass' : 'glass-quiet'}
+                aria-pressed={activeId === chip.id}
                 className="h-9 shrink-0 gap-2 rounded-full px-4"
-                onClick={() => setVaultId(chip.id)}
+                onClick={() => chooseVault(chip.id)}
               >
                 {chip.logo && (
                   <Image
