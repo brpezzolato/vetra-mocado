@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { buildCreditCardInvoices, type CardInvoice } from '@/lib/card-invoices';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import { calculatePortfolio } from '@/lib/portfolio';
+import { useAccountPreference } from '@/lib/use-account-preference';
 import { useVaultData } from '@/lib/use-vault-data';
 import { cn } from '@/lib/utils';
 
@@ -27,8 +28,6 @@ import { cn } from '@/lib/utils';
 
 const ALL = 'all';
 const QUICK = [100, 500, 1000];
-const DEPOSIT_KEY = 'vetra:coverage-deposit';
-const VAULT_KEY = 'vetra:coverage-vault';
 
 const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', {
@@ -70,9 +69,20 @@ export function VaultCoverage({
 }) {
   const router = useRouter();
   const { banks, rates, loading } = useVaultData();
-  const [vaultId, setVaultId] = useState(ALL);
   const [withNext, setWithNext] = useState(false);
-  const [deposit, setDeposit] = useState(new Decimal(0));
+  // Cofrinho e aporte ficam na conta: iguais no celular e no computador.
+  const {
+    value: prefs,
+    loaded,
+    save,
+  } = useAccountPreference<{
+    vault?: string;
+    deposit?: string;
+  }>('coverage');
+  const vaultId = prefs?.vault ?? ALL;
+  const deposit = /^\d+(\.\d{1,2})?$/.test(prefs?.deposit ?? '')
+    ? new Decimal(prefs!.deposit!)
+    : new Decimal(0);
 
   const portfolio = useMemo(
     () => calculatePortfolio(banks, rates),
@@ -128,42 +138,14 @@ export function VaultCoverage({
     : new Decimal(1);
   const missing = Decimal.max(before.negated(), 0);
 
-  // O cofrinho visto por último volta ao abrir a tela (neste aparelho).
-  const chooseVault = (id: string) => {
-    setVaultId(id);
-    try {
-      localStorage.setItem(VAULT_KEY, id);
-    } catch {}
-  };
-  const [typed, setTyped] = useState('');
-  const setAmount = (value: Decimal) => {
-    setDeposit(value);
-    setTyped(value.gt(0) ? money(value) : '');
-    // Fica guardado neste aparelho até limpar ou trocar o valor.
-    try {
-      if (value.gt(0)) localStorage.setItem(DEPOSIT_KEY, value.toFixed(2));
-      else localStorage.removeItem(DEPOSIT_KEY);
-    } catch {}
-  };
+  const chooseVault = (id: string) => save({ ...prefs, vault: id });
+  const setAmount = (value: Decimal) =>
+    save({ ...prefs, deposit: value.gt(0) ? value.toFixed(2) : undefined });
+  const typed = deposit.gt(0) ? money(deposit) : '';
   const onType = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 12);
     setAmount(digits ? new Decimal(digits).div(100) : new Decimal(0));
   };
-  useEffect(() => {
-    let stored: string | null = null;
-    let vaultStored: string | null = null;
-    try {
-      stored = localStorage.getItem(DEPOSIT_KEY);
-      vaultStored = localStorage.getItem(VAULT_KEY);
-    } catch {}
-    if (vaultStored) queueMicrotask(() => setVaultId(vaultStored));
-    if (!stored || !/^\d+(\.\d{1,2})?$/.test(stored)) return;
-    const value = new Decimal(stored);
-    queueMicrotask(() => {
-      setDeposit(value);
-      setTyped(money(value));
-    });
-  }, []);
 
   const chips = [
     { id: ALL, label: 'Todos', logo: null as string | null },
@@ -224,7 +206,7 @@ export function VaultCoverage({
           </div>
         </ScrollArea>
 
-        {loading ? (
+        {loading || !loaded ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
             <Skeleton className="h-80 rounded-3xl" />
             <Skeleton className="h-80 rounded-3xl" />
