@@ -49,13 +49,18 @@ export function MarkdownResponse({ children }: { children: string }) {
         pre: ({ children }) => (
           <ScrollArea
             orientation="horizontal"
+            hideScrollbar={false}
             className="my-2 rounded-xl bg-background/70"
           >
             <pre className="p-3 pb-4 text-xs">{children}</pre>
           </ScrollArea>
         ),
         table: ({ children }) => (
-          <ScrollArea orientation="horizontal" className="my-2">
+          <ScrollArea
+            orientation="horizontal"
+            hideScrollbar={false}
+            className="my-2"
+          >
             <table className="w-full border-collapse text-left text-xs">
               {children}
             </table>

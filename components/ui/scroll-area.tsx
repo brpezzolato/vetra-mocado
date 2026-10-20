@@ -16,13 +16,16 @@ function ScrollArea({
   orientation = 'vertical',
   viewportRef,
   viewportClassName,
-  hideScrollbar = false,
+  hideScrollbar = orientation === 'horizontal',
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
   orientation?: 'vertical' | 'horizontal' | 'both';
   viewportRef?: React.Ref<HTMLDivElement>;
   viewportClassName?: string;
-  /** Sem barra nem durante a rolagem (fileiras curtas). */
+  /**
+   * Sem barra nem durante a rolagem. Padrão nos horizontais (carrosséis de
+   * cards e pílulas: a barra no celular fica feia); `false` para mostrar.
+   */
   hideScrollbar?: boolean;
 }) {
   return (
