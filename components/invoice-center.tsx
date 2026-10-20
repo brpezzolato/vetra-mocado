@@ -295,7 +295,11 @@ function InvoiceHistory({
   return (
     <section className="mb-8">
       <h2 className="mb-3 text-sm font-semibold">Histórico</h2>
-      <ScrollArea orientation="horizontal" viewportRef={viewportRef}>
+      <ScrollArea
+        orientation="horizontal"
+        viewportRef={viewportRef}
+        className="scroll-bleed"
+      >
         <div
           role="tablist"
           aria-label="Escolher fatura"
@@ -872,8 +876,8 @@ export function InvoiceCenter({
         {invoiceCards.length || pendingCards.length ? (
           <>
             {/* Chips de filtro (com vidro). */}
-            <ScrollArea orientation="horizontal" className="-mx-1 mb-7">
-              <div className="flex gap-2 px-1 py-1">
+            <ScrollArea orientation="horizontal" className="scroll-bleed mb-7">
+              <div className="flex gap-2 py-1">
                 {[
                   { account: 'all', label: 'Todas', bankId: null },
                   ...[

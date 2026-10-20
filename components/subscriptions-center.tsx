@@ -271,7 +271,10 @@ export function SubscriptionsCenter({
         </section>
 
         <section className="min-w-0 overflow-hidden rounded-3xl border bg-card p-4 shadow-sm md:p-6">
-          <ScrollArea orientation="horizontal" className="w-full">
+          <ScrollArea
+            orientation="horizontal"
+            className="scroll-bleed [--bleed:1rem] md:[--bleed:1.5rem]"
+          >
             <div className="flex gap-2 pb-2">
               {(
                 [

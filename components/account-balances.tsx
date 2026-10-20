@@ -279,8 +279,11 @@ export function AccountBalances() {
   // Pílulas dos bancos no ScrollArea, sem scroll-snap (fazia a home arrastar
   // de lado no iPhone).
   const pills = (
-    <ScrollArea orientation="horizontal" className="w-full">
-      <ul className="flex gap-2 py-0.5 lg:flex-wrap">
+    <ScrollArea
+      orientation="horizontal"
+      className="scroll-bleed [--bleed:1.25rem] lg:mx-0"
+    >
+      <ul className="flex gap-2 py-0.5 lg:w-auto lg:flex-wrap lg:px-0">
         {accounts.map((account, index) => {
           const bank = BANKS[account.bank];
           return (

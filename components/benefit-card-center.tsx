@@ -549,7 +549,7 @@ export function BenefitCardCenter({
           )}
         </div>
 
-        <ScrollArea orientation="horizontal" className="mb-3 w-full">
+        <ScrollArea orientation="horizontal" className="scroll-bleed mb-3">
           <div className="flex gap-2 pb-2">
             <WalletChip
               label="Tudo"

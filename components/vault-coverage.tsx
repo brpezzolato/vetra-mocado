@@ -177,8 +177,8 @@ export function VaultCoverage({
         </div>
 
         {/* Cofrinho escolhido (chips com vidro, como em Faturas). */}
-        <ScrollArea orientation="horizontal" className="-mx-1 mb-6">
-          <div className="flex gap-2 px-1 py-1">
+        <ScrollArea orientation="horizontal" className="scroll-bleed mb-6">
+          <div className="flex gap-2 py-1">
             {chips.map((chip) => (
               <Button
                 key={chip.id}

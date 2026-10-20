@@ -182,6 +182,27 @@ body {
   height: 0;
 }
 
+/* Carrossel horizontal que vaza até a borda: no celular, o último card ou
+   pílula some na beirada da tela (ou do cartão), e não num corte reto dentro
+   da margem. `--bleed` é a margem que ele atravessa; troque com
+   `[--bleed:…]` quando o carrossel estiver dentro de um cartão. */
+@layer components {
+  .scroll-bleed {
+    --bleed: max(1rem, env(safe-area-inset-left));
+    margin-inline: calc(var(--bleed) * -1);
+  }
+  .scroll-bleed > [data-slot='scroll-area-viewport'] > * {
+    width: max-content;
+    min-width: 100%;
+    padding-inline: var(--bleed);
+  }
+  @media (min-width: 640px) {
+    .scroll-bleed {
+      --bleed: 1.25rem;
+    }
+  }
+}
+
 /* Safari dá largura intrínseca a date/time; força respeitar a coluna. */
 [data-slot='input'][type='date'],
 [data-slot='input'][type='time'] {
