@@ -69,6 +69,8 @@ export function PendingSpendDialog({
   const [error, setError] = useState('');
   // Passou de 3 dias úteis sem chegar: o usuário decide se tira.
   const [overdue, setOverdue] = useState(false);
+  // Excluir pede um segundo toque (não há como desfazer pela tela).
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -93,6 +95,7 @@ export function PendingSpendDialog({
       const amount = divided?.split?.total ?? plain?.amount ?? null;
       setTotal(amount);
       setOverdue(mine.some((item) => item.overdue));
+      setConfirming(false);
       setSeenUntil(
         divided ? (split.data?.seen_until ?? divided.at) : (plain?.at ?? null),
       );
@@ -226,19 +229,9 @@ export function PendingSpendDialog({
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Alguns bancos, como o PicPay, demoram. Ela fica esperando até 7
-              dias; se você sabe que não vai chegar, pode excluir agora.
+              dias; se você sabe que não vai chegar, pode excluir no botão
+              abaixo.
             </p>
-            <Button
-              type="button"
-              variant="glass-quiet"
-              size="sm"
-              className="mt-3 gap-1.5"
-              disabled={busy}
-              onClick={() => void dismiss()}
-            >
-              <Trash2 className="size-3.5" />
-              Excluir compra a chegar
-            </Button>
           </div>
         )}
 
@@ -378,6 +371,18 @@ export function PendingSpendDialog({
         )}
 
         <DialogFooter className="gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            className="gap-1.5 text-destructive hover:text-destructive sm:mr-auto"
+            disabled={busy || !total}
+            onClick={() => (confirming ? void dismiss() : setConfirming(true))}
+          >
+            <Trash2 className="size-4" />
+            {confirming
+              ? 'Toque de novo para excluir'
+              : 'Excluir compra a chegar'}
+          </Button>
           {saved && (
             <Button
               type="button"

@@ -1026,7 +1026,7 @@ function PendingSpendRow({ entry }: { entry: FinancialEntry }) {
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">
               {split
                 ? 'Dividida por você · chega em até 7 dias'
-                : 'O limite já caiu · toque para dividir'}
+                : 'O limite já caiu · toque para dividir ou excluir'}
             </span>
           )}
         </span>
