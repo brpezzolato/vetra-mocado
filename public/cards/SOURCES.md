@@ -5,7 +5,7 @@ The four `*-wallet.png` assets are deterministic crops of Apple Wallet screensho
 - Nubank Gold Mastercard
 - Flash Benefícios Visa
 - Itaú Platinum Mastercard
-- PicPay Mastercard
+- PicPay Mastercard (until 2026-10-21; see below)
 
 Personal card digits and original metadata were removed. Display-P3 screenshots were converted to sRGB for web use. Surrounding phone UI is excluded. The colored glow is applied by the component, not baked into the PNG.
 
@@ -32,3 +32,12 @@ square with the "itaú" letters cut out. Only the letters are filled white
 white); the corners stay transparent. Resized to 192px. Not redrawn. It
 replaced `itau-ui.webp` (the orange wordmark alone) and has a new name so
 cached copies of the old file are not served.
+
+`picpay-wallet.png` / `picpay-green-wallet-ui.webp` (2026-10-21) replace the
+black PicPay card. Built from a picture of the green PicPay Platinum card
+supplied by the project owner: the "platinum" text, the chip and the
+contactless symbol were left out; the PicPay logo and the Mastercard symbol
+were cut from that picture (mask against the card's green, not redrawn) and
+placed in the horizontal layout of the other cards, on the card's own green
+(#4FB273) with light grain. New filename so cached copies of the black card
+are not served.

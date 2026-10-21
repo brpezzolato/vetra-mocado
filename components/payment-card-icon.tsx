@@ -19,7 +19,7 @@ const WALLET_ART = {
     src: '/cards/nubank-wallet-ui.webp',
   },
   picpay: {
-    src: '/cards/picpay-wallet-ui.webp',
+    src: '/cards/picpay-green-wallet-ui.webp',
   },
 } satisfies Partial<Record<PaymentMethodId, { src: string }>>;
 
@@ -111,13 +111,6 @@ export function PaymentCardIcon({
             bankId === 'picpay' && 'scale-[1.025]',
           )}
         />
-        {bankId === 'picpay' && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-10 rounded-[4px] border"
-            style={{ borderColor: 'rgba(148, 148, 148, .32)' }}
-          />
-        )}
       </span>
     </span>
   );
