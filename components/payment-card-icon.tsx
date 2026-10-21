@@ -19,7 +19,7 @@ const WALLET_ART = {
     src: '/cards/nubank-wallet-ui.webp',
   },
   picpay: {
-    src: '/cards/picpay-green-wallet-ui.webp',
+    src: '/cards/picpay-verde-wallet-ui.webp',
   },
 } satisfies Partial<Record<PaymentMethodId, { src: string }>>;
 

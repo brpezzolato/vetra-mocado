@@ -122,7 +122,7 @@ export function AppHeader({
         '/cards/flash-wallet-ui.webp',
         '/cards/itau-wallet-ui.webp',
         '/cards/nubank-wallet-ui.webp',
-        '/cards/picpay-green-wallet-ui.webp',
+        '/cards/picpay-verde-wallet-ui.webp',
         '/cards/pix-wallet-ui.png',
       ]) {
         const logo = new window.Image();

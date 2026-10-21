@@ -33,11 +33,12 @@ white); the corners stay transparent. Resized to 192px. Not redrawn. It
 replaced `itau-ui.webp` (the orange wordmark alone) and has a new name so
 cached copies of the old file are not served.
 
-`picpay-wallet.png` / `picpay-green-wallet-ui.webp` (2026-10-21) replace the
+`picpay-wallet.png` / `picpay-verde-wallet-ui.webp` (2026-10-21) replace the
 black PicPay card. Built from a picture of the green PicPay Platinum card
 supplied by the project owner: the "platinum" text, the chip and the
 contactless symbol were left out; the PicPay logo and the Mastercard symbol
 were cut from that picture (mask against the card's green, not redrawn) and
-placed in the horizontal layout of the other cards, on the card's own green
+placed horizontally (logo top left, Mastercard bottom right, 96px from the
+edges at 1071px), on the card’s own green
 (#4FB273) with light grain. New filename so cached copies of the black card
 are not served.
