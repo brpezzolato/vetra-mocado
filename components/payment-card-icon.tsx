@@ -8,35 +8,29 @@ import { cn } from '@/lib/utils';
 const WALLET_ART = {
   pix: {
     src: '/cards/pix-wallet-ui.png',
-    glow: 'rgba(50, 188, 173, .48)',
   },
   flash: {
     src: '/cards/flash-wallet-ui.webp',
-    glow: 'rgba(255, 42, 145, .42)',
   },
   itau: {
     src: '/cards/itau-wallet-ui.webp',
-    glow: 'rgba(255, 102, 0, .42)',
   },
   nubank: {
     src: '/cards/nubank-wallet-ui.webp',
-    glow: 'rgba(151, 30, 255, .48)',
   },
   picpay: {
     src: '/cards/picpay-wallet-ui.webp',
-    glow: 'rgba(0, 0, 0, .8)',
   },
-} satisfies Partial<Record<PaymentMethodId, { src: string; glow: string }>>;
+} satisfies Partial<Record<PaymentMethodId, { src: string }>>;
 
 /** Banco sem arte própria: cartão na cor da marca com o logo no canto. */
 const BRAND_TILE = {
   'mercado-pago': {
     background: '#ffe600',
     logo: '/logos/mercado-pago-ui.webp',
-    glow: 'rgba(255, 230, 0, .38)',
   },
 } satisfies Partial<
-  Record<PaymentMethodId, { background: string; logo: string; glow: string }>
+  Record<PaymentMethodId, { background: string; logo: string }>
 >;
 
 export function PaymentCardIcon({
@@ -46,17 +40,12 @@ export function PaymentCardIcon({
   bankId: PaymentMethodId;
   large?: boolean;
 }) {
-  const art = (
-    WALLET_ART as Partial<
-      Record<PaymentMethodId, { src: string; glow: string }>
-    >
-  )[bankId];
+  const art = (WALLET_ART as Partial<Record<PaymentMethodId, { src: string }>>)[
+    bankId
+  ];
   const tile = (
     BRAND_TILE as Partial<
-      Record<
-        PaymentMethodId,
-        { background: string; logo: string; glow: string }
-      >
+      Record<PaymentMethodId, { background: string; logo: string }>
     >
   )[bankId];
   if (!art && tile)
@@ -67,9 +56,6 @@ export function PaymentCardIcon({
           'inline-flex shrink-0 aspect-[1071/672]',
           large ? 'w-32' : 'w-14',
         )}
-        style={{
-          filter: `drop-shadow(0 0 ${large ? 10 : 5}px ${tile.glow}) drop-shadow(0 0 2px ${tile.glow})`,
-        }}
       >
         <span
           className="relative block size-full overflow-hidden rounded-[4px]"
@@ -110,9 +96,6 @@ export function PaymentCardIcon({
         'inline-flex shrink-0 aspect-[1071/672]',
         large ? 'w-32' : 'w-14',
       )}
-      style={{
-        filter: `drop-shadow(0 0 ${large ? 10 : 5}px ${art.glow}) drop-shadow(0 0 2px ${art.glow})`,
-      }}
     >
       <span className="relative block size-full overflow-hidden rounded-[4px]">
         <Image
