@@ -13,7 +13,7 @@ import {
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
-import { CreditCard, X } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
 import {
   InvoiceDetails,
@@ -22,7 +22,7 @@ import {
   type CardLimit,
 } from '@/components/invoice-center';
 import { Private } from '@/components/private-value';
-import { Button } from '@/components/ui/button';
+import { CloseSymbol, GlassButton } from '@/components/ui/glass-button';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import type { CreditCardInvoices } from '@/lib/card-invoices';
 import type { PaymentCard } from '@/lib/payment-cards';
@@ -153,7 +153,8 @@ const CardFace = memo(function CardFace({
         </span>
       )}
       {(tag || (!art && !brand)) && (
-        <span className="absolute top-[7%] right-[5%] rounded-full bg-white/90 px-3 py-1 text-[clamp(11px,3.2cqw,14px)] font-semibold text-neutral-900 shadow-sm">
+        // Impresso no cartão: texto escuro simples, sem pílula.
+        <span className="absolute top-[8%] right-[6%] text-[clamp(13px,4.4cqw,19px)] font-semibold tracking-tight text-neutral-950/85">
           {tag ?? card.account}
         </span>
       )}
@@ -161,12 +162,50 @@ const CardFace = memo(function CardFace({
   );
 });
 
+/**
+ * Da frente para trás: a ordem salva na conta (`user_preferences`, chave
+ * `wallet`); sem ela, o mais usado na frente, sem dois cartões do mesmo banco
+ * colados quando der (dois laranjas do Itaú lado a lado se confundem).
+ */
+function walletOrder(
+  items: WalletCard[],
+  saved: string[] | null,
+  entries: CardInvoiceInputs['entries'],
+) {
+  if (saved?.length) {
+    const rank = (account: string) => {
+      const at = saved.indexOf(account);
+      return at < 0 ? saved.length : at;
+    };
+    return [...items].sort(
+      (a, b) => rank(a.card.account) - rank(b.card.account),
+    );
+  }
+  const uses = new Map<string, number>();
+  for (const entry of entries)
+    if (entry.entry_type === 'expense')
+      uses.set(entry.account, (uses.get(entry.account) ?? 0) + 1);
+  const left = [...items].sort(
+    (a, b) => (uses.get(b.card.account) ?? 0) - (uses.get(a.card.account) ?? 0),
+  );
+  const out: WalletCard[] = [];
+  while (left.length) {
+    const previous = out.at(-1)?.card.bank_id;
+    const at = left.findIndex((item) => item.card.bank_id !== previous);
+    out.push(...left.splice(at < 0 ? 0 : at, 1));
+  }
+  return out;
+}
+
 export function CardWallet({
   inputs,
+  order,
   initialAccount,
   initialError,
 }: {
   inputs: CardInvoiceInputs;
+  /** Ordem salva, da frente para trás (contas). */
+  order: string[] | null;
   initialAccount: string | null;
   initialError: string;
 }) {
@@ -178,9 +217,10 @@ export function CardWallet({
     [router],
   );
   const { invoiceCards, pendingCards } = useInvoiceCards(inputs);
+  // A pilha vai de trás (topo) para a frente (o cartão inteiro, embaixo).
   const wallet: WalletCard[] = useMemo(() => {
     const all = [...invoiceCards.map((item) => item.card), ...pendingCards];
-    return [
+    const items: WalletCard[] = [
       ...invoiceCards.map((item) => ({
         card: item.card,
         invoices: item,
@@ -192,7 +232,8 @@ export function CardWallet({
         tag: cardTag(card, all),
       })),
     ];
-  }, [invoiceCards, pendingCards]);
+    return walletOrder(items, order, inputs.entries).reverse();
+  }, [inputs.entries, invoiceCards, order, pendingCards]);
   const known = (account: string | null) =>
     account && wallet.some((item) => item.card.account === account)
       ? account
@@ -208,10 +249,11 @@ export function CardWallet({
   // Fechando: os detalhes esmaecem antes de desmontar.
   const [leaving, setLeaving] = useState(false);
   const timer = useRef<number | null>(null);
-  // Abrir põe ?cartao= no histórico (o voltar do celular fecha o cartão), mas
-  // só depois do movimento: o roteador do Next reage ao histórico, e isso no
-  // meio da animação engasga.
+  // Abrir põe uma entrada no histórico (o voltar do celular fecha o cartão),
+  // com o mesmo endereço (mudar a URL faz o Next redesenhar a página, e a
+  // tela piscava) e só depois do movimento.
   const pushed = useRef(false);
+  const selectedRef = useRef<string | null>(selected);
   const historyTimer = useRef<number | null>(null);
   /** O popstate do nosso próprio `history.back()` não fecha de novo. */
   const ownBack = useRef(false);
@@ -219,13 +261,15 @@ export function CardWallet({
   const collapse = useCallback(() => {
     if (timer.current) window.clearTimeout(timer.current);
     if (historyTimer.current) window.clearTimeout(historyTimer.current);
-    if (window.scrollY > 0) window.scrollTo({ top: 0 });
+    // Rolado nos detalhes: sobe junto com a volta dos cartões, sem pulo.
+    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: 'smooth' });
+    selectedRef.current = null;
     setSelected(null);
     setLeaving(true);
     timer.current = window.setTimeout(() => {
       setDetails(null);
       setLeaving(false);
-      // Fechado pelo X ou Esc: tira o ?cartao= depois do movimento.
+      // Fechado pelo X ou Esc: tira a entrada do histórico depois do movimento.
       if (pushed.current) {
         pushed.current = false;
         ownBack.current = true;
@@ -239,6 +283,7 @@ export function CardWallet({
     if (window.scrollY > 0) window.scrollTo({ top: 0 });
     setDetails(null);
     setLeaving(false);
+    selectedRef.current = account;
     setSelected(account);
     timer.current = window.setTimeout(
       () => startTransition(() => setDetails(account)),
@@ -250,11 +295,7 @@ export function CardWallet({
     expand(account);
     if (historyTimer.current) window.clearTimeout(historyTimer.current);
     historyTimer.current = window.setTimeout(() => {
-      window.history.pushState(
-        null,
-        '',
-        `${window.location.pathname}?cartao=${encodeURIComponent(account)}`,
-      );
+      window.history.pushState(window.history.state, '');
       pushed.current = true;
     }, DETAILS_LEAVE + 80);
   };
@@ -272,11 +313,11 @@ export function CardWallet({
         ownBack.current = false;
         return;
       }
-      const account = new URLSearchParams(window.location.search).get('cartao');
-      // Voltar do celular: a entrada já saiu do histórico.
-      pushed.current = false;
-      if (account) expand(account);
-      else collapse();
+      // Voltar do celular com um cartão aberto: a entrada já saiu do histórico.
+      if (pushed.current && selectedRef.current) {
+        pushed.current = false;
+        collapse();
+      }
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') close();
@@ -289,7 +330,7 @@ export function CardWallet({
       if (timer.current) window.clearTimeout(timer.current);
       if (historyTimer.current) window.clearTimeout(historyTimer.current);
     };
-  }, [close, collapse, expand]);
+  }, [close, collapse]);
 
   const index = wallet.findIndex((item) => item.card.account === selected);
   const active = index >= 0 ? wallet[index]! : null;
@@ -319,47 +360,51 @@ export function CardWallet({
   }, [inputs.limits, shown]);
 
   /** Posição de cada cartão: na pilha, ou abrindo o escolhido. */
+  /**
+   * Posição de cada cartão: na pilha, ou abrindo o escolhido. Os que saem
+   * deslizam um pouco, esmaecem e ficam `visibility: hidden` no fim (senão,
+   * rolando os detalhes, eles reapareciam no meio da tela). A troca de
+   * visibilidade vai junto na transição, com atraso: some só no fim e
+   * reaparece já no começo da volta.
+   */
   const place = (i: number): CSSProperties => {
-    const base: CSSProperties = {
+    const move = (
+      transform: string,
+      opacity: number,
+      { duration = 440, fade = 260, delay = 0, ease = EASE } = {},
+    ): CSSProperties => ({
       zIndex: i + 1,
-      transitionProperty: 'transform, opacity',
-      transitionDuration: '460ms, 300ms',
-      transitionTimingFunction: `${EASE}, ease`,
-    };
+      transform,
+      opacity,
+      visibility: opacity === 0 ? 'hidden' : 'visible',
+      transitionProperty: 'transform, opacity, visibility',
+      transitionDuration: `${duration}ms, ${fade}ms, 0s`,
+      transitionTimingFunction: `${ease}, ease, linear`,
+      transitionDelay: `${delay}ms, ${delay}ms, ${opacity === 0 ? delay + fade : 0}ms`,
+    });
     if (!active)
-      return {
-        ...base,
-        transform: `translate3d(0, ${i * PEEK * 100}%, 0)`,
-        opacity: 1,
-        // Voltando, os de baixo sobem em cascata.
-        transitionDelay:
-          index < 0 ? `${Math.max(0, i - 1) * 28}ms, 0ms` : undefined,
-      };
+      // Voltando, os da frente sobem em cascata.
+      return move(`translate3d(0, ${i * PEEK * 100}%, 0)`, 1, {
+        delay: index < 0 && leaving ? Math.max(0, i - 1) * 24 : 0,
+      });
     if (i === index)
-      return {
-        ...base,
-        transform: 'translate3d(0, 0, 0)',
-        opacity: 1,
-        transitionDuration: '520ms, 200ms',
-        transitionTimingFunction: `${EASE_SPRING}, ease`,
-      };
+      return move('translate3d(0, 0, 0)', 1, {
+        duration: 500,
+        ease: EASE_SPRING,
+      });
     if (i < index)
-      // Os de cima recuam para trás e somem.
-      return {
-        ...base,
-        transform: `translate3d(0, ${i * PEEK * 40 - 18}%, 0) scale(0.9)`,
-        opacity: 0,
-        transitionDuration: '420ms, 220ms',
-      };
-    // Os de baixo descem para fora da tela.
-    return {
-      ...base,
-      transform: `translate3d(0, calc(100dvh + ${(i - index) * PEEK * 100}%), 0)`,
-      opacity: 1,
-      transitionDuration: '400ms, 200ms',
-      transitionTimingFunction: `${EASE}, ease`,
-      transitionDelay: `${(i - index - 1) * 18}ms, 0ms`,
-    };
+      // Os de trás recuam um pouco e somem.
+      return move(
+        `translate3d(0, ${(i * PEEK - 0.12) * 100}%, 0) scale(0.94)`,
+        0,
+        { duration: 380, fade: 220 },
+      );
+    // Os da frente descem e somem.
+    return move(`translate3d(0, ${((i - index) * PEEK + 0.5) * 100}%, 0)`, 0, {
+      duration: 380,
+      fade: 240,
+      delay: (i - index - 1) * 16,
+    });
   };
 
   return (
@@ -412,17 +457,17 @@ export function CardWallet({
             )}
             aria-hidden={active ? undefined : true}
           >
-            <Button
+            {/* O mesmo X dos diálogos do app. */}
+            <GlassButton
               type="button"
-              variant="glass"
-              size="icon"
-              className="size-10 shrink-0 rounded-full"
+              shape="circle"
+              className="size-9 shrink-0"
               aria-label="Fechar e voltar aos cartões"
               tabIndex={active ? 0 : -1}
               onClick={close}
             >
-              <X />
-            </Button>
+              <CloseSymbol />
+            </GlassButton>
             <p className="min-w-0 truncate text-base font-semibold">
               {active?.card.account}
             </p>

@@ -830,7 +830,13 @@ export function InvoiceDetails({
       {rest && (
         <div
           key={`${entry.card.account}-${invoice.due}`}
-          className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+          // Só anima ao trocar de fatura: na primeira vez quem esmaece é
+          // quem abriu (a Carteira), e duas animações piscavam.
+          className={
+            selectedDue
+              ? 'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200'
+              : undefined
+          }
         >
           <InvoiceSummary invoice={invoice} invoices={entry.invoices} />
           <CategoryBreakdown invoice={invoice} bankId={entry.card.bank_id} />
