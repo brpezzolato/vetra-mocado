@@ -1,6 +1,13 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  startTransition,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
@@ -195,11 +202,14 @@ function InvoiceHero({
   invoices,
   card,
   limit,
+  hideCard = false,
 }: {
   invoice: CardInvoice;
   invoices: CardInvoice[];
   card: PaymentCard;
   limit?: CardLimit;
+  /** Sem o cartãozinho: a Carteira já mostra o cartão grande em cima. */
+  hideCard?: boolean;
 }) {
   const facts = [
     { label: 'Vence', value: dayMonth(invoice.due) },
@@ -232,12 +242,16 @@ function InvoiceHero({
             )
           )}
         </div>
-        <span className="shrink-0 sm:hidden">
-          <PaymentCardIcon bankId={card.bank_id} />
-        </span>
-        <span className="hidden shrink-0 sm:block">
-          <PaymentCardIcon bankId={card.bank_id} large />
-        </span>
+        {!hideCard && (
+          <>
+            <span className="shrink-0 sm:hidden">
+              <PaymentCardIcon bankId={card.bank_id} />
+            </span>
+            <span className="hidden shrink-0 sm:block">
+              <PaymentCardIcon bankId={card.bank_id} large />
+            </span>
+          </>
+        )}
       </div>
       <dl className="mt-6 grid grid-cols-3 divide-x divide-border/70 border-y border-border/70 py-3">
         {facts.map((fact) => (
@@ -651,7 +665,7 @@ function ExpenseList({ invoice }: { invoice: CardInvoice }) {
  * Cartão de crédito sem fatura ainda (sem ciclo): mostra limite e aviso até
  * a primeira fatura fechar.
  */
-function PendingCardPanel({
+export function PendingCardPanel({
   card,
   limit,
   onOpen,
@@ -764,6 +778,128 @@ function ConsolidatedInvoices({
   );
 }
 
+/**
+ * Os detalhes de um cartão (painel, histórico, resumo, categorias e compras),
+ * com a fatura escolhida no histórico. A Carteira (`/carteira`) usa o mesmo.
+ */
+export function InvoiceDetails({
+  entry,
+  limit,
+  hideCard = false,
+  progressive = false,
+}: {
+  entry: CreditCardInvoices;
+  limit?: CardLimit;
+  hideCard?: boolean;
+  /** Painel e histórico primeiro; resumo, categorias e compras no quadro seguinte. */
+  progressive?: boolean;
+}) {
+  const [selectedDue, setSelectedDue] = useState('');
+  const [rest, setRest] = useState(!progressive);
+  useEffect(() => {
+    if (rest) return;
+    let timeout = 0;
+    const frame = requestAnimationFrame(() => {
+      timeout = window.setTimeout(
+        () => startTransition(() => setRest(true)),
+        0,
+      );
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [rest]);
+  const invoice =
+    entry.invoices.find((item) => item.due === selectedDue) ?? entry.current;
+  return (
+    <>
+      <InvoiceHero
+        invoice={invoice}
+        invoices={entry.invoices}
+        card={entry.card}
+        limit={limit}
+        hideCard={hideCard}
+      />
+      <InvoiceHistory
+        invoice={invoice}
+        invoices={entry.invoices}
+        bankId={entry.card.bank_id}
+        onChange={setSelectedDue}
+      />
+      {rest && (
+        <div
+          key={`${entry.card.account}-${invoice.due}`}
+          className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
+        >
+          <InvoiceSummary invoice={invoice} invoices={entry.invoices} />
+          <CategoryBreakdown invoice={invoice} bankId={entry.card.bank_id} />
+          <ExpenseList invoice={invoice} />
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Cartões das faturas na ordem da tela: bancos em ordem fixa e, no mesmo
+ * banco, o mais usado primeiro. `pending`: cartão com limite e sem fatura.
+ */
+export function useInvoiceCards({
+  entries,
+  cards,
+  cycles,
+  payments,
+  bills,
+  limits,
+}: {
+  entries: FinancialEntry[];
+  cards: PaymentCard[];
+  cycles: CardCycle[];
+  payments: CardInvoicePayment[];
+  bills: CardBill[];
+  limits: CardLimit[];
+}) {
+  const sortedCards = useMemo(
+    () =>
+      sortPaymentCardsByUsage(
+        cards,
+        entries.map((entry) => entry.account),
+      )
+        .map((card, index) => ({ card, index }))
+        .sort(
+          (a, b) =>
+            bankRank(a.card.bank_id) - bankRank(b.card.bank_id) ||
+            a.index - b.index,
+        )
+        .map(({ card }) => card),
+    [cards, entries],
+  );
+  const invoiceCards = useMemo(
+    () =>
+      buildCreditCardInvoices(
+        entries,
+        sortedCards,
+        cycles,
+        undefined,
+        payments,
+        bills,
+        limits,
+      ),
+    [bills, cycles, entries, limits, payments, sortedCards],
+  );
+  const pendingCards = useMemo(
+    () =>
+      sortedCards.filter(
+        (card) =>
+          limits.some((item) => item.account === card.account) &&
+          !invoiceCards.some((item) => item.card.account === card.account),
+      ),
+    [invoiceCards, limits, sortedCards],
+  );
+  return { invoiceCards, pendingCards };
+}
+
 /** A ordem dos bancos nas faturas; os que não estão aqui vêm depois. */
 const BANK_ORDER: PaymentCard['bank_id'][] = [
   'nubank',
@@ -797,46 +933,14 @@ export function InvoiceCenter({
   initialError: string;
 }) {
   const router = useRouter();
-  // Cartões com ciclo de crédito; ordem fixa de bancos e, no mesmo banco, o
-  // mais usado primeiro.
-  const sortedCards = useMemo(
-    () =>
-      sortPaymentCardsByUsage(
-        cards,
-        entries.map((entry) => entry.account),
-      )
-        .map((card, index) => ({ card, index }))
-        .sort(
-          (a, b) =>
-            bankRank(a.card.bank_id) - bankRank(b.card.bank_id) ||
-            a.index - b.index,
-        )
-        .map(({ card }) => card),
-    [cards, entries],
-  );
-  const invoiceCards = useMemo(
-    () =>
-      buildCreditCardInvoices(
-        entries,
-        sortedCards,
-        cycles,
-        undefined,
-        payments,
-        bills,
-        limits,
-      ),
-    [bills, cycles, entries, limits, payments, sortedCards],
-  );
-  // Cartão do banco (tem limite) ainda sem fatura.
-  const pendingCards = useMemo(
-    () =>
-      sortedCards.filter(
-        (card) =>
-          limits.some((item) => item.account === card.account) &&
-          !invoiceCards.some((item) => item.card.account === card.account),
-      ),
-    [invoiceCards, limits, sortedCards],
-  );
+  const { invoiceCards, pendingCards } = useInvoiceCards({
+    entries,
+    cards,
+    cycles,
+    payments,
+    bills,
+    limits,
+  });
   const [activeAccount, setActiveAccount] = useState(initialAccount);
   const [selectedDue, setSelectedDue] = useState('');
   const active = invoiceCards.find(

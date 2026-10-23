@@ -335,7 +335,8 @@ export function VaultCoverage({
                       onClick={() => setAmount(deposit.plus(value))}
                     >
                       <Plus className="size-3" />
-                      {money(value).replace(',00', '')}
+                      {/* Atalho fixo, não é dado do usuário: sem Private. */}
+                      R$ {value.toLocaleString('pt-BR')}
                     </Button>
                   ))}
                   {missing.gt(0) && (
