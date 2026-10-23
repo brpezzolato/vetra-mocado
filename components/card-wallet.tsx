@@ -24,6 +24,7 @@ import {
 import { Private } from '@/components/private-value';
 import { CloseSymbol, GlassButton } from '@/components/ui/glass-button';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
+import { createClient } from '@/lib/supabase/client';
 import type { CreditCardInvoices } from '@/lib/card-invoices';
 import type { PaymentCard } from '@/lib/payment-cards';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,10 @@ const PEEK = 0.3;
 const DETAILS_DELAY = 470;
 /** Fechando, os detalhes somem e só desmontam quando os cartões assentam. */
 const DETAILS_LEAVE = 520;
+/** Segurar este tempo levanta o cartão para arrastar (como no Apple Wallet). */
+const HOLD_MS = 380;
+/** Mexer mais que isso antes do tempo é rolagem, não segurar. */
+const HOLD_SLOP = 8;
 /** Curva do iOS; a do cartão escolhido passa um tiquinho e volta. */
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 const EASE_SPRING = 'cubic-bezier(0.34, 1.18, 0.64, 1)';
@@ -199,7 +204,7 @@ function walletOrder(
 
 export function CardWallet({
   inputs,
-  order,
+  order: savedOrder,
   initialAccount,
   initialError,
 }: {
@@ -217,6 +222,9 @@ export function CardWallet({
     [router],
   );
   const { invoiceCards, pendingCards } = useInvoiceCards(inputs);
+  const client = useMemo(() => createClient(), []);
+  // Da frente para trás; arrastar troca aqui e grava na conta.
+  const [order, setOrder] = useState(savedOrder);
   // A pilha vai de trás (topo) para a frente (o cartão inteiro, embaixo).
   const wallet: WalletCard[] = useMemo(() => {
     const all = [...invoiceCards.map((item) => item.card), ...pendingCards];
@@ -360,6 +368,151 @@ export function CardWallet({
   }, [inputs.limits, shown]);
 
   /** Posição de cada cartão: na pilha, ou abrindo o escolhido. */
+  // Arrastar para reordenar: segurar levanta o cartão; ele segue o dedo por
+  // uma variável CSS (`--drag-y`, sem redesenhar o React a cada movimento) e
+  // os outros abrem espaço quando ele passa de uma faixa.
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  const dragging = useRef<{
+    from: number;
+    to: number;
+    startY: number;
+    step: number;
+    el: HTMLElement;
+  } | null>(null);
+  const press = useRef<{
+    timer: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  /** O clique que vem depois de soltar um arrasto não abre a fatura. */
+  const swallowClick = useRef(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  const saveOrder = useCallback(
+    (stack: WalletCard[]) => {
+      // A pilha vai de trás para a frente; a ordem salva, da frente para trás.
+      const next = stack.map((item) => item.card.account).reverse();
+      setOrder(next);
+      void client
+        .from('user_preferences')
+        .upsert(
+          {
+            key: 'wallet',
+            value: { order: next },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,key' },
+        )
+        .then(() => undefined);
+    },
+    [client],
+  );
+
+  const moveCard = (from: number, to: number) => {
+    if (from === to) return;
+    const stack = [...wallet];
+    const [moved] = stack.splice(from, 1);
+    stack.splice(to, 0, moved!);
+    saveOrder(stack);
+  };
+
+  const endPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  };
+
+  const onCardPointerDown = (
+    event: React.PointerEvent<HTMLElement>,
+    i: number,
+  ) => {
+    if (active || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    endPress();
+    // O botão captura o dedo (os eventos seguem vindo para ele); quem se move
+    // é o invólucro posicionado.
+    const target = event.currentTarget;
+    const el = target.parentElement!;
+    const pointer = event.pointerId;
+    const startY = event.clientY;
+    press.current = {
+      x: event.clientX,
+      y: startY,
+      timer: window.setTimeout(() => {
+        press.current = null;
+        try {
+          target.setPointerCapture(pointer);
+        } catch {}
+        dragging.current = {
+          from: i,
+          to: i,
+          startY,
+          step: el.getBoundingClientRect().height * PEEK,
+          el,
+        };
+        el.style.setProperty('--drag-y', '0px');
+        navigator.vibrate?.(8);
+        setDrag({ from: i, to: i });
+      }, HOLD_MS),
+    };
+  };
+
+  const onCardPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    const held = press.current;
+    if (held) {
+      if (
+        Math.abs(event.clientX - held.x) > HOLD_SLOP ||
+        Math.abs(event.clientY - held.y) > HOLD_SLOP
+      )
+        endPress();
+      return;
+    }
+    const current = dragging.current;
+    if (!current) return;
+    const dy = event.clientY - current.startY;
+    current.el.style.setProperty('--drag-y', `${dy}px`);
+    const to = Math.max(
+      0,
+      Math.min(wallet.length - 1, Math.round(current.from + dy / current.step)),
+    );
+    if (to !== current.to) {
+      current.to = to;
+      navigator.vibrate?.(4);
+      setDrag({ from: current.from, to });
+    }
+  };
+
+  const onCardPointerUp = () => {
+    endPress();
+    const current = dragging.current;
+    if (!current) return;
+    dragging.current = null;
+    swallowClick.current = true;
+    window.setTimeout(() => (swallowClick.current = false), 0);
+    moveCard(current.from, current.to);
+    setDrag(null);
+    // Depois que o React tirou a variável da posição, limpa.
+    requestAnimationFrame(() => current.el.style.removeProperty('--drag-y'));
+  };
+
+  // Arrastando, o dedo não rola a página (o touchmove precisa ser não
+  // passivo para poder cancelar a rolagem no iPhone).
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const block = (event: TouchEvent) => {
+      if (dragging.current) event.preventDefault();
+    };
+    stage.addEventListener('touchmove', block, { passive: false });
+    return () => stage.removeEventListener('touchmove', block);
+  }, [wallet.length]);
+
+  /** Onde cada cartão fica na pilha, contando o espaço aberto pelo arrasto. */
+  const slot = (i: number) => {
+    if (!drag || i === drag.from) return i;
+    if (drag.from < drag.to && i > drag.from && i <= drag.to) return i - 1;
+    if (drag.from > drag.to && i >= drag.to && i < drag.from) return i + 1;
+    return i;
+  };
+
   /**
    * Posição de cada cartão: na pilha, ou abrindo o escolhido. Os que saem
    * deslizam um pouco, esmaecem e ficam `visibility: hidden` no fim (senão,
@@ -382,11 +535,24 @@ export function CardWallet({
       transitionTimingFunction: `${ease}, ease, linear`,
       transitionDelay: `${delay}ms, ${delay}ms, ${opacity === 0 ? delay + fade : 0}ms`,
     });
+    if (drag && i === drag.from)
+      // O cartão levantado segue o dedo, um pouco maior e por cima de todos.
+      return {
+        zIndex: 100,
+        transform: `translate3d(0, calc(${i * PEEK * 100}% + var(--drag-y, 0px)), 0) scale(1.04)`,
+        opacity: 1,
+        visibility: 'visible',
+        transition: 'none',
+      };
     if (!active)
       // Voltando, os da frente sobem em cascata.
-      return move(`translate3d(0, ${i * PEEK * 100}%, 0)`, 1, {
-        delay: index < 0 && leaving ? Math.max(0, i - 1) * 24 : 0,
-      });
+      return {
+        ...move(`translate3d(0, ${slot(i) * PEEK * 100}%, 0)`, 1, {
+          delay: index < 0 && leaving ? Math.max(0, i - 1) * 24 : 0,
+          duration: drag ? 280 : 440,
+        }),
+        zIndex: slot(i) + 1,
+      };
     if (i === index)
       return move('translate3d(0, 0, 0)', 1, {
         duration: 500,
@@ -479,47 +645,82 @@ export function CardWallet({
             Nenhum cartão de crédito ainda.
           </p>
         ) : (
-          <div
-            className="relative [container-type:inline-size]"
-            style={{
-              // A pilha ocupa a altura de um cartão mais as faixas dos outros;
-              // aberto (e fechando), só a do cartão: os detalhes não pulam
-              // para baixo enquanto somem sob os cartões que voltam.
-              aspectRatio:
-                active || leaving
-                  ? `${RATIO}`
-                  : `${RATIO} / ${1 + (count - 1) * PEEK}`,
-            }}
-          >
-            {wallet.map((item, i) => {
-              const chosen = i === index;
-              const hidden = Boolean(active) && !chosen;
-              return (
-                <div
-                  key={item.card.account}
-                  className="absolute inset-x-0 top-0 will-change-transform motion-reduce:transition-none!"
-                  style={{ aspectRatio: `${RATIO}`, ...place(i) }}
-                  aria-hidden={hidden || undefined}
-                >
-                  {active ? (
-                    // Aberto, o nome do cartão está na barra do fechar.
-                    <div className="size-full">
-                      <CardFace card={item.card} tag={item.tag} />
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => open(item.card.account)}
-                      aria-label={`Abrir a fatura do ${item.card.account}`}
-                      className="block size-full rounded-[clamp(12px,4.2cqw,20px)] transition-transform duration-150 outline-none select-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-foreground active:scale-[0.985]"
-                    >
-                      <CardFace card={item.card} tag={item.tag} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <>
+            <p id="wallet-reorder-hint" className="sr-only">
+              Segure e arraste o cartão para mudar a ordem, ou use Alt e as
+              setas.
+            </p>
+            <div
+              ref={stageRef}
+              className="relative [container-type:inline-size]"
+              style={{
+                // A pilha ocupa a altura de um cartão mais as faixas dos outros;
+                // aberto (e fechando), só a do cartão: os detalhes não pulam
+                // para baixo enquanto somem sob os cartões que voltam.
+                aspectRatio:
+                  active || leaving
+                    ? `${RATIO}`
+                    : `${RATIO} / ${1 + (count - 1) * PEEK}`,
+              }}
+            >
+              {wallet.map((item, i) => {
+                const chosen = i === index;
+                const hidden = Boolean(active) && !chosen;
+                return (
+                  <div
+                    key={item.card.account}
+                    className="absolute inset-x-0 top-0 will-change-transform motion-reduce:transition-none!"
+                    style={{ aspectRatio: `${RATIO}`, ...place(i) }}
+                    aria-hidden={hidden || undefined}
+                  >
+                    {active ? (
+                      // Aberto, o nome do cartão está na barra do fechar.
+                      <div className="size-full">
+                        <CardFace card={item.card} tag={item.tag} />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (swallowClick.current || drag) return;
+                          open(item.card.account);
+                        }}
+                        onPointerDown={(event) => onCardPointerDown(event, i)}
+                        onPointerMove={onCardPointerMove}
+                        onPointerUp={onCardPointerUp}
+                        onPointerCancel={onCardPointerUp}
+                        onContextMenu={(event) => event.preventDefault()}
+                        // Teclado: Alt + setas muda o cartão de lugar.
+                        onKeyDown={(event) => {
+                          if (!event.altKey) return;
+                          if (event.key === 'ArrowUp' && i > 0) {
+                            event.preventDefault();
+                            moveCard(i, i - 1);
+                          } else if (
+                            event.key === 'ArrowDown' &&
+                            i < wallet.length - 1
+                          ) {
+                            event.preventDefault();
+                            moveCard(i, i + 1);
+                          }
+                        }}
+                        aria-label={`Abrir a fatura do ${item.card.account}`}
+                        aria-describedby="wallet-reorder-hint"
+                        className={cn(
+                          'block size-full rounded-[clamp(12px,4.2cqw,20px)] transition-[transform,box-shadow] duration-150 outline-none select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-foreground',
+                          drag?.from === i
+                            ? 'shadow-[0_24px_48px_-12px_rgb(0_0_0/0.7)]'
+                            : 'active:scale-[0.985]',
+                        )}
+                      >
+                        <CardFace card={item.card} tag={item.tag} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {shown && (
