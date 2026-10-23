@@ -27,7 +27,7 @@ import { CloseSymbol, GlassButton } from '@/components/ui/glass-button';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import { createClient } from '@/lib/supabase/client';
 import type { CreditCardInvoices } from '@/lib/card-invoices';
-import type { PaymentCard } from '@/lib/payment-cards';
+import { PAYMENT_METHOD_COLOUR, type PaymentCard } from '@/lib/payment-cards';
 import { cn } from '@/lib/utils';
 
 /* Carteira (teste; se aprovada, substitui /faturas): os cartões empilhados
@@ -208,6 +208,75 @@ function walletOrder(
   return out;
 }
 
+type LimitRow = {
+  account: string;
+  bankId: PaymentCard['bank_id'];
+  limit: Decimal;
+  used: Decimal;
+};
+
+/**
+ * Quanto do limite já foi gasto e quanto sobra: na pilha, a soma dos cartões
+ * (cada um na sua cor); aberto, só o do cartão. Sem animar a largura: a troca
+ * acontece junto com o movimento dos cartões e não pode custar layout.
+ */
+const LimitSummary = memo(function LimitSummary({
+  rows,
+  single,
+}: {
+  rows: LimitRow[];
+  single: boolean;
+}) {
+  const limit = rows.reduce((sum, row) => sum.plus(row.limit), new Decimal(0));
+  if (!limit.gt(0)) return null;
+  const used = rows.reduce((sum, row) => sum.plus(row.used), new Decimal(0));
+  const free = Decimal.max(limit.minus(used), 0);
+  const share = (value: Decimal) =>
+    `${Decimal.min(value.div(limit).times(100), 100).toFixed(2)}%`;
+  return (
+    <section
+      aria-label={single ? 'Limite deste cartão' : 'Limite dos cartões'}
+      className="mb-8 rounded-3xl border bg-card px-5 py-5 md:px-6"
+    >
+      <div className="flex items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">Já gasto</p>
+          <p className="mt-1 text-xl font-semibold tracking-tight tabular-nums">
+            <Private>{money(used)}</Private>
+          </p>
+        </div>
+        <div className="min-w-0 text-right">
+          <p className="text-xs text-muted-foreground">Sobra</p>
+          <p className="mt-1 text-xl font-semibold tracking-tight text-emerald-600 tabular-nums dark:text-emerald-400">
+            <Private>{money(free)}</Private>
+          </p>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-foreground/10"
+      >
+        {rows.map((row) =>
+          row.used.gt(0) ? (
+            <span
+              key={row.account}
+              className="h-full first:rounded-l-full"
+              style={{
+                width: share(row.used),
+                background: PAYMENT_METHOD_COLOUR[row.bankId],
+              }}
+            />
+          ) : null,
+        )}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        de <Private>{money(limit)}</Private> de limite
+        {single ? '' : ` em ${rows.length} cartões`}
+      </p>
+    </section>
+  );
+});
+
 export function CardWallet({
   inputs,
   order: savedOrder,
@@ -314,6 +383,31 @@ export function CardWallet({
     new Decimal(0),
   );
   const nextDue = invoiceCards.map((item) => item.current.due).sort()[0];
+  // O limite de cada cartão, da frente para trás (a pilha ao contrário).
+  const limitRows: LimitRow[] = useMemo(
+    () =>
+      [...wallet].reverse().flatMap((item) => {
+        const row = inputs.limits.find(
+          (limit) => limit.account === item.card.account,
+        );
+        if (row?.credit_limit == null) return [];
+        const limit = new Decimal(row.credit_limit);
+        if (!limit.gt(0)) return [];
+        const used = Decimal.max(
+          0,
+          Decimal.min(limit, limit.minus(row.available_limit ?? 0)),
+        );
+        return [
+          {
+            account: item.card.account,
+            bankId: item.card.bank_id,
+            limit,
+            used,
+          },
+        ];
+      }),
+    [inputs.limits, wallet],
+  );
   // Os detalhes de todos os cartões ficam montados e escondidos (`Activity`
   // hidden: o React os prepara em segundo plano depois da tela pronta). Abrir
   // só revela o painel pronto, sem montar nada pesado durante a animação, o
@@ -608,6 +702,10 @@ export function CardWallet({
             </p>
           </div>
         </div>
+
+        {/* Sempre o total: trocar o conteúdo junto com a animação de abrir
+            seria mais uma coisa mudando na tela ao mesmo tempo. */}
+        <LimitSummary rows={limitRows} single={false} />
 
         {count === 0 ? (
           <p className="rounded-3xl border bg-card p-6 text-sm text-muted-foreground">

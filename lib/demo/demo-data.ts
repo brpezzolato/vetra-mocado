@@ -503,7 +503,30 @@ export function demoTables(): Record<string, Row[]> {
     card_invoice_payments: [],
     // O limite do Nubank caiu R$ 86,50 entre ontem à noite e hoje de manhã,
     // sem compra correspondente: aparece como "compra a chegar".
-    pluggy_card_links: [{ ...base, account: 'Nubank', kind: 'credit' }],
+    // Limites dos cartões (a barra "Já gasto / Sobra" da Carteira e a da home).
+    pluggy_card_links: [
+      {
+        ...base,
+        account: 'Nubank',
+        kind: 'credit',
+        credit_limit: 4800,
+        available_limit: 3351.1,
+      },
+      {
+        ...base,
+        account: 'Itaú',
+        kind: 'credit',
+        credit_limit: 3200,
+        available_limit: 2088.4,
+      },
+      {
+        ...base,
+        account: 'Mercado Pago',
+        kind: 'credit',
+        credit_limit: 2500,
+        available_limit: 1912.75,
+      },
+    ],
     card_limit_snapshots: [
       [addDays(today, -1), '22:58', 3437.6],
       [today, '07:48', 3351.1],
