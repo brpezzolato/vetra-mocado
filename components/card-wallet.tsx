@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Activity,
   memo,
   startTransition,
   useCallback,
@@ -47,7 +48,7 @@ const PEEK = 0.3;
  * Quando os detalhes montam depois do toque: com o cartão quase no lugar,
  * para a montagem (o trabalho pesado) não cair no meio do movimento.
  */
-const DETAILS_DELAY = 470;
+const DETAILS_DELAY = 400;
 /** Fechando, os detalhes somem e só desmontam quando os cartões assentam. */
 const DETAILS_LEAVE = 520;
 /** Segurar este tempo levanta o cartão para arrastar (como no Apple Wallet). */
@@ -128,18 +129,23 @@ const CardFace = memo(function CardFace({
       style={{ background: brand?.colour ?? 'var(--muted)' }}
     >
       {art ? (
-        <Image
-          src={art}
-          alt=""
-          aria-hidden="true"
-          fill
-          sizes="(max-width: 640px) 100vw, 560px"
-          unoptimized
-          loading="eager"
-          draggable={false}
-          // A arte tem a borda arredondada embutida: um respiro esconde.
-          className="scale-[1.03] object-cover select-none"
-        />
+        // A arte tem a borda arredondada embutida: uma moldura 3% maior que
+        // o cartão esconde. Por tamanho e não por `scale`: transformação
+        // dentro do cartão que se move, com cantos recortados, faz o Safari
+        // recortar a cada quadro.
+        <span className="absolute -inset-[1.5%]">
+          <Image
+            src={art}
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes="(max-width: 640px) 100vw, 560px"
+            unoptimized
+            loading="eager"
+            draggable={false}
+            className="object-cover select-none"
+          />
+        </span>
       ) : brand ? (
         <Image
           src={brand.logo}
@@ -308,24 +314,27 @@ export function CardWallet({
     new Decimal(0),
   );
   const nextDue = invoiceCards.map((item) => item.current.due).sort()[0];
-  const shown = details ? wallet.find((w) => w.card.account === details) : null;
-  // Os detalhes só redesenham quando o cartão mostrado muda.
-  const detailsNode = useMemo(() => {
-    if (!shown) return null;
-    const limit: CardLimit | undefined = inputs.limits.find(
-      (item) => item.account === shown.card.account,
-    );
-    return shown.invoices ? (
-      <InvoiceDetails
-        entry={shown.invoices}
-        limit={limit}
-        hideCard
-        progressive
-      />
-    ) : (
-      <PendingCardPanel card={shown.card} limit={limit} />
-    );
-  }, [inputs.limits, shown]);
+  // Os detalhes de todos os cartões ficam montados e escondidos (`Activity`
+  // hidden: o React os prepara em segundo plano depois da tela pronta). Abrir
+  // só revela o painel pronto, sem montar nada pesado durante a animação, o
+  // que no iPhone travava o movimento e fazia os detalhes "bugarem".
+  const panels = useMemo(
+    () =>
+      wallet.map((item) => {
+        const limit: CardLimit | undefined = inputs.limits.find(
+          (row) => row.account === item.card.account,
+        );
+        return {
+          account: item.card.account,
+          node: item.invoices ? (
+            <InvoiceDetails entry={item.invoices} limit={limit} hideCard />
+          ) : (
+            <PendingCardPanel card={item.card} limit={limit} />
+          ),
+        };
+      }),
+    [inputs.limits, wallet],
+  );
 
   /** Posição de cada cartão: na pilha, ou abrindo o escolhido. */
   // Arrastar para reordenar: segurar levanta o cartão; ele segue o dedo por
@@ -667,10 +676,10 @@ export function CardWallet({
                         aria-label={`Abrir a fatura do ${item.card.account}`}
                         aria-describedby="wallet-reorder-hint"
                         className={cn(
-                          'block size-full rounded-[clamp(12px,4.2cqw,20px)] transition-[transform,box-shadow] duration-150 outline-none select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-foreground',
+                          'block size-full rounded-[clamp(12px,4.2cqw,20px)] transition-shadow duration-150 outline-none select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-foreground',
                           drag?.from === i
                             ? 'shadow-[0_24px_48px_-12px_rgb(0_0_0/0.7)]'
-                            : 'active:scale-[0.985]',
+                            : undefined,
                         )}
                       >
                         <CardFace card={item.card} tag={item.tag} />
@@ -683,19 +692,31 @@ export function CardWallet({
           </>
         )}
 
-        {shown && (
-          <div
-            key={shown.card.account}
-            className={cn(
-              'mt-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-3 motion-safe:duration-300',
-              leaving &&
-                'pointer-events-none opacity-0 transition-opacity duration-200',
-            )}
-            aria-hidden={leaving || undefined}
-          >
-            {detailsNode}
-          </div>
-        )}
+        <div className={details ? 'mt-6' : undefined}>
+          {panels.map((panel) => {
+            const visible = details === panel.account;
+            return (
+              <Activity
+                key={panel.account}
+                mode={visible ? 'visible' : 'hidden'}
+              >
+                {/* De escondido para visível a animação de entrada roda uma
+                    vez; fechando, esmaece sob os cartões que voltam. */}
+                <div
+                  className={cn(
+                    'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300',
+                    visible &&
+                      leaving &&
+                      'pointer-events-none opacity-0 transition-opacity duration-200',
+                  )}
+                  aria-hidden={(visible && leaving) || undefined}
+                >
+                  {panel.node}
+                </div>
+              </Activity>
+            );
+          })}
+        </div>
       </div>
     </main>
   );
