@@ -77,14 +77,6 @@ const money = (value: Decimal.Value) =>
     style: 'currency',
     currency: 'BRL',
   }).format(new Decimal(value).toNumber());
-const dayMonth = (value: string) =>
-  new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-    .format(new Date(`${value}T12:00:00Z`))
-    .replace('.', '');
 
 type WalletCard = {
   card: PaymentCard;
@@ -216,28 +208,24 @@ type LimitRow = {
 };
 
 /**
- * Quanto do limite já foi gasto e quanto sobra: na pilha, a soma dos cartões
- * (cada um na sua cor); aberto, só o do cartão. Sem animar a largura: a troca
- * acontece junto com o movimento dos cartões e não pode custar layout.
+ * Já gasto (o mesmo "faturas atuais": o que falta pagar na fatura do momento
+ * de cada cartão, sem parcelas futuras) e quanto sobra do limite. Sem cartão
+ * em volta: só os valores e a linha, cada cartão na sua cor.
  */
 const LimitSummary = memo(function LimitSummary({
   rows,
-  single,
 }: {
   rows: LimitRow[];
-  single: boolean;
 }) {
-  const limit = rows.reduce((sum, row) => sum.plus(row.limit), new Decimal(0));
-  if (!limit.gt(0)) return null;
   const used = rows.reduce((sum, row) => sum.plus(row.used), new Decimal(0));
+  const limit = rows.reduce((sum, row) => sum.plus(row.limit), new Decimal(0));
+  if (!limit.gt(0) && !used.gt(0)) return null;
   const free = Decimal.max(limit.minus(used), 0);
+  const scale = Decimal.max(limit, used);
   const share = (value: Decimal) =>
-    `${Decimal.min(value.div(limit).times(100), 100).toFixed(2)}%`;
+    `${Decimal.min(value.div(scale).times(100), 100).toFixed(2)}%`;
   return (
-    <section
-      aria-label={single ? 'Limite deste cartão' : 'Limite dos cartões'}
-      className="mb-8 rounded-3xl border bg-card px-5 py-5 md:px-6"
-    >
+    <section aria-label="Faturas atuais e limite livre" className="mb-8">
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">Já gasto</p>
@@ -245,12 +233,14 @@ const LimitSummary = memo(function LimitSummary({
             <Private>{money(used)}</Private>
           </p>
         </div>
-        <div className="min-w-0 text-right">
-          <p className="text-xs text-muted-foreground">Sobra</p>
-          <p className="mt-1 text-xl font-semibold tracking-tight text-emerald-600 tabular-nums dark:text-emerald-400">
-            <Private>{money(free)}</Private>
-          </p>
-        </div>
+        {limit.gt(0) && (
+          <div className="min-w-0 text-right">
+            <p className="text-xs text-muted-foreground">Sobra</p>
+            <p className="mt-1 text-xl font-semibold tracking-tight text-emerald-600 tabular-nums dark:text-emerald-400">
+              <Private>{money(free)}</Private>
+            </p>
+          </div>
+        )}
       </div>
       <div
         aria-hidden="true"
@@ -260,7 +250,7 @@ const LimitSummary = memo(function LimitSummary({
           row.used.gt(0) ? (
             <span
               key={row.account}
-              className="h-full first:rounded-l-full"
+              className="h-full"
               style={{
                 width: share(row.used),
                 background: PAYMENT_METHOD_COLOUR[row.bankId],
@@ -269,10 +259,6 @@ const LimitSummary = memo(function LimitSummary({
           ) : null,
         )}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        de <Private>{money(limit)}</Private> de limite
-        {single ? '' : ` em ${rows.length} cartões`}
-      </p>
     </section>
   );
 });
@@ -378,33 +364,23 @@ export function CardWallet({
   const index = wallet.findIndex((item) => item.card.account === selected);
   const active = index >= 0 ? wallet[index]! : null;
   const count = wallet.length;
-  const openTotal = invoiceCards.reduce(
-    (sum, item) => sum.plus(item.current.balance),
-    new Decimal(0),
-  );
-  const nextDue = invoiceCards.map((item) => item.current.due).sort()[0];
   // O limite de cada cartão, da frente para trás (a pilha ao contrário).
   const limitRows: LimitRow[] = useMemo(
     () =>
-      [...wallet].reverse().flatMap((item) => {
+      [...wallet].reverse().map((item) => {
         const row = inputs.limits.find(
           (limit) => limit.account === item.card.account,
         );
-        if (row?.credit_limit == null) return [];
-        const limit = new Decimal(row.credit_limit);
-        if (!limit.gt(0)) return [];
-        const used = Decimal.max(
-          0,
-          Decimal.min(limit, limit.minus(row.available_limit ?? 0)),
-        );
-        return [
-          {
-            account: item.card.account,
-            bankId: item.card.bank_id,
-            limit,
-            used,
-          },
-        ];
+        const limit = new Decimal(row?.credit_limit ?? 0);
+        return {
+          account: item.card.account,
+          bankId: item.card.bank_id,
+          limit: Decimal.max(limit, 0),
+          // O mesmo número de "faturas atuais" (sem parcelas futuras).
+          used: item.invoices
+            ? Decimal.max(new Decimal(item.invoices.current.balance), 0)
+            : new Decimal(0),
+        };
       }),
     [inputs.limits, wallet],
   );
@@ -665,17 +641,6 @@ export function CardWallet({
                 Carteira
               </h1>
             </div>
-            {invoiceCards.length > 0 && (
-              <div className="shrink-0 text-right">
-                <p className="text-[11px] text-muted-foreground">
-                  Faturas atuais
-                  {nextDue ? ` · vence ${dayMonth(nextDue)}` : ''}
-                </p>
-                <p className="text-lg font-semibold tabular-nums">
-                  <Private>{money(openTotal)}</Private>
-                </p>
-              </div>
-            )}
           </div>
           <div
             className={cn(
@@ -705,7 +670,7 @@ export function CardWallet({
 
         {/* Sempre o total: trocar o conteúdo junto com a animação de abrir
             seria mais uma coisa mudando na tela ao mesmo tempo. */}
-        <LimitSummary rows={limitRows} single={false} />
+        <LimitSummary rows={limitRows} />
 
         {count === 0 ? (
           <p className="rounded-3xl border bg-card p-6 text-sm text-muted-foreground">
