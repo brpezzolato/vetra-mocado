@@ -159,7 +159,7 @@ const CardFace = memo(function CardFace({
       )}
       {(tag || (!art && !brand)) && (
         // Impresso no cartão: texto escuro simples, sem pílula.
-        <span className="absolute top-[8%] right-[6%] text-[clamp(13px,4.4cqw,19px)] font-semibold tracking-tight text-neutral-950/85">
+        <span className="absolute top-[9%] right-[6%] text-[clamp(10px,3.1cqw,13px)] font-medium tracking-wide text-neutral-950/55">
           {tag ?? card.account}
         </span>
       )}
@@ -257,88 +257,48 @@ export function CardWallet({
   // Fechando: os detalhes esmaecem antes de desmontar.
   const [leaving, setLeaving] = useState(false);
   const timer = useRef<number | null>(null);
-  // Abrir põe uma entrada no histórico (o voltar do celular fecha o cartão),
-  // com o mesmo endereço (mudar a URL faz o Next redesenhar a página, e a
-  // tela piscava) e só depois do movimento.
-  const pushed = useRef(false);
-  const selectedRef = useRef<string | null>(selected);
-  const historyTimer = useRef<number | null>(null);
-  /** O popstate do nosso próprio `history.back()` não fecha de novo. */
-  const ownBack = useRef(false);
+  // Sem histórico do navegador: qualquer `pushState`/`replaceState` faz o
+  // roteador do Next redesenhar a página, e no meio da animação isso
+  // reiniciava o esmaecer dos detalhes (a tela "piscava"; visto quadro a
+  // quadro, 23/10/2026). Fecha pelo X ou pelo Esc.
 
   const collapse = useCallback(() => {
     if (timer.current) window.clearTimeout(timer.current);
-    if (historyTimer.current) window.clearTimeout(historyTimer.current);
     // Rolado nos detalhes: sobe junto com a volta dos cartões, sem pulo.
     if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: 'smooth' });
-    selectedRef.current = null;
     setSelected(null);
     setLeaving(true);
     timer.current = window.setTimeout(() => {
       setDetails(null);
       setLeaving(false);
-      // Fechado pelo X ou Esc: tira a entrada do histórico depois do movimento.
-      if (pushed.current) {
-        pushed.current = false;
-        ownBack.current = true;
-        window.history.back();
-      }
+      // Aberto pelo link (?cartao=): limpa o endereço só com tudo parado.
+      if (window.location.search.includes('cartao='))
+        window.history.replaceState(null, '', window.location.pathname);
     }, DETAILS_LEAVE);
   }, []);
 
-  const expand = useCallback((account: string) => {
+  const open = (account: string) => {
     if (timer.current) window.clearTimeout(timer.current);
     if (window.scrollY > 0) window.scrollTo({ top: 0 });
     setDetails(null);
     setLeaving(false);
-    selectedRef.current = account;
     setSelected(account);
     timer.current = window.setTimeout(
       () => startTransition(() => setDetails(account)),
       DETAILS_DELAY,
     );
-  }, []);
-
-  const open = (account: string) => {
-    expand(account);
-    if (historyTimer.current) window.clearTimeout(historyTimer.current);
-    historyTimer.current = window.setTimeout(() => {
-      window.history.pushState(window.history.state, '');
-      pushed.current = true;
-    }, DETAILS_LEAVE + 80);
   };
 
-  const close = useCallback(() => {
-    // Aberto pelo link (?cartao= sem entrada nossa no histórico): só limpa.
-    if (!pushed.current && window.location.search.includes('cartao='))
-      window.history.replaceState(null, '', window.location.pathname);
-    collapse();
-  }, [collapse]);
-
   useEffect(() => {
-    const onPop = () => {
-      if (ownBack.current) {
-        ownBack.current = false;
-        return;
-      }
-      // Voltar do celular com um cartão aberto: a entrada já saiu do histórico.
-      if (pushed.current && selectedRef.current) {
-        pushed.current = false;
-        collapse();
-      }
-    };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape') collapse();
     };
-    window.addEventListener('popstate', onPop);
     window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('popstate', onPop);
       window.removeEventListener('keydown', onKey);
       if (timer.current) window.clearTimeout(timer.current);
-      if (historyTimer.current) window.clearTimeout(historyTimer.current);
     };
-  }, [close, collapse]);
+  }, [collapse]);
 
   const index = wallet.findIndex((item) => item.card.account === selected);
   const active = index >= 0 ? wallet[index]! : null;
@@ -630,7 +590,7 @@ export function CardWallet({
               className="size-9 shrink-0"
               aria-label="Fechar e voltar aos cartões"
               tabIndex={active ? 0 : -1}
-              onClick={close}
+              onClick={collapse}
             >
               <CloseSymbol />
             </GlassButton>
