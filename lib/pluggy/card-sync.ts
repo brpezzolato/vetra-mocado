@@ -306,7 +306,13 @@ export async function syncCardsFromPluggy(
         );
         await saveBills(admin, link, bills);
         result.bills += bills.length;
-        const cycle = await saveCycle(admin, link, bills);
+        // Cartão novo, sem fatura fechada ainda: vale o ciclo cadastrado, para a
+        // previsão de fatura de cada compra (`billForecastDate`) ser usada. Sem
+        // isso o Itaú Crédito, que só fecha a primeira em 29/11, punha as
+        // compras de outubro na fatura de 07/11 (26/10/2026).
+        const cycle =
+          (await saveCycle(admin, link, bills)) ??
+          (await savedCycle(admin, link));
         if (cycle) {
           estimate = (day) => invoiceFor(day, cycle).due;
           // Vencimento de cada fatura: o publicado ou o da regra do cartão.
@@ -427,6 +433,23 @@ async function saveBills(
  * Ciclo real pela fatura mais recente: dia de vencimento e dias até o
  * fechamento. Devolve o ciclo gravado.
  */
+/** O ciclo já cadastrado do cartão (à mão ou de uma rodada anterior). */
+async function savedCycle(
+  admin: SupabaseClient,
+  link: CardLink,
+): Promise<CardCycle | null> {
+  const { data } = await admin
+    .from('card_cycles')
+    .select(
+      'account, kind, closing_day, due_day, closing_offset_days, due_rolls_forward',
+    )
+    .eq('user_id', link.user_id)
+    .eq('account', link.account)
+    .eq('kind', 'credit')
+    .maybeSingle();
+  return (data as CardCycle | null) ?? null;
+}
+
 async function saveCycle(
   admin: SupabaseClient,
   link: CardLink,

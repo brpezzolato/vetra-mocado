@@ -337,6 +337,60 @@ describe('cartão que vem do banco', () => {
   });
 });
 
+describe('cartão novo cuja primeira fatura fecha depois do ciclo de agora', () => {
+  // Itaú Crédito: aberto em outubro, ciclo 29/7, e o banco pôs as compras de
+  // outubro na fatura de dezembro (primeira fechando em 29/11).
+  const cycle = {
+    account: 'Itaú Crédito',
+    kind: 'credit' as const,
+    closing_day: 29,
+    due_day: 7,
+    closing_offset_days: null,
+  };
+  const payment = {
+    id: 'p',
+    user_id: 'user',
+    account: 'Itaú Crédito',
+    invoice_due: '2026-11-07',
+    amount: '62.39',
+    paid_at: '2026-10-16T15:40:00Z',
+    created_at: '',
+    updated_at: '',
+  };
+
+  it('não mostra a fatura de 07/11 vazia e o pagamento abate a primeira', () => {
+    const [result] = buildCreditCardInvoices(
+      [
+        {
+          ...entry('a', 'Itaú Crédito', '508.60', '2026-10-13T12:00:00Z'),
+          invoice_due_override: '2026-12-07',
+        },
+      ],
+      [card('Itaú Crédito', 'itau')],
+      [cycle],
+      '2026-10-26',
+      [payment],
+    );
+    expect(result.invoices.some((item) => item.due === '2026-11-07')).toBe(
+      false,
+    );
+    expect(result.current.due).toBe('2026-12-07');
+    expect(result.current.closing).toBe('2026-11-29');
+    expect(result.current.balance).toBe('446.21');
+  });
+
+  it('sem a previsão do banco, segue o ciclo cadastrado', () => {
+    const [result] = buildCreditCardInvoices(
+      [entry('a', 'Itaú Crédito', '508.60', '2026-10-13T12:00:00Z')],
+      [card('Itaú Crédito', 'itau')],
+      [cycle],
+      '2026-10-26',
+      [payment],
+    );
+    expect(result.current.due).toBe('2026-11-07');
+  });
+});
+
 describe('fatura fechada que não fecha só com compras e crédito', () => {
   it('mostra a diferença como ajuste do banco, sem esconder', () => {
     const [result] = buildCreditCardInvoices(
