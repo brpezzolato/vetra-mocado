@@ -119,9 +119,11 @@ export type BenefitCycle = {
 };
 
 /**
- * Extrato em ciclos, do mais novo ao mais velho. Cada depósito da Flash abre
- * um ciclo. O mais antigo não tem limite inferior para nenhum lançamento
- * sumir; sem depósitos, um ciclo só.
+ * Extrato em ciclos, do mais novo ao mais velho. Só o depósito de Alimentação
+ * e Refeição abre ciclo: o do Transporte cai em outro dia e partia o mês em
+ * dois (26/10/2026, pedido do Bruno); ele entra no ciclo em que cair. O mais
+ * antigo não tem limite inferior para nenhum lançamento sumir; sem depósitos,
+ * um ciclo só.
  */
 export function benefitCycles(entries: FinancialEntry[]): BenefitCycle[] {
   const day = (entry: FinancialEntry) => saoDate(entry.occurred_at);
@@ -130,7 +132,13 @@ export function benefitCycles(entries: FinancialEntry[]): BenefitCycle[] {
   );
   const starts = [
     ...new Set(
-      sorted.filter((entry) => entry.entry_type === 'income').map(day),
+      sorted
+        .filter(
+          (entry) =>
+            entry.entry_type === 'income' &&
+            walletForEntry(entry).key === 'alimentacao',
+        )
+        .map(day),
     ),
   ].sort((a, b) => b.localeCompare(a));
   if (!starts.length) return [{ start: '', next: null, entries: sorted }];

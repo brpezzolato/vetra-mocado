@@ -227,6 +227,23 @@ describe('ciclos do cartão', () => {
     ).toEqual(['2026-09-21', '2026-08-24']);
   });
 
+  it('só o depósito de Alimentação e Refeição abre ciclo', () => {
+    // O do Transporte chega noutro dia e partia o mês em dois.
+    const cycles = benefitCycles([
+      movement('2026-09-22', { entry_type: 'income' }),
+      movement('2026-09-22', { entry_type: 'income', category: 'Transporte' }),
+      movement('2026-10-22', { entry_type: 'income' }),
+      movement('2026-10-24'),
+      movement('2026-10-26', { entry_type: 'income', category: 'Transporte' }),
+      movement('2026-10-27', { category: 'Transporte' }),
+    ]);
+    expect(cycles.map((cycle) => cycle.start)).toEqual([
+      '2026-10-22',
+      '2026-09-22',
+    ]);
+    expect(cycles[0].entries).toHaveLength(4);
+  });
+
   it('não esconde gasto anterior ao primeiro depósito', () => {
     // Uma lista que engole lançamento é o mesmo defeito que já custou o saldo.
     const cycles = benefitCycles([
