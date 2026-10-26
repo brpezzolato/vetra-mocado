@@ -963,6 +963,27 @@ export function InvoiceCenter({
     (sum, item) => sum.plus(item.current.balance),
     new Decimal(0),
   );
+  // O mesmo total sem as compras "fora das contas" (como em /cobertura).
+  const countedOpenTotal = invoiceCards.reduce(
+    (sum, item) =>
+      sum.plus(
+        Decimal.max(
+          new Decimal(item.current.balance).minus(
+            item.current.entries
+              .filter((entry) => entry.excluded_from_totals)
+              .reduce(
+                (total, entry) =>
+                  entry.entry_type === 'income'
+                    ? total.minus(entry.amount)
+                    : total.plus(entry.amount),
+                new Decimal(0),
+              ),
+          ),
+          0,
+        ),
+      ),
+    new Decimal(0),
+  );
   const nextDue = invoiceCards.map((item) => item.current.due).sort()[0];
   const activePending = pendingCards.find(
     (card) => card.account === activeAccount,
@@ -1044,6 +1065,14 @@ export function InvoiceCenter({
                   <h1 className="mt-2 text-4xl font-semibold tracking-tight tabular-nums md:text-5xl">
                     <Private>{money(openTotal)}</Private>
                   </h1>
+                  {!countedOpenTotal.eq(openTotal) && (
+                    <p className="mt-1.5 text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground tabular-nums">
+                        <Private>{money(countedOpenTotal)}</Private>
+                      </span>{' '}
+                      nas contas, sem o que está fora delas
+                    </p>
+                  )}
                   {nextDue && (
                     <p className="mt-2 text-sm text-muted-foreground">
                       {invoiceCards.length + pendingCards.length === 1
