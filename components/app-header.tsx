@@ -23,7 +23,6 @@ import {
   Sparkles,
   ListChecks,
   Plus,
-  LayoutTemplate,
 } from 'lucide-react';
 import Link from '@/components/navigation-link';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -242,11 +241,6 @@ export function AppHeader({
         { href: '/beneficios', label: 'Benefícios (Flash)', icon: Wallet },
         { href: '/simulador', label: 'Simulador de compra', icon: Calculator },
         { href: '/cobertura', label: 'Cofrinho × faturas', icon: PiggyBank },
-        {
-          href: '/faturas/opcoes',
-          label: 'Faturas: novas opções (teste)',
-          icon: LayoutTemplate,
-        },
       ],
     },
   ];
