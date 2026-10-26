@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  type ReactNode,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
@@ -50,7 +44,7 @@ import { PendingSpendDialog } from '@/components/pending-spend-dialog';
 // Faturas em blocos: painel (valor, datas, limite), histórico em barras que
 // trocam a fatura, resumo e destaques, categorias e compras por dia.
 
-export const money = (value: Decimal.Value) =>
+const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -60,7 +54,7 @@ const compactMoney = (value: Decimal.Value) =>
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(new Decimal(value).toNumber())}`;
-export const dayMonth = (value: string) =>
+const dayMonth = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: 'short',
@@ -87,7 +81,7 @@ const monthLong = (value: string) =>
     new Date(`${value}T12:00:00Z`),
   );
 /** Cor do cartão (PAYMENT_METHOD_COLOUR). */
-export const invoiceAccent = (bankId: PaymentCard['bank_id']) =>
+const invoiceAccent = (bankId: PaymentCard['bank_id']) =>
   bankId === 'other' ? 'var(--foreground)' : PAYMENT_METHOD_COLOUR[bankId];
 /** Cores de marca legíveis como texto (por tema, em globals.css). */
 const BRAND_TEXT: Partial<Record<PaymentCard['bank_id'], string>> = {
@@ -96,7 +90,7 @@ const BRAND_TEXT: Partial<Record<PaymentCard['bank_id'], string>> = {
   itau: '#ec7000',
   'mercado-pago': 'var(--brand-mercadopago-text)',
 };
-export const invoiceTextAccent = (bankId: PaymentCard['bank_id']) =>
+const invoiceTextAccent = (bankId: PaymentCard['bank_id']) =>
   BRAND_TEXT[bankId] ?? 'var(--foreground)';
 /** Símbolo do banco no chip (ver public/cards/SOURCES.md). */
 const BANK_LOGO: Partial<Record<PaymentCard['bank_id'], string>> = {
@@ -119,11 +113,11 @@ const STAGE_TITLE = {
   atual: 'Fatura atual',
   próxima: 'Próxima fatura',
 } as const;
-export const invoiceStatus = (invoice: CardInvoice, invoices: CardInvoice[]) =>
+const invoiceStatus = (invoice: CardInvoice, invoices: CardInvoice[]) =>
   STAGE_TITLE[invoiceStage(invoice, invoices)];
 
 /** Paga mostra o valor que teve; as outras, o que falta. */
-export const shownAmount = (invoice: CardInvoice) =>
+const shownAmount = (invoice: CardInvoice) =>
   invoice.settled ? invoice.charged : invoice.balance;
 
 /**
@@ -139,7 +133,7 @@ const countedTotal = (invoice: CardInvoice) =>
     new Decimal(0),
   );
 
-export const byDue = (invoices: CardInvoice[]) =>
+const byDue = (invoices: CardInvoice[]) =>
   [...invoices].sort((a, b) => a.due.localeCompare(b.due));
 
 /** O "paga" verde, perto do valor de que ele fala. */
@@ -158,7 +152,7 @@ function PaidMark({ className = '' }: { className?: string }) {
 export type CardLimit = CardLimitInfo & { synced_at?: string | null };
 
 /** Quanto do limite está em uso, numa barra da cor do cartão. */
-export function LimitBar({
+function LimitBar({
   limit,
   bankId,
 }: {
@@ -702,7 +696,10 @@ export function PendingCardPanel({
   );
 }
 
-/** "Todas": um painel por cartão, com a fatura atual, a próxima e o limite. */
+/**
+ * "Todas", sem caixas: cada cartão numa faixa entre fios, com o valor grande,
+ * a fatura e a próxima numa linha só e o limite embaixo.
+ */
 function ConsolidatedInvoices({
   cards,
   pending,
@@ -715,58 +712,70 @@ function ConsolidatedInvoices({
   onOpen: (account: string) => void;
 }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {cards.map(({ card, current, invoices }) => {
-        const next = byDue(invoices).find((item) => item.due > current.due);
-        return (
-          <button
-            key={card.account}
-            type="button"
-            onClick={() => onOpen(card.account)}
-            className="grid gap-4 rounded-3xl border bg-card p-5 text-left transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-foreground"
-          >
-            <span className="flex items-center gap-3">
-              <PaymentCardIcon bankId={card.bank_id} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">
-                  {card.account}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {invoiceStatus(current, invoices)} · vence{' '}
-                  {dayMonth(current.due)}
-                </span>
-              </span>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </span>
-            <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span
-                className="text-2xl font-semibold tracking-tight tabular-nums"
-                style={{ color: invoiceTextAccent(card.bank_id) }}
+    <>
+      <ol className="border-t">
+        {cards.map(({ card, current, invoices }, index) => {
+          const next = byDue(invoices).find((item) => item.due > current.due);
+          return (
+            <li key={card.account} className="border-b">
+              <button
+                type="button"
+                onClick={() => onOpen(card.account)}
+                className="group grid w-full gap-4 py-6 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
               >
-                <Private>{money(current.balance)}</Private>
-              </span>
-              {next && (
-                <span className="text-xs text-muted-foreground">
-                  Próxima <Private>{money(shownAmount(next))}</Private>
+                <span className="flex items-center gap-3">
+                  <span className="w-5 text-xs tabular-nums text-muted-foreground">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <PaymentCardIcon bankId={card.bank_id} />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {card.account}
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </span>
-              )}
-            </span>
-            <LimitBar
+                <span className="grid gap-2 pl-8">
+                  <span
+                    className="text-4xl font-semibold tracking-tight tabular-nums"
+                    style={{ color: invoiceTextAccent(card.bank_id) }}
+                  >
+                    <Private>{money(current.balance)}</Private>
+                  </span>
+                  <span className="flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
+                    <span className="min-w-0 truncate">
+                      {invoiceStatus(current, invoices)} · vence{' '}
+                      {dayMonth(current.due)}
+                    </span>
+                    {next && (
+                      <span className="shrink-0 tabular-nums">
+                        Próxima <Private>{money(shownAmount(next))}</Private>
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <span className="pl-8">
+                  <LimitBar
+                    limit={limits.find((item) => item.account === card.account)}
+                    bankId={card.bank_id}
+                  />
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      {pending.length > 0 && (
+        <div className="mt-3 grid gap-3">
+          {pending.map((card) => (
+            <PendingCardPanel
+              key={card.account}
+              card={card}
               limit={limits.find((item) => item.account === card.account)}
-              bankId={card.bank_id}
+              onOpen={onOpen}
             />
-          </button>
-        );
-      })}
-      {pending.map((card) => (
-        <PendingCardPanel
-          key={card.account}
-          card={card}
-          limit={limits.find((item) => item.account === card.account)}
-          onOpen={onOpen}
-        />
-      ))}
-    </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -841,17 +850,6 @@ const bankRank = (bank: PaymentCard['bank_id']) => {
   return index === -1 ? BANK_ORDER.length : index;
 };
 
-/** O que a visão "Todas" mostra; as opções de redesenho recebem o mesmo. */
-export type InvoiceOverview = {
-  cards: CreditCardInvoices[];
-  pending: PaymentCard[];
-  limits: CardLimit[];
-  openTotal: Decimal;
-  countedOpenTotal: Decimal;
-  nextDue?: string;
-  onOpen: (account: string) => void;
-};
-
 export function InvoiceCenter({
   entries,
   cards,
@@ -861,8 +859,6 @@ export function InvoiceCenter({
   limits = [],
   initialAccount = 'all',
   initialError,
-  overview,
-  top,
 }: {
   entries: FinancialEntry[];
   cards: PaymentCard[];
@@ -873,10 +869,6 @@ export function InvoiceCenter({
   /** O cartão que a página abre escolhido; "all" é a visão de todas. */
   initialAccount?: string;
   initialError: string;
-  /** Teste de redesenho: troca a visão "Todas" (/faturas/opcoes). */
-  overview?: (data: InvoiceOverview) => ReactNode;
-  /** Acima de tudo, abaixo do voltar (o seletor das opções). */
-  top?: ReactNode;
 }) {
   const router = useRouter();
   const { invoiceCards, pendingCards } = useInvoiceCards({
@@ -938,7 +930,6 @@ export function InvoiceCenter({
       <AppHeader onRefresh={() => router.refresh()} />
       <div className="app-container min-w-0 max-w-3xl py-6 md:py-9">
         <NavigationBackButton className="mb-5" />
-        {top}
         {initialError && (
           <p className="mb-5 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm">
             Não foi possível carregar todas as informações das faturas.
@@ -997,27 +988,17 @@ export function InvoiceCenter({
                   (item) => item.account === activePending.account,
                 )}
               />
-            ) : (!active || !invoice) && overview ? (
-              overview({
-                cards: invoiceCards,
-                pending: pendingCards,
-                limits,
-                openTotal,
-                countedOpenTotal,
-                nextDue,
-                onOpen: choose,
-              })
             ) : !active || !invoice ? (
               <>
-                <section className="mb-6">
+                <section className="mb-8">
                   <p className="text-xs uppercase tracking-[.14em] text-muted-foreground">
                     Faturas atuais
                   </p>
-                  <h1 className="mt-2 text-4xl font-semibold tracking-tight tabular-nums md:text-5xl">
+                  <h1 className="mt-3 text-5xl font-semibold tracking-tighter tabular-nums md:text-7xl">
                     <Private>{money(openTotal)}</Private>
                   </h1>
                   {!countedOpenTotal.eq(openTotal) && (
-                    <p className="mt-1.5 text-sm text-muted-foreground">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       <span className="font-medium text-foreground tabular-nums">
                         <Private>{money(countedOpenTotal)}</Private>
                       </span>{' '}
@@ -1025,7 +1006,7 @@ export function InvoiceCenter({
                     </p>
                   )}
                   {nextDue && (
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {invoiceCards.length + pendingCards.length === 1
                         ? '1 cartão'
                         : `${invoiceCards.length + pendingCards.length} cartões`}{' '}
