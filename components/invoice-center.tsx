@@ -742,8 +742,7 @@ function ConsolidatedInvoices({
                   </span>
                   <span className="flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
                     <span className="min-w-0 truncate">
-                      {invoiceStatus(current, invoices)} · vence{' '}
-                      {dayMonth(current.due)}
+                      Vence {dayMonth(current.due)}
                     </span>
                     {next && (
                       <span className="shrink-0 tabular-nums">
