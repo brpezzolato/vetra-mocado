@@ -1,7 +1,12 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
+import {
+  type ReactNode,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
 import {
@@ -31,7 +36,6 @@ import {
 import { saoDate, type CardCycle } from '@/lib/expense-insights';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import {
-  cardBankName,
   PAYMENT_METHOD_COLOUR,
   sortPaymentCardsByUsage,
   type PaymentCard,
@@ -44,7 +48,7 @@ import { PendingSpendDialog } from '@/components/pending-spend-dialog';
 // Faturas em blocos: painel (valor, datas, limite), histórico em barras que
 // trocam a fatura, resumo e destaques, categorias e compras por dia.
 
-const money = (value: Decimal.Value) =>
+export const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -54,7 +58,7 @@ const compactMoney = (value: Decimal.Value) =>
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(new Decimal(value).toNumber())}`;
-const dayMonth = (value: string) =>
+export const dayMonth = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: 'short',
@@ -81,7 +85,7 @@ const monthLong = (value: string) =>
     new Date(`${value}T12:00:00Z`),
   );
 /** Cor do cartão (PAYMENT_METHOD_COLOUR). */
-const invoiceAccent = (bankId: PaymentCard['bank_id']) =>
+export const invoiceAccent = (bankId: PaymentCard['bank_id']) =>
   bankId === 'other' ? 'var(--foreground)' : PAYMENT_METHOD_COLOUR[bankId];
 /** Cores de marca legíveis como texto (por tema, em globals.css). */
 const BRAND_TEXT: Partial<Record<PaymentCard['bank_id'], string>> = {
@@ -90,22 +94,8 @@ const BRAND_TEXT: Partial<Record<PaymentCard['bank_id'], string>> = {
   itau: '#ec7000',
   'mercado-pago': 'var(--brand-mercadopago-text)',
 };
-const invoiceTextAccent = (bankId: PaymentCard['bank_id']) =>
+export const invoiceTextAccent = (bankId: PaymentCard['bank_id']) =>
   BRAND_TEXT[bankId] ?? 'var(--foreground)';
-/** Símbolo do banco no chip (ver public/cards/SOURCES.md). */
-const BANK_LOGO: Partial<Record<PaymentCard['bank_id'], string>> = {
-  nubank: '/logos/nubank-ui.webp',
-  picpay: '/logos/picpay-ui.webp',
-  itau: '/logos/itau-app.webp',
-  'mercado-pago': '/logos/mercado-pago-ui.webp',
-};
-
-/** Alturas que igualam a área visual dos símbolos. */
-const BANK_LOGO_SIZE: Partial<Record<PaymentCard['bank_id'], string>> = {
-  nubank: 'h-3',
-  picpay: 'h-4',
-};
-
 /** Nome da fatura; mesma régua do Vetra AI (`invoiceStage`). */
 const STAGE_TITLE = {
   anterior: 'Fatura anterior',
@@ -113,11 +103,11 @@ const STAGE_TITLE = {
   atual: 'Fatura atual',
   próxima: 'Próxima fatura',
 } as const;
-const invoiceStatus = (invoice: CardInvoice, invoices: CardInvoice[]) =>
+export const invoiceStatus = (invoice: CardInvoice, invoices: CardInvoice[]) =>
   STAGE_TITLE[invoiceStage(invoice, invoices)];
 
 /** Paga mostra o valor que teve; as outras, o que falta. */
-const shownAmount = (invoice: CardInvoice) =>
+export const shownAmount = (invoice: CardInvoice) =>
   invoice.settled ? invoice.charged : invoice.balance;
 
 /**
@@ -133,7 +123,7 @@ const countedTotal = (invoice: CardInvoice) =>
     new Decimal(0),
   );
 
-const byDue = (invoices: CardInvoice[]) =>
+export const byDue = (invoices: CardInvoice[]) =>
   [...invoices].sort((a, b) => a.due.localeCompare(b.due));
 
 /** O "paga" verde, perto do valor de que ele fala. */
@@ -152,7 +142,7 @@ function PaidMark({ className = '' }: { className?: string }) {
 export type CardLimit = CardLimitInfo & { synced_at?: string | null };
 
 /** Quanto do limite está em uso, numa barra da cor do cartão. */
-function LimitBar({
+export function LimitBar({
   limit,
   bankId,
 }: {
@@ -849,6 +839,17 @@ const bankRank = (bank: PaymentCard['bank_id']) => {
   return index === -1 ? BANK_ORDER.length : index;
 };
 
+/** O que a visão "Todas" mostra; as opções de redesenho recebem o mesmo. */
+export type InvoiceOverview = {
+  cards: CreditCardInvoices[];
+  pending: PaymentCard[];
+  limits: CardLimit[];
+  openTotal: Decimal;
+  countedOpenTotal: Decimal;
+  nextDue?: string;
+  onOpen: (account: string) => void;
+};
+
 export function InvoiceCenter({
   entries,
   cards,
@@ -858,6 +859,8 @@ export function InvoiceCenter({
   limits = [],
   initialAccount = 'all',
   initialError,
+  overview,
+  top,
 }: {
   entries: FinancialEntry[];
   cards: PaymentCard[];
@@ -868,6 +871,10 @@ export function InvoiceCenter({
   /** O cartão que a página abre escolhido; "all" é a visão de todas. */
   initialAccount?: string;
   initialError: string;
+  /** Teste de redesenho: troca a visão "Todas" (/faturas/opcoes). */
+  overview?: (data: InvoiceOverview) => ReactNode;
+  /** Acima de tudo, abaixo do voltar (o seletor das opções). */
+  top?: ReactNode;
 }) {
   const router = useRouter();
   const { invoiceCards, pendingCards } = useInvoiceCards({
@@ -922,13 +929,26 @@ export function InvoiceCenter({
   const choose = (account: string) => {
     setActiveAccount(account);
     setSelectedDue('');
+    // Trocar entre a lista e um cartão começa a tela do topo.
+    window.scrollTo({ top: 0 });
   };
 
   return (
     <main className="min-h-dvh overflow-x-clip bg-background pb-[max(2rem,env(safe-area-inset-bottom))]">
       <AppHeader onRefresh={() => router.refresh()} />
       <div className="app-container min-w-0 max-w-3xl py-6 md:py-9">
-        <NavigationBackButton className="mb-5" />
+        {/* Sem a fileira de bancos (pedido do Bruno, 26/10/2026): com um
+            cartão aberto, voltar leva à lista; aberto de fora, volta à
+            página de onde veio. */}
+        <NavigationBackButton
+          className="mb-5"
+          onBack={
+            activeAccount !== 'all' && initialAccount === 'all'
+              ? () => choose('all')
+              : undefined
+          }
+        />
+        {top}
         {initialError && (
           <p className="mb-5 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm">
             Não foi possível carregar todas as informações das faturas.
@@ -937,49 +957,6 @@ export function InvoiceCenter({
 
         {invoiceCards.length || pendingCards.length ? (
           <>
-            {/* Chips de filtro (com vidro). */}
-            <ScrollArea orientation="horizontal" className="scroll-bleed mb-7">
-              <div className="flex gap-2 py-1">
-                {[
-                  { account: 'all', label: 'Todas', bankId: null },
-                  ...[
-                    ...invoiceCards.map(({ card }) => card),
-                    ...pendingCards,
-                  ].map((card) => ({
-                    account: card.account,
-                    label: cardBankName(card.bank_id),
-                    bankId: card.bank_id,
-                  })),
-                ].map((chip) => (
-                  <Button
-                    key={chip.account}
-                    type="button"
-                    size="sm"
-                    variant={
-                      activeAccount === chip.account ? 'glass' : 'glass-quiet'
-                    }
-                    aria-pressed={activeAccount === chip.account}
-                    className="h-9 shrink-0 gap-2 rounded-full px-4"
-                    onClick={() => choose(chip.account)}
-                  >
-                    {chip.bankId && BANK_LOGO[chip.bankId] && (
-                      <Image
-                        src={BANK_LOGO[chip.bankId]!}
-                        alt=""
-                        aria-hidden="true"
-                        width={32}
-                        height={32}
-                        unoptimized
-                        loading="eager"
-                        className={`w-auto object-contain ${BANK_LOGO_SIZE[chip.bankId] ?? 'h-4'}`}
-                      />
-                    )}
-                    {chip.label}
-                  </Button>
-                ))}
-              </div>
-            </ScrollArea>
-
             {activePending ? (
               <PendingCardPanel
                 card={activePending}
@@ -987,6 +964,16 @@ export function InvoiceCenter({
                   (item) => item.account === activePending.account,
                 )}
               />
+            ) : (!active || !invoice) && overview ? (
+              overview({
+                cards: invoiceCards,
+                pending: pendingCards,
+                limits,
+                openTotal,
+                countedOpenTotal,
+                nextDue,
+                onOpen: choose,
+              })
             ) : !active || !invoice ? (
               <>
                 <section className="mb-8">

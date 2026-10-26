@@ -8,10 +8,13 @@ export function NavigationBackButton({
   fallback = '/',
   label = 'Voltar',
   className,
+  onBack,
 }: {
   fallback?: string;
   label?: string;
   className?: string;
+  /** Volta dentro da própria tela (ex.: do cartão aberto à lista). */
+  onBack?: () => void;
 }) {
   const router = useRouter();
   return (
@@ -24,7 +27,8 @@ export function NavigationBackButton({
       className={cn('pl-3', className)}
       aria-label={label}
       onClick={() => {
-        if (window.history.length > 1) router.back();
+        if (onBack) onBack();
+        else if (window.history.length > 1) router.back();
         else router.push(fallback);
       }}
     >
