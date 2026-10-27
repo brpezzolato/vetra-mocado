@@ -159,15 +159,6 @@ const daysBetween = (from: string, to: string) =>
   );
 
 /**
- * Quanto o saldo permite por dia no que resta da janela. Arredonda para
- * baixo: arredondar para cima esgota antes.
- */
-const perDay = (balance: Decimal.Value, daysLeft: number) =>
-  daysLeft > 0
-    ? new Decimal(balance).div(daysLeft).toDecimalPlaces(2, Decimal.ROUND_DOWN)
-    : new Decimal(0);
-
-/**
  * Previsão do ritmo de gasto: frase, barra até o próximo depósito e números.
  * Vermelho só quando não aguenta.
  */
@@ -194,13 +185,13 @@ function ForecastPanel({
       : null;
   return (
     <div
-      className={`mt-4 rounded-2xl p-4 ${short ? 'bg-destructive/10' : 'bg-muted/60'}`}
+      className={`mt-3 rounded-2xl p-3 ${short ? 'bg-destructive/10' : 'bg-muted/60'}`}
     >
       <div className="flex items-start gap-3">
         <span
-          className={`grid size-8 shrink-0 place-items-center rounded-full ${short ? 'bg-destructive/15 text-destructive' : 'bg-background text-foreground'}`}
+          className={`grid size-7 shrink-0 place-items-center rounded-full ${short ? 'bg-destructive/15 text-destructive' : 'bg-background text-foreground'}`}
         >
-          <Icon className="size-4" aria-hidden="true" />
+          <Icon className="size-3.5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
           <p
@@ -345,6 +336,26 @@ export function BenefitCardCenter({
   const todayParts = wallets.flatMap(({ wallet, allowance }) =>
     allowance ? [{ wallet, ...allowance }] : [],
   );
+  const totalBalance = wallets.reduce(
+    (sum, { view }) => (view ? sum.plus(view.current) : sum),
+    new Decimal(0),
+  );
+  const openBalance = (wallet: FlashWallet, current: string | null) => {
+    setBalanceWallet(wallet);
+    // Começa com o saldo atual (confirmar é um toque). Negativo: vazio.
+    setBalanceValue(
+      current && !current.startsWith('-') ? moneyInput(current) : '',
+    );
+    setBalanceDay(saoDate(new Date()));
+    setBalanceOpen(true);
+  };
+  const openDeposit = (wallet: FlashWallet) => {
+    setDepositWallet(wallet);
+    setDepositValue('');
+    setDepositDescription('');
+    setDepositDay(saoDate(new Date()));
+    setDepositOpen(true);
+  };
   const todayTotal = todayParts.reduce(
     (sum, part) => ({
       allowance: sum.allowance.plus(part.allowance),
@@ -452,170 +463,152 @@ export function BenefitCardCenter({
       <AppHeader onRefresh={reload} />
       <div className="app-container py-6 md:py-9">
         <NavigationBackButton fallback="/financeiro" className="mb-5" />
-        <h1 className="text-xl font-semibold">Cartão de benefícios</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Os saldos da sua Flash, acompanhados junto com o resto das suas
-          contas.
-        </p>
+        {/* Redesenho de 27/10/2026, no molde do /faturas: o saldo da Flash
+            grande, o "hoje dá" embaixo e uma ficha por carteira. */}
+        <section className="mb-6">
+          <p className="text-xs uppercase tracking-[.14em] text-muted-foreground">
+            Cartão de benefícios
+          </p>
+          <h1 className="mt-2 text-4xl font-semibold tracking-tight tabular-nums md:text-5xl">
+            <Private>{money(totalBalance)}</Private>
+          </h1>
+          {todayParts.length > 0 ? (
+            <>
+              <p
+                className={cn(
+                  'mt-1.5 text-sm text-muted-foreground',
+                  todayOver && 'text-destructive',
+                )}
+              >
+                {todayOver ? 'Hoje você passou ' : 'Hoje ainda dá para gastar '}
+                <span className="font-medium text-foreground tabular-nums">
+                  <Private>
+                    {money(
+                      todayOver
+                        ? todayTotal.spent.minus(todayTotal.allowance)
+                        : todayTotal.left,
+                    )}
+                  </Private>
+                </span>
+              </p>
+              {/* Termômetro: verde até o valor do dia, vermelho além. */}
+              <div
+                aria-hidden="true"
+                className="mt-3 h-1.5 max-w-sm overflow-hidden rounded-full bg-foreground/10"
+              >
+                <span
+                  className={`block h-full rounded-full transition-[width] duration-500 ${todayOver ? 'bg-destructive' : 'bg-emerald-500'}`}
+                  style={{ width: `${todayPercent}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                de <Private>{money(todayTotal.allowance)}</Private> do dia, nas
+                duas carteiras
+              </p>
+            </>
+          ) : (
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Os saldos da sua Flash, acompanhados junto com o resto das suas
+              contas.
+            </p>
+          )}
+        </section>
 
         {error && (
           <p
             role="alert"
-            className="mt-5 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm"
+            className="mb-5 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm"
           >
             {error}
           </p>
         )}
         {notice && (
-          <output className="mt-5 block rounded-xl border bg-card p-3 text-sm">
+          <output className="mb-5 block rounded-xl border bg-card p-3 text-sm">
             {notice}
           </output>
         )}
 
-        {todayParts.length > 0 && (
-          <section className="mt-6 rounded-3xl border bg-card p-6">
-            <p className="text-xs text-muted-foreground">
-              {todayOver ? 'Hoje você passou' : 'Hoje ainda dá para gastar'}
-            </p>
-            <p
-              className={cn(
-                'mt-1 text-3xl font-semibold tracking-tight tabular-nums',
-                todayOver && 'text-destructive',
-              )}
-            >
-              <Private>
-                {money(
-                  todayOver
-                    ? todayTotal.spent.minus(todayTotal.allowance)
-                    : todayTotal.left,
-                )}
-              </Private>
-            </p>
-            {/* Termômetro: verde até o valor do dia, vermelho além. */}
-            <div
-              aria-hidden="true"
-              className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10"
-            >
-              <span
-                className={`block h-full rounded-full transition-[width] duration-500 ${todayOver ? 'bg-destructive' : 'bg-emerald-500'}`}
-                style={{ width: `${todayPercent}%` }}
-              />
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              de <Private>{money(todayTotal.allowance)}</Private> do dia
-            </p>
-            {/* Cada carteira só paga o que é dela: o número de cada uma. */}
-            <ul className="mt-4 grid gap-2">
-              {todayParts.map((part) => {
-                const Icon = WALLET_ICON[part.wallet.key];
-                return (
-                  <li
-                    key={part.wallet.key}
-                    className="flex items-center gap-2.5 text-sm"
-                  >
-                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted">
-                      <Icon className="size-3.5" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">
-                      {part.wallet.label}
-                    </span>
-                    <span className="text-right tabular-nums">
-                      <span
-                        className={cn(
-                          'font-medium',
-                          part.over && 'text-destructive',
-                        )}
-                      >
-                        <Private>{money(part.left)}</Private>
-                      </span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        até {shortDay(part.until)} ·{' '}
-                        {part.days === 1
-                          ? 'último dia'
-                          : `faltam ${part.days} dias`}
-                      </span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {wallets.map(({ wallet, view, daysLeft, forecast }) => {
+        <div className="grid gap-3 md:grid-cols-2">
+          {wallets.map(({ wallet, view, daysLeft, forecast, allowance }) => {
             const Icon = WALLET_ICON[wallet.key];
+            const positive = view && new Decimal(view.current).gt(0);
             return (
               <section
                 key={wallet.key}
-                className="rounded-3xl border bg-card p-6"
+                className="rounded-3xl border bg-card p-4"
               >
-                <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-foreground">
-                    <Icon className="size-4" />
+                <div className="flex items-center gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-muted">
+                    <Icon className="size-4" aria-hidden="true" />
                   </span>
-                  {wallet.label}
+                  <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {wallet.label}
+                  </h2>
                 </div>
-                <p className="mt-2 text-3xl font-semibold tabular-nums">
-                  <Private>{view ? money(view.current) : '—'}</Private>
-                </p>
-                {view && new Decimal(view.current).gt(0) && (
-                  <p className="mt-1 text-sm tabular-nums text-muted-foreground">
-                    {daysLeft === 0 ? (
-                      // Trinta dias sem depósito nem leitura: não há janela a repartir.
-                      <>ciclo de {BUDGET_DAYS} dias encerrado</>
-                    ) : perDay(view.current, daysLeft).gt(0) ? (
-                      <>
+                {view ? (
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="min-w-0 rounded-2xl bg-muted/60 p-3">
+                      <p className="text-[11px] text-muted-foreground">Saldo</p>
+                      <p className="mt-1 truncate text-xl font-semibold tracking-tight tabular-nums">
+                        <Private>{money(view.current)}</Private>
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {daysLeft === 0
+                          ? `ciclo de ${BUDGET_DAYS} dias encerrado`
+                          : `${daysLeft} dia${daysLeft === 1 ? '' : 's'} no ciclo`}
+                      </p>
+                    </div>
+                    <div className="min-w-0 rounded-2xl bg-muted/60 p-3">
+                      <p className="text-[11px] text-muted-foreground">
+                        {allowance?.over ? 'Hoje passou' : 'Hoje dá'}
+                      </p>
+                      <p
+                        className={cn(
+                          'mt-1 truncate text-xl font-semibold tracking-tight tabular-nums',
+                          allowance?.over && 'text-destructive',
+                        )}
+                      >
                         <Private>
-                          {money(perDay(view.current, daysLeft))}
-                        </Private>{' '}
-                        por dia pelos {daysLeft} dia
-                        {daysLeft === 1 ? '' : 's'} que faltam
-                      </>
-                    ) : (
-                      // Menos de um centavo por dia.
-                      <>
-                        não dá um centavo por dia nos {daysLeft} dia
-                        {daysLeft === 1 ? '' : 's'} que faltam
-                      </>
-                    )}
-                  </p>
-                )}
-                {forecast && view && new Decimal(view.current).gt(0) && (
-                  <ForecastPanel forecast={forecast} today={today} />
-                )}
-                {!view && (
-                  <p className="mt-2 text-xs text-muted-foreground">
+                          {money(
+                            allowance
+                              ? allowance.over
+                                ? new Decimal(allowance.spent).minus(
+                                    allowance.allowance,
+                                  )
+                                : allowance.left
+                              : 0,
+                          )}
+                        </Private>
+                      </p>
+                      {allowance && (
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground tabular-nums">
+                          de <Private>{money(allowance.allowance)}</Private> ·
+                          até {shortDay(allowance.until)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-2xl bg-muted/60 p-3 text-xs text-muted-foreground">
                     Informe quanto você tem em {wallet.label} para começar a
                     acompanhar.
                   </p>
                 )}
-                <div className="mt-5 flex flex-wrap gap-2">
+                {forecast && positive && (
+                  <ForecastPanel forecast={forecast} today={today} />
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Button
+                    size="sm"
                     variant="glass"
-                    onClick={() => {
-                      setBalanceWallet(wallet);
-                      // Começa com o saldo atual (confirmar é um toque). Negativo: vazio.
-                      setBalanceValue(
-                        view && !view.current.startsWith('-')
-                          ? moneyInput(view.current)
-                          : '',
-                      );
-                      setBalanceDay(saoDate(new Date()));
-                      setBalanceOpen(true);
-                    }}
+                    onClick={() => openBalance(wallet, view?.current ?? null)}
                   >
                     Informar saldo
                   </Button>
                   <Button
+                    size="sm"
                     variant="glass-quiet"
-                    onClick={() => {
-                      setDepositWallet(wallet);
-                      setDepositValue('');
-                      setDepositDescription('');
-                      setDepositDay(saoDate(new Date()));
-                      setDepositOpen(true);
-                    }}
+                    onClick={() => openDeposit(wallet)}
                   >
                     <Plus />
                     Registrar depósito

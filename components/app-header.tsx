@@ -21,7 +21,6 @@ import {
   Calculator,
   Repeat2,
   Sparkles,
-  ListChecks,
   Plus,
 } from 'lucide-react';
 import Link from '@/components/navigation-link';
@@ -229,7 +228,6 @@ export function AppHeader({
         { href: '/resumo', label: 'Resumo', icon: CalendarDays },
         { href: '/graficos', label: 'Gráficos', icon: ChartNoAxesCombined },
         { href: '/retrospectiva', label: 'Retrospectiva', icon: Sparkles },
-        { href: '/revisao', label: 'Revisar compras', icon: ListChecks },
       ],
     },
     {
