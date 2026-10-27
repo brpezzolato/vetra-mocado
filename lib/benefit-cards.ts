@@ -247,3 +247,59 @@ export function benefitForecast(
       : null,
   };
 }
+
+export type BenefitAllowance = {
+  /** Valor do dia: (saldo + gasto de hoje) ÷ dias até o próximo depósito. */
+  allowance: string;
+  spent: string;
+  /** O que ainda dá hoje (nunca negativo). */
+  left: string;
+  over: boolean;
+  /** Último dia coberto: a véspera do próximo depósito. */
+  until: string;
+  /** Dias contando hoje (≥ 1). */
+  days: number;
+};
+
+/**
+ * "Hoje dá para gastar" da carteira, como o da home (lib/daily-allowance.ts),
+ * mas até a véspera do próximo depósito em vez do último dia útil do mês.
+ * O gasto de hoje volta ao saldo para o valor não encolher a cada compra.
+ * Sem depósito previsto, usa `fallbackDays`. `entries` só desta carteira.
+ */
+export function benefitAllowance(
+  current: Decimal.Value,
+  entries: FinancialEntry[],
+  today: string,
+  fallbackDays: number,
+): BenefitAllowance {
+  const deposits = [
+    ...new Set(
+      entries
+        .filter((entry) => entry.entry_type === 'income')
+        .map((entry) => saoDate(entry.occurred_at))
+        .filter((day) => day <= today),
+    ),
+  ].sort();
+  const spent = entries
+    .filter(
+      (entry) =>
+        entry.entry_type === 'expense' &&
+        !entry.excluded_from_totals &&
+        saoDate(entry.occurred_at) === today,
+    )
+    .reduce((sum, entry) => sum.plus(entry.amount), new Decimal(0));
+  const next = expectedNextDeposit(deposits, today);
+  const days = Math.max(1, next ? daysApart(today, next) : fallbackDays);
+  const allowance = Decimal.max(new Decimal(current).plus(spent), 0)
+    .div(days)
+    .toDecimalPlaces(2, Decimal.ROUND_DOWN);
+  return {
+    allowance: allowance.toFixed(2),
+    spent: spent.toFixed(2),
+    left: Decimal.max(allowance.minus(spent), 0).toFixed(2),
+    over: spent.gt(allowance),
+    until: addDays(today, days - 1),
+    days,
+  };
+}

@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
+  benefitAllowance,
   benefitBalanceView,
   benefitCycles,
   benefitForecast,
@@ -323,6 +324,14 @@ export function BenefitCardCenter({
           anchorDay,
           daysLeft,
           view,
+          allowance: view
+            ? benefitAllowance(
+                view.current,
+                ownEntries,
+                today,
+                daysLeft || BUDGET_DAYS,
+              )
+            : null,
           forecast: view
             ? benefitForecast(view.current, ownEntries, today)
             : null,
@@ -330,6 +339,29 @@ export function BenefitCardCenter({
       }),
     [balances, cardEntries, today],
   );
+
+  // "Hoje dá para gastar" só da Flash: a soma das carteiras, cada uma
+  // repartida até a véspera do próprio depósito (lib/benefit-cards.ts).
+  const todayParts = wallets.flatMap(({ wallet, allowance }) =>
+    allowance ? [{ wallet, ...allowance }] : [],
+  );
+  const todayTotal = todayParts.reduce(
+    (sum, part) => ({
+      allowance: sum.allowance.plus(part.allowance),
+      spent: sum.spent.plus(part.spent),
+      left: sum.left.plus(part.left),
+    }),
+    { allowance: new Decimal(0), spent: new Decimal(0), left: new Decimal(0) },
+  );
+  const todayOver = todayTotal.spent.gt(todayTotal.allowance);
+  const todayPercent = todayTotal.allowance.gt(0)
+    ? Math.min(
+        100,
+        todayTotal.spent.div(todayTotal.allowance).times(100).toNumber(),
+      )
+    : todayTotal.spent.gt(0)
+      ? 100
+      : 0;
 
   const cycles = useMemo(() => benefitCycles(cardEntries), [cardEntries]);
   // Índice preso ao que existe: recarregar pode encurtar a lista.
@@ -438,6 +470,76 @@ export function BenefitCardCenter({
           <output className="mt-5 block rounded-xl border bg-card p-3 text-sm">
             {notice}
           </output>
+        )}
+
+        {todayParts.length > 0 && (
+          <section className="mt-6 rounded-3xl border bg-card p-6">
+            <p className="text-xs text-muted-foreground">
+              {todayOver ? 'Hoje você passou' : 'Hoje ainda dá para gastar'}
+            </p>
+            <p
+              className={cn(
+                'mt-1 text-3xl font-semibold tracking-tight tabular-nums',
+                todayOver && 'text-destructive',
+              )}
+            >
+              <Private>
+                {money(
+                  todayOver
+                    ? todayTotal.spent.minus(todayTotal.allowance)
+                    : todayTotal.left,
+                )}
+              </Private>
+            </p>
+            {/* Termômetro: verde até o valor do dia, vermelho além. */}
+            <div
+              aria-hidden="true"
+              className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10"
+            >
+              <span
+                className={`block h-full rounded-full transition-[width] duration-500 ${todayOver ? 'bg-destructive' : 'bg-emerald-500'}`}
+                style={{ width: `${todayPercent}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              de <Private>{money(todayTotal.allowance)}</Private> do dia
+            </p>
+            {/* Cada carteira só paga o que é dela: o número de cada uma. */}
+            <ul className="mt-4 grid gap-2">
+              {todayParts.map((part) => {
+                const Icon = WALLET_ICON[part.wallet.key];
+                return (
+                  <li
+                    key={part.wallet.key}
+                    className="flex items-center gap-2.5 text-sm"
+                  >
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted">
+                      <Icon className="size-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {part.wallet.label}
+                    </span>
+                    <span className="text-right tabular-nums">
+                      <span
+                        className={cn(
+                          'font-medium',
+                          part.over && 'text-destructive',
+                        )}
+                      >
+                        <Private>{money(part.left)}</Private>
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        até {shortDay(part.until)} ·{' '}
+                        {part.days === 1
+                          ? 'último dia'
+                          : `faltam ${part.days} dias`}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         )}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2">

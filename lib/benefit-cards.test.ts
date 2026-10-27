@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  benefitAllowance,
   benefitCycles,
   benefitBalanceView,
   benefitForecast,
@@ -382,5 +383,37 @@ describe('previsão do saldo até o próximo depósito', () => {
     )!;
     expect(forecast.nextDeposit).toBeNull();
     expect(forecast.lasts).toBe(false);
+  });
+});
+
+describe('quanto dá para gastar hoje no benefício', () => {
+  const deposit = (occurred_at: string, amount: string) =>
+    entry(occurred_at, amount, { entry_type: 'income' });
+
+  it('reparte o saldo, mais o gasto de hoje, até a véspera do depósito', () => {
+    const entries = [
+      deposit('2026-09-22T15:00:00Z', '900.00'),
+      deposit('2026-10-22T15:00:00Z', '900.00'),
+      entry('2026-10-27T15:00:00Z', '30.00'),
+    ];
+    // Próximo depósito em 21/11: 25 dias de 27/10 a 20/11.
+    const result = benefitAllowance('470.00', entries, '2026-10-27', 30);
+    expect(result).toMatchObject({
+      days: 25,
+      until: '2026-11-20',
+      allowance: '20.00',
+      spent: '30.00',
+      left: '0.00',
+      over: true,
+    });
+  });
+
+  it('sem depósito previsto usa os dias de reserva', () => {
+    const result = benefitAllowance('100.00', [], '2026-10-27', 10);
+    expect(result).toMatchObject({
+      days: 10,
+      allowance: '10.00',
+      left: '10.00',
+    });
   });
 });
