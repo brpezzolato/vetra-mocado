@@ -27,6 +27,7 @@ import {
 import Link from '@/components/navigation-link';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { bankLogo } from '@/lib/domain';
 import { cn } from '@/lib/utils';
 import { publishSyncProgress } from '@/lib/sync-progress';
 import {
@@ -164,35 +165,34 @@ export function AppHeader({
               <Skeleton className="h-3.5 w-28" />
             </div>
           ))}
-        {banks.map((bank) => (
-          <Link
-            key={bank.id}
-            href={`/cofrinhos/${bank.id}`}
-            onClick={() => setOpen(false)}
-            className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted"
-          >
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted p-1">
-              {bank.bank === 'Nubank' || bank.bank === 'Mercado Pago' ? (
-                <Image
-                  src={
-                    bank.bank === 'Nubank'
-                      ? '/logos/nubank-ui.webp'
-                      : '/logos/mercado-pago-ui.webp'
-                  }
-                  alt=""
-                  width={24}
-                  height={24}
-                  unoptimized
-                  loading="eager"
-                  className="size-full object-contain"
-                />
-              ) : (
-                <PiggyBank className="size-4" />
-              )}
-            </span>
-            <span className="truncate">{bank.name}</span>
-          </Link>
-        ))}
+        {banks.map((bank) => {
+          const logo = bankLogo(bank.bank);
+          return (
+            <Link
+              key={bank.id}
+              href={`/cofrinhos/${bank.id}`}
+              onClick={() => setOpen(false)}
+              className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted"
+            >
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted p-1">
+                {logo ? (
+                  <Image
+                    src={logo}
+                    alt=""
+                    width={24}
+                    height={24}
+                    unoptimized
+                    loading="eager"
+                    className="size-full object-contain"
+                  />
+                ) : (
+                  <PiggyBank className="size-4" />
+                )}
+              </span>
+              <span className="truncate">{bank.name}</span>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

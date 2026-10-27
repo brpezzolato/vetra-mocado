@@ -87,10 +87,7 @@ export function VaultCards({
       id: bank.id,
       name: bank.name,
       bank: bank.bank,
-      image:
-        bank.bank === 'Nubank'
-          ? '/logos/nubank-ui.webp'
-          : '/logos/mercado-pago-ui.webp',
+      image: bankPolicy(bank.bank).logo,
       value: result.netBalance,
       stale: staleBankDate([bank]),
       ...signedGain(yieldOnly(result.earnings)),

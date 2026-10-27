@@ -1,4 +1,4 @@
-export type BankName = 'Nubank' | 'Mercado Pago';
+export type BankName = 'Nubank' | 'Mercado Pago' | 'Itaú';
 export type TransactionKind = 'deposit' | 'withdrawal' | 'adjustment';
 
 export type PiggyBankRow = {
@@ -67,27 +67,48 @@ export type PiggyBank = PiggyBankRow & {
   earningCredits?: BankEarningCredit[];
 };
 
-export const bankPolicy = (bank: BankName) =>
-  bank === 'Nubank'
-    ? {
-        product: 'Caixinha Turbo',
-        cdi: 115,
-        limit: 5000,
-        excess: 100,
-        taxRule: 'Regressivo' as const,
-        iofRule: 'Regressivo até o 29º dia; zero a partir do 30º',
-        accruesOnDepositDay: false,
-        version: 'NUB-TURBO-115',
-        color: '#b517f5',
-      }
-    : {
-        product: 'Cofrinho Meli+',
-        cdi: 120,
-        limit: 10000,
-        excess: 100,
-        taxRule: 'Regressivo' as const,
-        iofRule: 'Isento desde o primeiro dia',
-        accruesOnDepositDay: false,
-        version: 'MP-MELI-120-2026-08',
-        color: '#ffe600',
-      };
+const BANK_POLICIES = {
+  Nubank: {
+    product: 'Caixinha Turbo',
+    cdi: 115,
+    limit: 5000,
+    excess: 100,
+    taxRule: 'Regressivo' as const,
+    iofRule: 'Regressivo até o 29º dia; zero a partir do 30º',
+    accruesOnDepositDay: false,
+    version: 'NUB-TURBO-115',
+    color: '#b517f5',
+    logo: '/logos/nubank-ui.webp',
+  },
+  'Mercado Pago': {
+    product: 'Cofrinho Meli+',
+    cdi: 120,
+    limit: 10000,
+    excess: 100,
+    taxRule: 'Regressivo' as const,
+    iofRule: 'Isento desde o primeiro dia',
+    accruesOnDepositDay: false,
+    version: 'MP-MELI-120-2026-08',
+    color: '#ffe600',
+    logo: '/logos/mercado-pago-ui.webp',
+  },
+  // Cofrinho do Itaú: CDB a 100% do CDI (taxa do lote na Pluggy), sem teto.
+  Itaú: {
+    product: 'Cofrinho',
+    cdi: 100,
+    limit: null,
+    excess: 100,
+    taxRule: 'Regressivo' as const,
+    iofRule: 'Regressivo até o 29º dia; zero a partir do 30º',
+    accruesOnDepositDay: false,
+    version: 'ITAU-COFRINHO-100',
+    color: '#ec7000',
+    logo: '/logos/itau-app.webp',
+  },
+} satisfies Record<BankName, unknown>;
+
+export const bankPolicy = (bank: BankName) => BANK_POLICIES[bank];
+
+/** Logo do banco do cofrinho; `null` para um nome que não é de cofrinho. */
+export const bankLogo = (bank: string): string | null =>
+  bank in BANK_POLICIES ? BANK_POLICIES[bank as BankName].logo : null;

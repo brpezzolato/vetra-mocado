@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { buildCreditCardInvoices, type CardInvoice } from '@/lib/card-invoices';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
+import { bankLogo } from '@/lib/domain';
 import { calculatePortfolio } from '@/lib/portfolio';
 import { useAccountPreference } from '@/lib/use-account-preference';
 import { useVaultData } from '@/lib/use-vault-data';
@@ -42,8 +43,6 @@ const dayMonth = (value: string) =>
   })
     .format(new Date(`${value}T12:00:00Z`))
     .replace('.', '');
-const vaultLogo = (bank: string) =>
-  bank === 'Nubank' ? '/logos/nubank-ui.webp' : '/logos/mercado-pago-ui.webp';
 
 // "Fora das contas" (compra de outra pessoa no cartão, por exemplo): o banco
 // cobra, mas não sai do cofrinho; estorno marcado assim devolve.
@@ -152,7 +151,7 @@ export function VaultCoverage({
     ...portfolio.results.map(({ bank }) => ({
       id: bank.id,
       label: bank.name,
-      logo: vaultLogo(bank.bank),
+      logo: bankLogo(bank.bank),
     })),
   ];
 
