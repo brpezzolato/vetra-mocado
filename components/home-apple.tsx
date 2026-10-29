@@ -1,22 +1,27 @@
 'use client';
 
-/* Home de teste no padrão Apple (skill apple-hig), segunda tentativa
-   (29/10/2026): "Resumo" à moda de Saúde/Fitness — anel do dia, pílulas dos
-   saldos (as da home, pedido do Bruno), destaques em blocos coloridos com
-   minigráficos e a lista de gastos à moda do app Apple Card. Só lê: não
-   congela o valor do dia nem mexe no que entra na conta. */
+/* Home de teste no padrão Apple (skill apple-hig), terceira tentativa
+   (29/10/2026): grade de widgets como a tela de início do iPhone — pequenos,
+   médios e grandes, com cor e profundidade — e tudo o que a home oficial
+   mostra (o Bruno sentiu falta de informação nas duas primeiras). As
+   pílulas dos saldos dos bancos são as mesmas da home, a pedido dele.
+   Grava o mesmo que a home: o valor do dia, a janela de 3 dias úteis e o
+   que entra na conta (`spending_room_exclusions`). */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Decimal from 'decimal.js';
 import {
+  ArrowDownRight,
+  ArrowUpRight,
   ChevronRight,
   CreditCard,
   Flame,
+  Minus,
   PiggyBank,
   ReceiptText,
+  SlidersHorizontal,
   Sparkles,
-  TrendingDown,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -27,9 +32,18 @@ import { ExpenseEntryDialog } from '@/components/expense-entry-dialog';
 import { ExpenseLine, dayLabel } from '@/components/expense-line';
 import { PaymentCardIcon } from '@/components/payment-card-icon';
 import { Private } from '@/components/private-value';
-import { blueTier } from '@/components/streak-badge';
+import { ReviewTeaser } from '@/components/review-teaser';
+import { RobotFreshness } from '@/components/robot-freshness';
 import { WishlistCard } from '@/components/wishlist-card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { barColour } from '@/lib/bank-colors';
@@ -39,6 +53,7 @@ import {
   daysInTheBlue,
   type AllowanceDay,
 } from '@/lib/daily-allowance';
+import { bankLogo } from '@/lib/domain';
 import { myShare, toTotalsView } from '@/lib/entry-share';
 import {
   saoDate,
@@ -48,6 +63,7 @@ import {
 import { loadFinancialEntries } from '@/lib/financial-entries-query';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import { summarizeFinances } from '@/lib/finance-overview';
+import { BANK_FOLLOW_UPS, subscribeManualRefresh } from '@/lib/manual-refresh';
 import { recapDefaultMonth, recapIsFresh } from '@/lib/monthly-recap';
 import {
   cardBankName,
@@ -57,7 +73,11 @@ import {
   type PaymentCard,
 } from '@/lib/payment-cards';
 import { monthLabel } from '@/lib/period-summary';
-import { calculatePortfolio } from '@/lib/portfolio';
+import {
+  calculatePortfolio,
+  portfolioEarnings,
+  yieldOnly,
+} from '@/lib/portfolio';
 import { createClient } from '@/lib/supabase/client';
 import { isPendingSpend, pendingEntries } from '@/lib/unidentified-spend';
 import { loadUnidentifiedSpend } from '@/lib/unidentified-spend-query';
@@ -66,11 +86,12 @@ import { useVaultData } from '@/lib/use-vault-data';
 import { cn } from '@/lib/utils';
 
 type BankKey = 'nubank' | 'itau' | 'picpay' | 'mercado-pago';
+type Exclusion = { kind: 'account' | 'card'; key: string };
 type Balances = {
   accounts: { bank: BankKey; balance: number }[];
   cards: { key: string; limit: number; available: number }[];
   benefits: { key: string; label: string; balance: number }[];
-  excluded: { kind: 'account' | 'card'; key: string }[];
+  excluded: Exclusion[];
   plan: {
     subscriptions: RecurringExpense[];
     spentByDay: Record<string, string>;
@@ -90,6 +111,13 @@ const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
     new Decimal(value).toNumber(),
   );
+/** Sem centavos, para os widgets pequenos. */
+const round = (value: Decimal.Value) =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(new Decimal(value).toNumber());
 const shortDay = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 const time = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -98,24 +126,22 @@ const time = (value: string) =>
     timeZone: 'America/Sao_Paulo',
   }).format(new Date(value));
 
-/* Uma cor por assunto, a mesma em toda a tela (e o texto diz o assunto:
-   cor nunca é o único sinal). */
-const TONES = {
-  room: {
-    text: 'text-emerald-600 dark:text-emerald-400',
-    fill: 'bg-emerald-500',
-  },
-  spend: {
-    text: 'text-orange-600 dark:text-orange-400',
-    fill: 'bg-orange-500',
-  },
-  vault: { text: 'text-sky-600 dark:text-sky-400', fill: 'bg-sky-500' },
-  flash: { text: 'text-pink-600 dark:text-pink-400', fill: 'bg-pink-500' },
-  income: { text: 'text-teal-600 dark:text-teal-400', fill: 'bg-teal-500' },
+/* Fundo de cada assunto: gradiente escuro o bastante para texto branco
+   (contraste ≥ 4,5:1 no tom de baixo). Mesma cor = mesmo assunto em toda a
+   tela, e o título sempre diz o assunto. */
+const PAINT = {
+  today: 'from-emerald-500 to-teal-700 shadow-emerald-900/25',
+  over: 'from-rose-500 to-red-700 shadow-red-900/25',
+  streak: 'from-amber-400 to-orange-600 shadow-orange-900/25',
+  week: 'from-orange-500 to-rose-600 shadow-rose-900/25',
+  vault: 'from-sky-500 to-indigo-700 shadow-indigo-900/25',
+  flash: 'from-pink-500 to-fuchsia-700 shadow-fuchsia-900/25',
+  month: 'from-violet-500 to-purple-800 shadow-purple-900/25',
+  recap: 'from-indigo-500 to-violet-700 shadow-violet-900/25',
 } as const;
-type Tone = keyof typeof TONES;
+type Paint = keyof typeof PAINT;
 
-/* --- Dados (os mesmos da home) ------------------------------------------ */
+/* --- Dados (os mesmos da home, com as mesmas gravações) ----------------- */
 
 async function fetchBalances(): Promise<Balances> {
   const response = await fetch('/api/pluggy/balances', { cache: 'no-store' });
@@ -144,6 +170,7 @@ function useHomeData() {
       loadUnidentifiedSpend(client).catch(() => []),
       fetchBalances().catch(() => null),
     ]);
+    if (nextBalances) setBalances(nextBalances);
     if (entryResult.error || cardResult.error) {
       setFailed(true);
       return;
@@ -154,148 +181,300 @@ function useHomeData() {
       ...pendingEntries(pending),
     ]);
     setCards((cardResult.data ?? []) as PaymentCard[]);
-    if (nextBalances) setBalances(nextBalances);
   }, [client]);
 
   useEffect(() => {
     queueMicrotask(() => void load());
+    // Os bancos mandam gastos depois da primeira leitura (como na home).
+    return subscribeManualRefresh(load, { followUps: BANK_FOLLOW_UPS });
   }, [load]);
   useResumeRefresh(load);
-  return { client, entries, setEntries, cards, balances, failed, reload: load };
-}
 
-/* --- Peças -------------------------------------------------------------- */
+  const userId = useCallback(async () => {
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    return user?.id ?? null;
+  }, [client]);
 
-/** Anel do dia (como os de Atividade): quanto do valor do dia já saiu. */
-function DayRing({ percent, over }: { percent: number; over: boolean }) {
-  const size = 108;
-  const stroke = 12;
-  const radius = (size - stroke) / 2;
-  const length = 2 * Math.PI * radius;
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      aria-hidden="true"
-      className="shrink-0 -rotate-90"
-    >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        strokeWidth={stroke}
-        className="stroke-foreground/10"
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={length}
-        strokeDashoffset={length * (1 - Math.max(percent, 1) / 100)}
-        className={cn(
-          'transition-[stroke-dashoffset] duration-500 motion-reduce:transition-none',
-          over ? 'stroke-destructive' : 'stroke-emerald-500',
-        )}
-      />
-    </svg>
+  /** Valor do dia congelado no primeiro cálculo (igual à home). */
+  const freeze = useCallback(
+    async (day: string, allowance: string) => {
+      setBalances((current) =>
+        current?.plan &&
+        !current.plan.allowances.some((item) => item.day === day)
+          ? {
+              ...current,
+              plan: {
+                ...current.plan,
+                allowances: [...current.plan.allowances, { day, allowance }],
+              },
+            }
+          : current,
+      );
+      const id = await userId();
+      if (!id) return;
+      await client
+        .from('daily_allowances')
+        .upsert(
+          { user_id: id, day, allowance },
+          { onConflict: 'user_id,day', ignoreDuplicates: true },
+        );
+    },
+    [client, userId],
   );
+
+  /** Valores que a janela de 3 dias úteis baixou. */
+  const saveAdjusted = useCallback(
+    async (changed: AllowanceDay[]) => {
+      if (!changed.length) return;
+      const lowered = new Map(changed.map((item) => [item.day, item]));
+      setBalances((current) =>
+        current?.plan
+          ? {
+              ...current,
+              plan: {
+                ...current.plan,
+                allowances: current.plan.allowances.map(
+                  (item) => lowered.get(item.day) ?? item,
+                ),
+              },
+            }
+          : current,
+      );
+      const id = await userId();
+      if (!id) return;
+      for (const item of changed)
+        await client
+          .from('daily_allowances')
+          .update({ allowance: item.allowance })
+          .eq('user_id', id)
+          .eq('day', item.day);
+    },
+    [client, userId],
+  );
+
+  /** Liga/desliga um saldo ou limite na conta; desfaz se falhar. */
+  const toggle = useCallback(
+    async (item: Exclusion, include: boolean) => {
+      let previous: Balances | null = null;
+      setBalances((current) => {
+        previous = current;
+        if (!current) return current;
+        return {
+          ...current,
+          excluded: include
+            ? current.excluded.filter(
+                (other) =>
+                  !(other.kind === item.kind && other.key === item.key),
+              )
+            : [...current.excluded, item],
+        };
+      });
+      const id = await userId();
+      const { error } = !id
+        ? { error: new Error('sem sessão') }
+        : include
+          ? await client
+              .from('spending_room_exclusions')
+              .delete()
+              .eq('kind', item.kind)
+              .eq('key', item.key)
+          : await client
+              .from('spending_room_exclusions')
+              .upsert(
+                { user_id: id, kind: item.kind, key: item.key },
+                { onConflict: 'user_id,kind,key' },
+              );
+      if (error) setBalances(previous);
+    },
+    [client, userId],
+  );
+
+  return {
+    client,
+    entries,
+    setEntries,
+    cards,
+    balances,
+    failed,
+    reload: load,
+    freeze,
+    saveAdjusted,
+    toggle,
+  };
 }
+
+/* --- Widgets ------------------------------------------------------------ */
 
 /**
- * Bloco de destaque (como os de Saúde): ícone e assunto na cor do assunto,
- * valor grande, legenda, e um minigráfico opcional embaixo. Tocar abre a tela.
+ * Widget colorido (pequeno ou médio): gradiente do assunto, título no
+ * topo, número grande embaixo. Tocar abre a tela do assunto.
  */
-function Tile({
-  tone,
+function Widget({
+  paint,
   icon: Icon,
   title,
-  value,
-  caption,
   href,
-  children,
   className,
+  children,
+  index = 0,
 }: {
-  tone: Tone;
+  paint: Paint;
   icon: LucideIcon;
   title: string;
-  value: React.ReactNode;
-  caption?: React.ReactNode;
   href: string;
-  children?: React.ReactNode;
   className?: string;
+  children: React.ReactNode;
+  /** Ordem na entrada escalonada. */
+  index?: number;
 }) {
   return (
     <Link
       href={href}
+      style={{ animationDelay: `${index * 40}ms` }}
       className={cn(
-        'group flex min-w-0 flex-col rounded-3xl bg-card p-4 ring-1 ring-border/60 transition-[transform,background-color] hover:bg-muted/30 focus-visible:outline-2 focus-visible:outline-ring active:scale-[0.98] motion-reduce:active:scale-100',
+        'relative isolate flex min-h-[9.5rem] min-w-0 flex-col overflow-clip rounded-[26px] bg-linear-to-br p-4 text-white shadow-lg ring-1 ring-white/10 ring-inset transition-transform focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both motion-safe:duration-300 motion-reduce:active:scale-100',
+        PAINT[paint],
         className,
       )}
     >
-      <span className="flex items-center gap-1.5">
-        <Icon aria-hidden="true" className={cn('size-4', TONES[tone].text)} />
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate text-[15px] font-semibold',
-            TONES[tone].text,
-          )}
-        >
-          {title}
-        </span>
-        <ChevronRight
-          aria-hidden="true"
-          className="size-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5"
-        />
+      {/* Brilho de cima, para dar volume. */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-1/2 bg-linear-to-b from-white/15 to-transparent"
+      />
+      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-white/90">
+        <Icon aria-hidden="true" className="size-4" />
+        <span className="min-w-0 flex-1 truncate">{title}</span>
       </span>
-      <span className="mt-4 block text-[22px] leading-7 font-bold tracking-tight tabular-nums">
-        {value}
-      </span>
-      {caption && (
-        <span className="mt-0.5 block text-[13px] text-muted-foreground">
-          {caption}
-        </span>
-      )}
-      {children && <span className="mt-3 block">{children}</span>}
+      <span className="mt-auto block pt-3">{children}</span>
     </Link>
   );
 }
 
-/** Minigráfico de barras (7 dias); hoje na cor cheia, futuros apagados. */
-function MiniBars({
+/**
+ * Widget grande (fundo do app): cabeçalho com ícone colorido e "Ver" no
+ * fim, conteúdo livre. Para listas e detalhes, onde texto pequeno precisa
+ * de fundo sólido.
+ */
+function Panel({
+  paint,
+  icon: Icon,
+  title,
+  subtitle,
+  href,
+  action = 'Ver',
+  trailing,
+  className,
+  children,
+  index = 0,
+}: {
+  paint: Paint;
+  icon: LucideIcon;
+  title: string;
+  subtitle?: React.ReactNode;
+  href?: string;
+  action?: string;
+  trailing?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+  index?: number;
+}) {
+  return (
+    <section
+      style={{ animationDelay: `${index * 40}ms` }}
+      className={cn(
+        'min-w-0 rounded-[26px] bg-card p-4 shadow-sm ring-1 ring-border/60 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both motion-safe:duration-300',
+        className,
+      )}
+    >
+      <header className="mb-3 flex items-center gap-3">
+        <span
+          className={cn(
+            'grid size-9 shrink-0 place-items-center rounded-[11px] bg-linear-to-br text-white shadow-sm',
+            PAINT[paint],
+          )}
+        >
+          <Icon aria-hidden="true" className="size-[18px]" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <h2 className="truncate text-[17px] font-semibold tracking-tight">
+            {title}
+          </h2>
+          {subtitle && (
+            <span className="block truncate text-[13px] text-muted-foreground">
+              {subtitle}
+            </span>
+          )}
+        </span>
+        {trailing}
+        {href && (
+          <Link
+            href={href}
+            className="inline-flex min-h-11 shrink-0 items-center gap-0.5 rounded-full px-2 text-[15px] text-primary hover:bg-muted/50"
+          >
+            {action}
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </Link>
+        )}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/** Barras de 7 dias; hoje destacado, futuros apagados. */
+function WeekBars({
   days,
   today,
-  tone,
+  onColour = false,
 }: {
   days: { day: string; total: string | null }[];
   today: string;
-  tone: Tone;
+  /** Em cima de gradiente (barras brancas). */
+  onColour?: boolean;
 }) {
   const max = Math.max(1, ...days.map((day) => Number(day.total ?? 0)));
+  const letters = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
   return (
-    <span aria-hidden="true" className="flex h-12 items-end gap-1.5">
-      {days.map((day) => (
-        <span
-          key={day.day}
-          className={cn(
-            'flex-1 rounded-[3px]',
-            day.total === null
-              ? 'bg-foreground/5'
-              : day.day === today
-                ? TONES[tone].fill
-                : 'bg-foreground/20',
-          )}
-          style={{
-            height:
-              day.total === null
-                ? '3px'
-                : `${Math.max(6, (Number(day.total) / max) * 100)}%`,
-          }}
-        />
+    <span aria-hidden="true" className="grid grid-cols-7 items-end gap-1.5">
+      {days.map((day, index) => (
+        <span key={day.day} className="flex flex-col items-center gap-1">
+          <span className="flex h-12 w-full items-end">
+            <span
+              className={cn(
+                'w-full rounded-[4px]',
+                day.total === null
+                  ? onColour
+                    ? 'bg-white/15'
+                    : 'bg-foreground/5'
+                  : day.day === today
+                    ? onColour
+                      ? 'bg-white'
+                      : 'bg-orange-500'
+                    : onColour
+                      ? 'bg-white/45'
+                      : 'bg-foreground/20',
+              )}
+              style={{
+                height:
+                  day.total === null
+                    ? '3px'
+                    : `${Math.max(8, (Number(day.total) / max) * 100)}%`,
+              }}
+            />
+          </span>
+          <span
+            className={cn(
+              'text-[11px]',
+              onColour ? 'text-white/80' : 'text-muted-foreground',
+              day.day === today && 'font-bold',
+            )}
+          >
+            {letters[index]}
+          </span>
+        </span>
       ))}
     </span>
   );
@@ -304,14 +483,30 @@ function MiniBars({
 /* --- Tela --------------------------------------------------------------- */
 
 export function HomeApple() {
-  const { client, entries, setEntries, cards, balances, failed, reload } =
-    useHomeData();
+  const {
+    client,
+    entries,
+    setEntries,
+    cards,
+    balances,
+    failed,
+    reload,
+    freeze,
+    saveAdjusted,
+    toggle,
+  } = useHomeData();
   const { banks, rates, loading: vaultsLoading } = useVaultData();
   const [entryOpen, setEntryOpen] = useState(false);
   const [selected, setSelected] = useState<FinancialEntry | null>(null);
+  const [configuring, setConfiguring] = useState(false);
+  const [shown, setShown] = useState(8);
   const todayKey = saoDate(new Date());
 
   const list = useMemo(() => entries ?? [], [entries]);
+  const recorded = useMemo(
+    () => list.filter((entry) => !isPendingSpend(entry)),
+    [list],
+  );
   const expenses = useMemo(
     () =>
       list
@@ -340,10 +535,15 @@ export function HomeApple() {
     [banks, rates],
   );
 
+  const out = useCallback(
+    (kind: Exclusion['kind'], key: string) =>
+      (balances?.excluded ?? []).some(
+        (item) => item.kind === kind && item.key === key,
+      ),
+    [balances],
+  );
   const room = useMemo(() => {
     if (!balances) return null;
-    const out = (kind: 'account' | 'card', key: string) =>
-      balances.excluded.some((item) => item.kind === kind && item.key === key);
     const accounts = balances.accounts.filter(
       (account) => !out('account', account.bank),
     );
@@ -359,16 +559,19 @@ export function HomeApple() {
     const parts = [
       ...accounts.map((item) => ({
         id: `a-${item.bank}`,
+        label: `Conta ${BANKS[item.bank].name}`,
         colour: barColour(item.bank, 'balance'),
         value: item.balance,
       })),
       ...benefits.map((item) => ({
         id: `b-${item.key}`,
+        label: `Flash · ${item.label}`,
         colour: barColour('flash', 'balance'),
         value: item.balance,
       })),
       ...limits.map((item) => ({
         id: `c-${item.key}`,
+        label: item.key,
         colour: barColour(suggestedCardBank(item.key), 'limit'),
         value: item.available,
       })),
@@ -380,11 +583,15 @@ export function HomeApple() {
       flash,
       parts,
       positive: parts.reduce((total, part) => total + part.value, 0),
+      nothing: !accounts.length && !limits.length && !benefits.length,
+      hasAccounts: accounts.length > 0,
+      hasBenefits: benefits.length > 0,
+      hasCards: limits.length > 0,
     };
-  }, [balances]);
+  }, [balances, out]);
 
-  const today = useMemo(() => {
-    const plan = balances?.plan;
+  const plan = balances?.plan ?? null;
+  const day = useMemo(() => {
     if (!plan || !room) return null;
     const spent = new Decimal(plan.spentByDay[todayKey] ?? 0);
     const computed = allowanceForToday({
@@ -393,7 +600,7 @@ export function HomeApple() {
       spentToday: spent,
       subscriptions: plan.subscriptions,
     });
-    const { adjusted } = adjustAllowances({
+    const { adjusted, changed } = adjustAllowances({
       today: todayKey,
       room: room.total,
       allowances: plan.allowances,
@@ -423,11 +630,31 @@ export function HomeApple() {
       days: computed.days,
       short: Decimal.max(new Decimal(computed.free).negated(), 0),
       blue,
+      changed,
+      freezeValue: stored ? null : computed.perDay,
       pending: (plan.unidentified ?? []).filter(
         (item) => item.day === todayKey,
       ),
     };
-  }, [balances, room, todayKey]);
+  }, [plan, room, todayKey]);
+
+  // As mesmas gravações da home: congelar hoje e baixar a janela.
+  const freezeValue = room?.nothing ? null : (day?.freezeValue ?? null);
+  useEffect(() => {
+    if (freezeValue) void freeze(todayKey, freezeValue);
+  }, [freezeValue, freeze, todayKey]);
+  const changedKey = (day?.changed ?? [])
+    .map((item) => `${item.day}:${item.allowance}`)
+    .join('|');
+  useEffect(() => {
+    if (!changedKey || room?.nothing) return;
+    void saveAdjusted(
+      changedKey.split('|').map((item) => {
+        const [when, allowance] = item.split(':');
+        return { day: when, allowance };
+      }),
+    );
+  }, [changedKey, room?.nothing, saveAdjusted]);
 
   const dateLine = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
@@ -435,6 +662,14 @@ export function HomeApple() {
     month: 'long',
     timeZone: 'America/Sao_Paulo',
   }).format(new Date());
+  const weekDiff = new Decimal(week.total).minus(week.previous);
+  const dayMonth = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+  const weekPeriod =
+    week.start === week.end
+      ? dayMonth(week.start)
+      : `${dayMonth(week.start)} – ${dayMonth(week.end)}`;
+  const weekGain = portfolioEarnings(portfolio, week.start, week.end);
+  const loadingData = entries === null;
 
   /* Pílulas dos saldos: exatamente as da home (account-balances.tsx). */
   const pills = balances?.accounts.length ? (
@@ -470,73 +705,102 @@ export function HomeApple() {
     </ScrollArea>
   ) : null;
 
-  /* Hoje: o número que a home existe para responder, com o anel ao lado. */
-  const hero = today ? (
-    <section
-      aria-label="Hoje"
-      className="rounded-[28px] bg-card p-5 ring-1 ring-border/60"
-    >
-      <div className="flex items-center gap-5">
-        <div className="relative grid place-items-center">
-          <DayRing percent={today.percent} over={today.over} />
-          <span className="absolute text-center">
-            <span className="block text-[17px] leading-5 font-bold tabular-nums">
-              {Math.round(today.percent)}%
-            </span>
-            <span className="block text-[11px] text-muted-foreground">
-              usado
-            </span>
+  /* Topo: "Hoje" grande à esquerda; dias no azul e semana à direita. */
+  const top = (
+    <div className="grid grid-cols-2 gap-3">
+      {day ? (
+        <Widget
+          paint={day.over ? 'over' : 'today'}
+          icon={Wallet}
+          title="Hoje"
+          href="/resumo"
+          className="row-span-2 min-h-[20rem]"
+        >
+          <span className="block text-[15px] font-medium text-white/90">
+            {day.over ? 'Você passou' : 'Ainda dá'}
           </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] text-muted-foreground">
-            {today.over ? 'Hoje você passou' : 'Hoje ainda dá'}
-          </p>
-          <p
-            className={cn(
-              'text-[34px] leading-[41px] font-bold tracking-tight tabular-nums',
-              today.over ? 'text-destructive' : TONES.room.text,
-            )}
-          >
+          <span className="block text-[34px] leading-[38px] font-bold tracking-tight tabular-nums">
             <Private>
-              {money(
-                today.over ? today.spent.minus(today.allowance) : today.left,
-              )}
+              {money(day.over ? day.spent.minus(day.allowance) : day.left)}
             </Private>
-          </p>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            de <Private>{money(today.allowance)}</Private> · até{' '}
-            {shortDay(today.until)}
-          </p>
-        </div>
-      </div>
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/70 pt-3 text-[13px]">
-        <span className="text-muted-foreground">
-          {today.days === 1
-            ? 'Último dia do período'
-            : `${today.days} dias até o fim do mês`}
-        </span>
-        {today.blue.total > 0 && (
+          </span>
           <span
-            className="inline-flex items-center gap-1 font-semibold"
-            title={today.blue.provisional ? 'Provisório' : undefined}
+            aria-hidden="true"
+            className="mt-3 block h-2 overflow-hidden rounded-full bg-white/25"
           >
+            <span
+              className="block h-full rounded-full bg-white transition-[width] duration-500 motion-reduce:transition-none"
+              style={{ width: `${day.percent}%` }}
+            />
+          </span>
+          <span className="mt-2 block text-[13px] font-medium text-white/90">
+            Gastou <Private>{money(day.spent)}</Private> de{' '}
+            <Private>{money(day.allowance)}</Private>
+          </span>
+          <span className="block text-[13px] text-white/85">
+            até {shortDay(day.until)} ·{' '}
+            {day.days === 1 ? 'último dia' : `faltam ${day.days} dias`}
+          </span>
+        </Widget>
+      ) : (
+        <Skeleton className="row-span-2 min-h-[20rem] rounded-[26px]" />
+      )}
+      {day ? (
+        <Widget
+          paint="streak"
+          icon={Flame}
+          title="No azul"
+          href="/resumo"
+          index={1}
+        >
+          <span className="flex items-baseline gap-1">
+            <span className="text-[34px] leading-[38px] font-bold tabular-nums">
+              {day.blue.total}
+            </span>
             <Flame
               aria-hidden="true"
               className={cn(
-                'size-4 fill-current',
-                blueTier(today.blue.total).text,
+                'size-6 fill-current',
+                day.blue.total ? 'text-white' : 'text-white/50',
               )}
             />
-            {today.blue.total}{' '}
-            {today.blue.total === 1 ? 'dia no azul' : 'dias no azul'}
           </span>
-        )}
-      </div>
-      {today.pending.length > 0 && (
-        <p className="mt-2 text-[13px] text-muted-foreground">
-          Inclui{' '}
-          {today.pending.map((item, index) => (
+          <span className="block text-[13px] font-medium text-white/90">
+            {day.blue.total === 1 ? 'dia' : 'dias'} dentro do valor
+            {day.blue.provisional && ' · provisório'}
+          </span>
+        </Widget>
+      ) : (
+        <Skeleton className="min-h-[9.5rem] rounded-[26px]" />
+      )}
+      {loadingData ? (
+        <Skeleton className="min-h-[9.5rem] rounded-[26px]" />
+      ) : (
+        <Widget
+          paint="week"
+          icon={ReceiptText}
+          title="Semana"
+          href="/resumo"
+          index={2}
+        >
+          <span className="block text-[22px] leading-7 font-bold tracking-tight tabular-nums">
+            <Private>{round(week.total)}</Private>
+          </span>
+          <span className="mt-2 block">
+            <WeekBars days={week.days} today={todayKey} onColour />
+          </span>
+        </Widget>
+      )}
+    </div>
+  );
+
+  /* Avisos do dia, logo abaixo (fundo sólido: texto pequeno). */
+  const notes = day && (day.pending.length > 0 || day.short.gt(0)) && (
+    <div className="grid gap-1 rounded-[22px] bg-card px-4 py-3 text-[13px] ring-1 ring-border/60">
+      {day.pending.length > 0 && (
+        <p className="text-muted-foreground">
+          Hoje inclui{' '}
+          {day.pending.map((item, index) => (
             <span key={item.account}>
               {index > 0 && ' e '}
               <Private>{money(item.amount)}</Private> no{' '}
@@ -546,262 +810,497 @@ export function HomeApple() {
           que o limite já mostra e a compra ainda não chegou.
         </p>
       )}
-      {today.short.gt(0) && (
-        <p className="mt-2 text-[13px] text-destructive">
-          Faltam <Private>{money(today.short)}</Private> para cobrir as
+      {day.short.gt(0) && (
+        <p className="text-destructive">
+          Faltam <Private>{money(day.short)}</Private> para cobrir as
           assinaturas do mês.
         </p>
       )}
-    </section>
-  ) : (
-    <Skeleton className="h-48 rounded-[28px]" />
+    </div>
   );
 
-  /* Destaques: blocos de assunto, dois por linha no celular. */
-  const weekDiff = new Decimal(week.total).minus(week.previous);
-  const tiles = (
-    <section aria-labelledby="destaques">
-      <h2
-        id="destaques"
-        className="mb-3 px-1 text-[22px] leading-7 font-bold tracking-tight"
-      >
-        Destaques
-      </h2>
-      <div className="grid grid-cols-2 gap-3">
-        {room ? (
-          <Tile
-            tone="room"
-            icon={Wallet}
-            title="No mês"
-            value={<Private>{money(room.total)}</Private>}
-            caption="disponível até o fim do mês"
-            href="/financeiro"
-            className="col-span-2"
-          >
-            <span
-              aria-hidden="true"
-              className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-foreground/10"
-            >
-              {room.parts.map((part) => (
-                <span
-                  key={part.id}
-                  className="h-full first:rounded-l-full last:rounded-r-full"
-                  style={{
-                    width: `${(part.value / room.positive) * 100}%`,
-                    background: part.colour,
-                  }}
-                />
-              ))}
-            </span>
-            <span className="mt-2 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
-              <span>
-                Contas <Private>{money(room.balance)}</Private>
-              </span>
-              {room.flash.gt(0) && (
-                <span>
-                  Flash <Private>{money(room.flash)}</Private>
-                </span>
+  /* Três pequenos: cofrinhos, Flash e mês. */
+  const smalls = (
+    <div className="grid grid-cols-3 gap-3">
+      {vaultsLoading ? (
+        <Skeleton className="min-h-[8.5rem] rounded-[26px]" />
+      ) : (
+        <Widget
+          paint="vault"
+          icon={PiggyBank}
+          title="Cofrinhos"
+          href="/cobertura"
+          className="min-h-[8.5rem] p-3.5"
+          index={3}
+        >
+          <span className="block text-[17px] leading-6 font-bold tabular-nums">
+            <Private>{round(portfolio.netBalance)}</Private>
+          </span>
+          <span className="block truncate text-[11px] font-medium text-white/90">
+            +
+            <Private>
+              {round(Decimal.max(portfolio.lifetimeNetGain, 0))}
+            </Private>{' '}
+            rendidos
+          </span>
+        </Widget>
+      )}
+      {room ? (
+        <Widget
+          paint="flash"
+          icon={CreditCard}
+          title="Flash"
+          href="/beneficios"
+          className="min-h-[8.5rem] p-3.5"
+          index={4}
+        >
+          <span className="block text-[17px] leading-6 font-bold tabular-nums">
+            <Private>
+              {round(
+                (balances?.benefits ?? []).reduce(
+                  (sum, item) => sum.plus(item.balance),
+                  new Decimal(0),
+                ),
               )}
-              <span>
-                Limite <Private>{money(room.free)}</Private>
-              </span>
-            </span>
-          </Tile>
-        ) : (
-          <Skeleton className="col-span-2 h-36 rounded-3xl" />
-        )}
-        {entries === null ? (
-          <>
-            <Skeleton className="h-40 rounded-3xl" />
-            <Skeleton className="h-40 rounded-3xl" />
-          </>
-        ) : (
-          <>
-            <Tile
-              tone="spend"
-              icon={TrendingDown}
-              title="Semana"
-              value={<Private>{money(week.total)}</Private>}
-              caption={
-                weekDiff.isZero() ? (
-                  'igual à anterior'
-                ) : (
-                  <>
-                    <Private>{money(weekDiff.abs())}</Private>{' '}
-                    {weekDiff.isNegative() ? 'a menos' : 'a mais'}
-                  </>
-                )
-              }
-              href="/resumo"
-            >
-              <MiniBars days={week.days} today={todayKey} tone="spend" />
-            </Tile>
-            <Tile
-              tone="spend"
-              icon={ReceiptText}
-              title="Mês"
-              value={<Private>{money(month.expenses)}</Private>}
-              caption={
-                <>
-                  entrou <Private>{money(month.income)}</Private>
-                </>
-              }
-              href="/financeiro"
-            >
-              <span
-                aria-hidden="true"
-                className="block h-2 overflow-hidden rounded-full bg-teal-500/25"
-              >
-                <span
-                  className={cn('block h-full rounded-full', TONES.spend.fill)}
-                  style={{
-                    width: `${
-                      month.income.gt(0)
-                        ? Math.min(
-                            100,
-                            month.expenses
-                              .div(month.income)
-                              .times(100)
-                              .toNumber(),
-                          )
-                        : 100
-                    }%`,
-                  }}
-                />
-              </span>
-              <span className="mt-1.5 block text-[11px] text-muted-foreground">
-                gasto × entrada
-              </span>
-            </Tile>
-          </>
-        )}
-        {vaultsLoading ? (
-          <Skeleton className="h-36 rounded-3xl" />
-        ) : (
-          <Tile
-            tone="vault"
-            icon={PiggyBank}
-            title="Cofrinhos"
-            value={<Private>{money(portfolio.netBalance)}</Private>}
-            caption={
-              <>
-                +
-                <Private>
-                  {money(Decimal.max(portfolio.lifetimeNetGain, 0))}
-                </Private>{' '}
-                rendidos
-              </>
-            }
-            href="/cobertura"
-          />
-        )}
-        {room && room.flash.gt(0) && (
-          <Tile
-            tone="flash"
-            icon={CreditCard}
-            title="Flash"
-            value={<Private>{money(room.flash)}</Private>}
-            caption="nos benefícios"
-            href="/beneficios"
-          />
-        )}
-        {recapIsFresh() && (
-          <Tile
-            tone="income"
-            icon={Sparkles}
-            title="Retrospectiva"
-            value={
-              <span className="first-letter:uppercase">
-                {monthLabel(recapDefaultMonth()).split(' ')[0]}
-              </span>
-            }
-            caption="maior compra, dias sem gastar"
-            href="/retrospectiva"
-          />
-        )}
-      </div>
-    </section>
+            </Private>
+          </span>
+          <span className="block truncate text-[11px] font-medium text-white/90">
+            nos benefícios
+          </span>
+        </Widget>
+      ) : (
+        <Skeleton className="min-h-[8.5rem] rounded-[26px]" />
+      )}
+      {loadingData ? (
+        <Skeleton className="min-h-[8.5rem] rounded-[26px]" />
+      ) : (
+        <Widget
+          paint="month"
+          icon={ReceiptText}
+          title="Mês"
+          href="/financeiro"
+          className="min-h-[8.5rem] p-3.5"
+          index={5}
+        >
+          <span className="block text-[17px] leading-6 font-bold tabular-nums">
+            <Private>{round(month.expenses)}</Private>
+          </span>
+          <span className="block truncate text-[11px] font-medium text-white/90">
+            gastos no mês
+          </span>
+        </Widget>
+      )}
+    </div>
   );
 
-  /* Gastos recentes: uma lista só, como as transações do Apple Card. */
-  const recent = expenses.slice(0, 8);
-  const transactions = (
-    <section aria-labelledby="gastos">
-      <div className="mb-3 flex items-end justify-between gap-3 px-1">
-        <h2
-          id="gastos"
-          className="text-[22px] leading-7 font-bold tracking-tight"
+  /* Médio: o disponível do mês, de onde vem e o que entra na conta. */
+  const monthPanel = room ? (
+    <Panel
+      paint="today"
+      icon={Wallet}
+      title="Ainda dá para gastar no mês"
+      index={6}
+      trailing={
+        <Button
+          type="button"
+          variant="glass-quiet"
+          size="icon"
+          aria-label="Escolher saldos e limites da conta"
+          onClick={() => setConfiguring(true)}
         >
-          Últimos gastos
-        </h2>
-        <Link
-          href="/financeiro"
-          className="inline-flex min-h-11 items-center text-[15px] text-primary"
-        >
-          Ver todos
-        </Link>
-      </div>
-      {entries === null ? (
-        <Skeleton className="h-96 rounded-3xl" />
-      ) : recent.length === 0 ? (
-        <div className="rounded-3xl bg-card p-6 text-center ring-1 ring-border/60">
-          <p className="text-[15px] font-medium">Nenhum gasto ainda</p>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Toque em + no topo para registrar o primeiro.
+          <SlidersHorizontal />
+        </Button>
+      }
+    >
+      <p className="text-[28px] leading-[34px] font-bold tracking-tight tabular-nums">
+        <Private>{money(room.total)}</Private>
+      </p>
+      {room.nothing ? (
+        <p className="mt-2 text-[13px] text-muted-foreground">
+          Nenhum saldo nem limite escolhido. Toque no ajuste para escolher.
+        </p>
+      ) : (
+        <>
+          <ul
+            aria-label="De onde vem"
+            className="mt-3 flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-foreground/10"
+          >
+            {room.parts.map((part) => (
+              <li
+                key={part.id}
+                title={`${part.label}: ${money(part.value)}`}
+                className="h-full first:rounded-l-full last:rounded-r-full"
+                style={{
+                  width: `${(part.value / room.positive) * 100}%`,
+                  background: part.colour,
+                }}
+              >
+                <span className="sr-only">
+                  {part.label}: {money(part.value)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <dl className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              room.hasAccounts && { label: 'Contas', value: room.balance },
+              room.hasBenefits && { label: 'Flash', value: room.flash },
+              room.hasCards && { label: 'Limite livre', value: room.free },
+            ]
+              .filter((item) => item !== false)
+              .map((item) => (
+                <div
+                  key={item.label}
+                  className="min-w-0 rounded-2xl bg-muted/60 px-3 py-2"
+                >
+                  <dt className="truncate text-[11px] text-muted-foreground">
+                    {item.label}
+                  </dt>
+                  <dd className="truncate text-[15px] font-semibold tabular-nums">
+                    <Private>{money(item.value)}</Private>
+                  </dd>
+                </div>
+              ))}
+          </dl>
+        </>
+      )}
+    </Panel>
+  ) : (
+    <Skeleton className="h-52 rounded-[26px]" />
+  );
+
+  /* Grande: últimos gastos, com o gasto de hoje no cabeçalho. */
+  const spentToday = expenses
+    .filter(
+      (entry) =>
+        saoDate(entry.occurred_at) === todayKey && !entry.excluded_from_totals,
+    )
+    .reduce((sum, entry) => sum.plus(myShare(entry)), new Decimal(0));
+  const spendingPanel = loadingData ? (
+    <Skeleton className="h-[28rem] rounded-[26px]" />
+  ) : (
+    <Panel
+      paint="week"
+      icon={ReceiptText}
+      title="Últimos gastos"
+      subtitle={
+        <>
+          Hoje <Private>{money(spentToday)}</Private>
+        </>
+      }
+      href="/financeiro"
+      action="Todos"
+      index={7}
+    >
+      {expenses.length === 0 ? (
+        <p className="py-6 text-center text-[13px] text-muted-foreground">
+          Nenhum gasto ainda. Toque em + no topo para registrar o primeiro.
+        </p>
+      ) : (
+        <>
+          <ul className="-mx-1">
+            {expenses.slice(0, shown).map((entry, index, items) => {
+              const when = saoDate(entry.occurred_at);
+              const newDay =
+                index === 0 || saoDate(items[index - 1].occurred_at) !== when;
+              return (
+                <li key={entry.id}>
+                  {newDay && (
+                    <p className="px-2 pt-3 pb-1 text-[13px] font-semibold text-muted-foreground first:pt-0">
+                      {dayLabel(when, todayKey)}
+                    </p>
+                  )}
+                  {isPendingSpend(entry) ? (
+                    <ExpenseLine
+                      entry={entry}
+                      cards={sortedCards}
+                      onOpen={setSelected}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setSelected(entry)}
+                      className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring active:bg-muted/70"
+                    >
+                      <PaymentCardIcon
+                        bankId={resolvePaymentMethod(entry.account, cards)}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[15px] font-medium">
+                          {entry.description}
+                        </span>
+                        <span className="block truncate text-[13px] text-muted-foreground">
+                          {entry.category} · {time(entry.occurred_at)}
+                          {entry.excluded_from_daily &&
+                            !entry.excluded_from_totals &&
+                            ' · fora do valor do dia'}
+                        </span>
+                      </span>
+                      <span
+                        className={cn(
+                          'shrink-0 text-[15px] font-semibold tabular-nums',
+                          entry.excluded_from_totals &&
+                            'text-muted-foreground line-through',
+                        )}
+                      >
+                        <Private>−{money(myShare(entry))}</Private>
+                      </span>
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {shown < expenses.length && (
+            <Button
+              type="button"
+              variant="glass-quiet"
+              className="mt-3 w-full"
+              onClick={() => setShown((count) => count + 10)}
+            >
+              Mostrar mais
+            </Button>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+
+  /* Grande: resumo da semana (o que a aba Semana mostra). */
+  const weekPanel = loadingData ? (
+    <Skeleton className="h-96 rounded-[26px]" />
+  ) : (
+    <Panel
+      paint="week"
+      icon={ReceiptText}
+      title="Resumo semanal"
+      subtitle={`Esta semana · ${weekPeriod}`}
+      href="/resumo"
+      index={8}
+    >
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[28px] leading-[34px] font-bold tracking-tight tabular-nums">
+            <Private>{money(week.total)}</Private>
+          </p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            {week.count} {week.count === 1 ? 'lançamento' : 'lançamentos'}
           </p>
         </div>
-      ) : (
-        <ul className="overflow-clip rounded-3xl bg-card ring-1 ring-border/60">
-          {recent.map((entry) => (
-            <li
-              key={entry.id}
-              className="border-b border-border/70 last:border-b-0"
-            >
-              {isPendingSpend(entry) ? (
-                <div className="px-2">
-                  <ExpenseLine
-                    entry={entry}
-                    cards={sortedCards}
-                    onOpen={setSelected}
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-semibold',
+            weekDiff.gt(0)
+              ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+              : weekDiff.lt(0)
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {weekDiff.gt(0) ? (
+            <ArrowUpRight aria-hidden="true" className="size-3.5" />
+          ) : weekDiff.lt(0) ? (
+            <ArrowDownRight aria-hidden="true" className="size-3.5" />
+          ) : (
+            <Minus aria-hidden="true" className="size-3.5" />
+          )}
+          {weekDiff.isZero() ? (
+            'Mesmo valor'
+          ) : (
+            <>
+              <Private>{money(weekDiff.abs())}</Private>{' '}
+              {weekDiff.gt(0) ? 'a mais' : 'a menos'}
+            </>
+          )}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {week.previousStart === week.previousEnd
+          ? `Comparado ao domingo passado (${dayMonth(week.previousStart)})`
+          : `Comparado à semana passada até o mesmo dia (${dayMonth(week.previousStart)} – ${dayMonth(week.previousEnd)})`}
+      </p>
+      <div className="mt-4">
+        <WeekBars days={week.days} today={todayKey} />
+      </div>
+      <div className="mt-4 grid gap-3 border-t border-border/70 pt-4">
+        <p className="text-[13px] font-semibold">Maiores categorias</p>
+        {week.categories.length ? (
+          week.categories.slice(0, 3).map((category) => {
+            const share = new Decimal(week.total).gt(0)
+              ? new Decimal(category.total)
+                  .div(week.total)
+                  .times(100)
+                  .toNumber()
+              : 0;
+            return (
+              <div key={category.name}>
+                <div className="mb-1 flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="truncate text-muted-foreground">
+                    {category.name}
+                  </span>
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    <Private>{money(category.total)}</Private>
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-orange-500"
+                    style={{ width: `${Math.max(share, 4)}%` }}
                   />
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setSelected(entry)}
-                  className="flex min-h-16 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted/70"
-                >
-                  <PaymentCardIcon
-                    bankId={resolvePaymentMethod(entry.account, cards)}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[15px] font-semibold">
-                      {entry.description}
-                    </span>
-                    <span className="block truncate text-[13px] text-muted-foreground">
-                      {entry.category}
-                    </span>
-                    <span className="block text-[13px] text-muted-foreground">
-                      {dayLabel(saoDate(entry.occurred_at), todayKey)} ·{' '}
-                      {time(entry.occurred_at)}
-                    </span>
-                  </span>
-                  <span
-                    className={cn(
-                      'shrink-0 self-start pt-0.5 text-[15px] font-semibold tabular-nums',
-                      entry.excluded_from_totals &&
-                        'text-muted-foreground line-through',
-                    )}
-                  >
-                    <Private>{money(myShare(entry))}</Private>
-                  </span>
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-[13px] text-muted-foreground">
+            Nenhum gasto registrado nesta semana.
+          </p>
+        )}
+      </div>
+      {!vaultsLoading && (
+        <p className="mt-4 flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 text-[13px]">
+          <PiggyBank aria-hidden="true" className="size-4 text-sky-500" />
+          <span className="min-w-0 flex-1">Cofrinhos renderam na semana</span>
+          <span className="shrink-0 font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">
+            +<Private>{money(Decimal.max(weekGain, 0))}</Private>
+          </span>
+        </p>
       )}
+    </Panel>
+  );
+
+  /* Médio: o mês (gastos e entradas), como na aba Semana. */
+  const incomePanel = loadingData ? (
+    <Skeleton className="h-40 rounded-[26px]" />
+  ) : (
+    <Panel paint="month" icon={ReceiptText} title="Este mês" index={9}>
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          {
+            label: 'Gastos do mês',
+            amount: month.expenses,
+            note: 'Lançamentos registrados',
+            href: '/financeiro',
+            tone: '',
+          },
+          {
+            label: 'Entrou no mês',
+            amount: month.income,
+            note: 'Salário, Flash e entradas escolhidas',
+            href: '/resumo',
+            tone: 'text-emerald-600 dark:text-emerald-400',
+          },
+        ].map((item) => (
+          <Link
+            key={item.label}
+            href={item.href}
+            className="min-w-0 rounded-2xl bg-muted/60 p-3 transition-colors hover:bg-muted active:scale-[0.98]"
+          >
+            <span className="block text-[13px] text-muted-foreground">
+              {item.label}
+            </span>
+            <span
+              className={cn(
+                'mt-1 block truncate text-[20px] leading-6 font-bold tabular-nums',
+                item.tone,
+              )}
+            >
+              <Private>{money(item.amount)}</Private>
+            </span>
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              {item.note}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </Panel>
+  );
+
+  /* Grande: cada cofrinho com o que rendeu. */
+  const vaultPanel = vaultsLoading ? (
+    <Skeleton className="h-64 rounded-[26px]" />
+  ) : (
+    <Panel
+      paint="vault"
+      icon={PiggyBank}
+      title="Cofrinhos"
+      subtitle={
+        <>
+          <Private>{money(portfolio.netBalance)}</Private> · +
+          <Private>{money(Decimal.max(portfolio.lifetimeNetGain, 0))}</Private>{' '}
+          rendidos
+        </>
+      }
+      href="/cobertura"
+      action="Cobertura"
+      index={10}
+    >
+      <ul className="-mx-1">
+        {portfolio.results.map(({ bank, result }) => {
+          const logo = bankLogo(bank.bank);
+          const gain = Decimal.max(yieldOnly(result.earnings), 0);
+          return (
+            <li key={bank.id}>
+              <Link
+                href={`/cofrinhos/${bank.id}`}
+                className="flex min-h-14 items-center gap-3 rounded-2xl px-2 py-2 transition-colors hover:bg-muted/50 active:bg-muted/70"
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-full border bg-background">
+                  {logo && (
+                    <Image
+                      src={logo}
+                      alt=""
+                      width={22}
+                      height={22}
+                      unoptimized
+                      className="size-[22px] object-contain"
+                    />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium">
+                    {bank.name}
+                  </span>
+                  <span className="block truncate text-[13px] text-emerald-600 dark:text-emerald-400">
+                    +<Private>{money(gain)}</Private> rendidos
+                  </span>
+                </span>
+                <span className="shrink-0 text-[15px] font-semibold tabular-nums">
+                  <Private>{money(result.netBalance)}</Private>
+                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground/60"
+                />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+
+  const wishPanel = (
+    <section className="min-w-0 rounded-[26px] bg-card p-4 shadow-sm ring-1 ring-border/60">
+      <WishlistCard entries={recorded} flat />
     </section>
+  );
+
+  const recap = recapIsFresh() && (
+    <Widget
+      paint="recap"
+      icon={Sparkles}
+      title="Retrospectiva"
+      href="/retrospectiva"
+      className="min-h-0"
+    >
+      <span className="block text-[22px] leading-7 font-bold first-letter:uppercase">
+        {monthLabel(recapDefaultMonth()).split(' ')[0]}
+      </span>
+      <span className="block text-[13px] font-medium text-white/90">
+        Maior compra, dias sem gastar e quanto os cofrinhos renderam
+      </span>
+    </Widget>
   );
 
   return (
@@ -813,12 +1312,15 @@ export function HomeApple() {
             {dateLine}
           </p>
           <h1 className="mt-0.5 text-[34px] leading-[41px] font-bold tracking-tight">
-            Resumo
+            Início
           </h1>
+          <div className="mt-1 text-[13px] text-muted-foreground">
+            <RobotFreshness />
+          </div>
         </header>
 
         {failed && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl bg-card p-4 ring-1 ring-border/60">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[22px] bg-card p-4 ring-1 ring-border/60">
             <p className="text-[15px]">Não foi possível atualizar os gastos.</p>
             <Button variant="glass" onClick={() => void reload()}>
               Tentar de novo
@@ -826,26 +1328,105 @@ export function HomeApple() {
           </div>
         )}
 
-        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-          <div className="grid min-w-0 gap-5">
-            {hero}
+        <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2 lg:gap-6">
+          <div className="grid min-w-0 gap-4">
+            {top}
+            {notes}
             {pills}
-            {tiles}
+            {smalls}
+            {recap}
+            {monthPanel}
+            {incomePanel}
           </div>
-          <div className="grid min-w-0 gap-8">
-            {transactions}
-            <section
-              aria-label="Lista de desejos"
-              className="rounded-3xl bg-card p-4 ring-1 ring-border/60"
-            >
-              <WishlistCard
-                entries={list.filter((entry) => !isPendingSpend(entry))}
-                flat
-              />
-            </section>
+          <div className="grid min-w-0 gap-4">
+            {!loadingData && <ReviewTeaser entries={recorded} />}
+            {spendingPanel}
+            {weekPanel}
+            {vaultPanel}
+            {wishPanel}
           </div>
         </div>
       </div>
+
+      <Dialog open={configuring} onOpenChange={setConfiguring}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>O que entra na conta</DialogTitle>
+            <DialogDescription>
+              Marque os saldos e os limites que contam em “Ainda dá para
+              gastar”. Conta ou cartão novo entra marcado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5">
+            {[
+              {
+                legend: 'Saldos',
+                items: (balances?.accounts ?? []).map((account) => ({
+                  id: `room-account-${account.bank}`,
+                  exclusion: {
+                    kind: 'account',
+                    key: account.bank,
+                  } as Exclusion,
+                  label: BANKS[account.bank].name,
+                  value: money(account.balance),
+                })),
+              },
+              {
+                legend: 'Flash',
+                items: (balances?.benefits ?? []).map((benefit) => ({
+                  id: `room-benefit-${benefit.key}`,
+                  exclusion: {
+                    kind: 'account',
+                    key: `flash-${benefit.key}`,
+                  } as Exclusion,
+                  label: benefit.label,
+                  value: money(benefit.balance),
+                })),
+              },
+              {
+                legend: 'Limites',
+                items: (balances?.cards ?? []).map((card, index) => ({
+                  id: `room-card-${index}`,
+                  exclusion: { kind: 'card', key: card.key } as Exclusion,
+                  label: card.key,
+                  value: `${money(card.available)} de ${money(card.limit)}`,
+                })),
+              },
+            ]
+              .filter((group) => group.items.length)
+              .map((group) => (
+                <fieldset key={group.legend} className="grid gap-1">
+                  <legend className="mb-2 text-xs font-medium tracking-[.1em] text-muted-foreground uppercase">
+                    {group.legend}
+                  </legend>
+                  {group.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 rounded-xl px-1 py-2"
+                    >
+                      <Checkbox
+                        id={item.id}
+                        checked={!out(item.exclusion.kind, item.exclusion.key)}
+                        onCheckedChange={(checked) =>
+                          void toggle(item.exclusion, checked)
+                        }
+                      />
+                      <label
+                        htmlFor={item.id}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-3 text-sm"
+                      >
+                        <span className="truncate">{item.label}</span>
+                        <span className="shrink-0 text-muted-foreground tabular-nums">
+                          <Private>{item.value}</Private>
+                        </span>
+                      </label>
+                    </div>
+                  ))}
+                </fieldset>
+              ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {entryOpen && (
         <ExpenseEntryDialog
