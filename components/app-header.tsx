@@ -22,6 +22,7 @@ import {
   Repeat2,
   Sparkles,
   Plus,
+  LayoutTemplate,
 } from 'lucide-react';
 import Link from '@/components/navigation-link';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -228,6 +229,11 @@ export function AppHeader({
         { href: '/resumo', label: 'Resumo', icon: CalendarDays },
         { href: '/graficos', label: 'Gráficos', icon: ChartNoAxesCombined },
         { href: '/retrospectiva', label: 'Retrospectiva', icon: Sparkles },
+        {
+          href: '/teste/home',
+          label: 'Home Apple (teste)',
+          icon: LayoutTemplate,
+        },
       ],
     },
     {
