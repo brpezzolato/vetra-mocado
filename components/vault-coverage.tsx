@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { buildCreditCardInvoices, type CardInvoice } from '@/lib/card-invoices';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import { bankLogo } from '@/lib/domain';
+import type { FlashWalletBalance } from '@/lib/flash-balances-query';
 import { calculatePortfolio } from '@/lib/portfolio';
 import { useAccountPreference } from '@/lib/use-account-preference';
 import { useVaultData } from '@/lib/use-vault-data';
@@ -61,9 +62,12 @@ const owed = (invoice: CardInvoice) =>
 
 export function VaultCoverage({
   inputs,
+  benefits = [],
   initialError,
 }: {
   inputs: CardInvoiceInputs | null;
+  /** Saldos das carteiras da Flash (lib/flash-balances-query.ts). */
+  benefits?: FlashWalletBalance[];
   initialError: string;
 }) {
   const router = useRouter();
@@ -77,7 +81,15 @@ export function VaultCoverage({
   } = useAccountPreference<{
     vault?: string;
     deposit?: string;
+    /** Somar os saldos dos benefícios; desligado por padrão. */
+    benefits?: boolean;
   }>('coverage');
+  const benefitsTotal = benefits.reduce(
+    (sum, wallet) => sum.plus(Decimal.max(wallet.balance, 0)),
+    new Decimal(0),
+  );
+  const withBenefits = prefs?.benefits === true && benefitsTotal.gt(0);
+  const extra = withBenefits ? benefitsTotal : new Decimal(0);
   const vaultId = prefs?.vault ?? ALL;
   const deposit = /^\d+(\.\d{1,2})?$/.test(prefs?.deposit ?? '')
     ? new Decimal(prefs!.deposit!)
@@ -128,8 +140,8 @@ export function VaultCoverage({
       sum.plus(Decimal.max(invoice.balance, 0).minus(owed(invoice))),
     new Decimal(0),
   );
-  const before = saved.minus(invoicesTotal);
-  const available = saved.plus(deposit);
+  const before = saved.plus(extra).minus(invoicesTotal);
+  const available = saved.plus(extra).plus(deposit);
   const result = available.minus(invoicesTotal);
   const covers = result.gte(0);
   const coverage = invoicesTotal.gt(0)
@@ -270,6 +282,14 @@ export function VaultCoverage({
                       <Private>{money(saved)}</Private>
                     </dd>
                   </div>
+                  {withBenefits && (
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Benefícios</dt>
+                      <dd className="shrink-0 tabular-nums text-emerald-700 dark:text-emerald-300">
+                        + <Private>{money(benefitsTotal)}</Private>
+                      </dd>
+                    </div>
+                  )}
                   {deposit.gt(0) && (
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">Aporte</dt>
@@ -295,6 +315,23 @@ export function VaultCoverage({
                     </dd>
                   </div>
                 </dl>
+                {benefitsTotal.gt(0) && (
+                  <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-background/60 px-3 py-2.5">
+                    <Label
+                      htmlFor="coverage-benefits"
+                      className="text-sm font-normal"
+                    >
+                      Somar os saldos dos benefícios
+                    </Label>
+                    <Switch
+                      id="coverage-benefits"
+                      checked={withBenefits}
+                      onCheckedChange={(checked) =>
+                        save({ ...prefs, benefits: checked || undefined })
+                      }
+                    />
+                  </div>
+                )}
                 {excludedTotal.gt(0) && (
                   <p className="mt-3 text-xs text-muted-foreground">
                     As faturas já estão sem{' '}
