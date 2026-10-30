@@ -111,6 +111,8 @@ const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
     new Decimal(value).toNumber(),
   );
+const limitLabel = (available: Decimal.Value, limit: Decimal.Value) =>
+  `${money(available)} de ${money(limit)}`;
 /** Sem centavos, para os widgets pequenos. */
 const round = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', {
@@ -935,7 +937,7 @@ export function HomeApple() {
                   background: part.colour,
                 }}
               >
-                <span className="sr-only">
+                <span className="sr-only" data-private-value>
                   {part.label}: {money(part.value)}
                 </span>
               </li>
@@ -1389,7 +1391,7 @@ export function HomeApple() {
                   id: `room-card-${index}`,
                   exclusion: { kind: 'card', key: card.key } as Exclusion,
                   label: card.key,
-                  value: `${money(card.available)} de ${money(card.limit)}`,
+                  value: limitLabel(card.available, card.limit),
                 })),
               },
             ]

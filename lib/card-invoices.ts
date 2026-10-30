@@ -187,8 +187,7 @@ export function buildCreditCardInvoices(
     // Cartão novo sem fatura fechada: se o banco já pôs todas as compras numa
     // fatura posterior (`invoice_due_override` vindo da previsão da Pluggy), a
     // do ciclo de agora não existe e não entra vazia como "atual" (Itaú
-    // Crédito, primeira fatura em 29/11/2026). Pagamento feito antes dela
-    // abate a primeira que existir.
+    // Crédito, primeira fatura em 29/11/2026).
     const firstBillLater =
       !fromBank &&
       !grouped.has(currentPeriod.due) &&
@@ -199,9 +198,9 @@ export function buildCreditCardInvoices(
           !!entry.invoice_due_override &&
           entry.invoice_due_override > currentPeriod.due,
       );
-    const firstDue = firstBillLater
-      ? [...grouped.keys()].filter((due) => due > currentPeriod.due).sort()[0]!
-      : null;
+    // Sem fatura do banco, pagamento para uma fatura sem compras abate a
+    // primeira seguinte que tem; vale também depois que aquela fecha.
+    const purchaseDues = [...grouped.keys()].sort();
     for (const payment of payments) {
       if (payment.account !== card.account) continue;
       if (
@@ -214,9 +213,10 @@ export function buildCreditCardInvoices(
         continue;
       if (fromBank && !grouped.has(payment.invoice_due)) continue;
       const target =
-        firstDue && payment.invoice_due < firstDue
-          ? firstDue
-          : payment.invoice_due;
+        (!fromBank &&
+          !grouped.has(payment.invoice_due) &&
+          purchaseDues.find((due) => due > payment.invoice_due)) ||
+        payment.invoice_due;
       const group = grouped.get(target) ?? {
         closing: closingForDue(target, cycle),
         entries: [],

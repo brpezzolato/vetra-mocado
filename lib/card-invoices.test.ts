@@ -379,6 +379,26 @@ describe('cartão novo cuja primeira fatura fecha depois do ciclo de agora', () 
     expect(result.current.balance).toBe('446.21');
   });
 
+  it('depois do fechamento de 29/10, o pagamento continua na de 07/12', () => {
+    const [result] = buildCreditCardInvoices(
+      [
+        {
+          ...entry('a', 'Itaú Crédito', '508.60', '2026-10-13T12:00:00Z'),
+          invoice_due_override: '2026-12-07',
+        },
+      ],
+      [card('Itaú Crédito', 'itau')],
+      [cycle],
+      '2026-10-30',
+      [payment],
+    );
+    expect(result.invoices.some((item) => item.due === '2026-11-07')).toBe(
+      false,
+    );
+    expect(result.current.due).toBe('2026-12-07');
+    expect(result.current.balance).toBe('446.21');
+  });
+
   it('sem a previsão do banco, segue o ciclo cadastrado', () => {
     const [result] = buildCreditCardInvoices(
       [entry('a', 'Itaú Crédito', '508.60', '2026-10-13T12:00:00Z')],
