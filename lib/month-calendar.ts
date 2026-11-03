@@ -7,7 +7,7 @@ import {
   type CardLimitInfo,
 } from './card-invoices';
 import {
-  nextMonth,
+  chargeAfter,
   saoDate,
   type CardCycle,
   type RecurringExpense,
@@ -61,19 +61,13 @@ const daysIn = (month: string) =>
     Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
   ).getUTCDate();
 
-const addYear = (date: string) =>
-  `${Number(date.slice(0, 4)) + 1}${date.slice(4)}`;
-
 /** Cobranças do mês a partir da próxima data; as anteriores já estão nos lançamentos. */
 export function subscriptionDays(item: RecurringExpense, month: string) {
   const days: string[] = [];
   let date = item.next_date;
   for (let guard = 0; guard < 60 && date.slice(0, 7) <= month; guard++) {
     if (date.slice(0, 7) === month) days.push(date);
-    date =
-      item.frequency === 'yearly'
-        ? addYear(date)
-        : nextMonth(date, item.billing_day);
+    date = chargeAfter(item, date);
   }
   return days;
 }

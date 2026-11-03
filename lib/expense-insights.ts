@@ -42,6 +42,28 @@ export function nextMonth(date: string, preferredDay?: number) {
   const [y, m, d] = date.split('-').map(Number);
   return calendarDate(y, m, preferredDay ?? d);
 }
+/** A cobrança seguinte a `date`, pela frequência da assinatura. */
+export function chargeAfter(
+  item: Pick<RecurringExpense, 'billing_day' | 'frequency'>,
+  date: string,
+) {
+  if (item.frequency !== 'yearly') return nextMonth(date, item.billing_day);
+  const [y, m, d] = date.split('-').map(Number);
+  return calendarDate(y + 1, m - 1, d);
+}
+/**
+ * Próxima cobrança a partir de hoje. A `next_date` gravada só anda com o
+ * "Avançar"; depois que a data passa (e a cobrança caiu), vale a seguinte.
+ */
+export function upcomingCharge(
+  item: Pick<RecurringExpense, 'next_date' | 'billing_day' | 'frequency'>,
+  today: string,
+) {
+  let date = item.next_date;
+  for (let guard = 0; guard < 600 && date < today; guard++)
+    date = chargeAfter(item, date);
+  return date;
+}
 // Purchases on the closing date belong to the following cycle (conservative estimate).
 export function invoiceFor(date: string, cycle: CardCycle) {
   const [y, m] = date.split('-').map(Number);

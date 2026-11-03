@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  chargeAfter,
   duplicatePairs,
   invoiceFor,
   nextMonth,
   recurringCandidates,
   weeklySummary,
   saoDate,
+  upcomingCharge,
 } from './expense-insights';
 import type { FinancialEntry } from './financial-tracker';
 const e = (
@@ -200,5 +202,34 @@ describe('expense assistant', () => {
       '2026-09-13',
       '2026-09-19',
     ]);
+  });
+});
+
+describe('próxima cobrança da assinatura', () => {
+  const cinemark = {
+    next_date: '2026-10-28',
+    billing_day: 28,
+    frequency: 'monthly' as const,
+  };
+  it('passada a data gravada, vale a do mês seguinte', () => {
+    expect(upcomingCharge(cinemark, '2026-11-03')).toBe('2026-11-28');
+  });
+  it('no próprio dia, a cobrança ainda é a de hoje', () => {
+    expect(upcomingCharge(cinemark, '2026-10-28')).toBe('2026-10-28');
+  });
+  it('pula quantos meses ficaram para trás e respeita o fim do mês', () => {
+    expect(
+      upcomingCharge(
+        { next_date: '2026-11-30', billing_day: 31, frequency: 'monthly' },
+        '2027-02-10',
+      ),
+    ).toBe('2027-02-28');
+  });
+  it('anual anda de ano em ano, inclusive a de 29/02', () => {
+    const yearly = { billing_day: 29, frequency: 'yearly' as const };
+    expect(
+      upcomingCharge({ ...yearly, next_date: '2026-03-10' }, '2026-11-03'),
+    ).toBe('2027-03-10');
+    expect(chargeAfter(yearly, '2028-02-29')).toBe('2029-02-28');
   });
 });

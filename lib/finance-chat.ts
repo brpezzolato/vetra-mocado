@@ -14,7 +14,11 @@ import {
   vaultFacts,
 } from './finance-chat-facts';
 import type { FinancialEntry } from './financial-tracker';
-import type { CardCycle, RecurringExpense } from './expense-insights';
+import {
+  upcomingCharge,
+  type CardCycle,
+  type RecurringExpense,
+} from './expense-insights';
 import type { PaymentCard } from './payment-cards';
 
 type ChatEntry = {
@@ -217,7 +221,7 @@ export function financialChatContext(
       assinatura: scrubIdentifiers(item.merchant),
       valor: money(item.amount),
       frequencia: item.frequency ?? 'monthly',
-      proxima_cobranca: item.next_date,
+      proxima_cobranca: upcomingCharge(item, dayKey(now)),
       conta: item.account,
       categoria: item.category ?? 'Assinaturas',
     }));

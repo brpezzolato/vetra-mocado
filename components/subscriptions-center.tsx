@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/select';
 import { OTHER_PAYER_ACCOUNT } from '@/lib/financial-visualizations';
 import type { RecurringExpense } from '@/lib/expense-insights';
-import { nextMonth, saoDate } from '@/lib/expense-insights';
+import { chargeAfter, saoDate, upcomingCharge } from '@/lib/expense-insights';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import {
   resolveCardBank,
@@ -99,13 +99,17 @@ export function SubscriptionsCenter({
       ),
     [cards, entries],
   );
-  const visible = subscriptions.filter((item) =>
-    filter === 'all'
-      ? true
-      : filter === 'mine'
-        ? item.paid_by_me !== false
-        : item.paid_by_me === false,
-  );
+  const today = saoDate(new Date());
+  const visible = subscriptions
+    .filter((item) =>
+      filter === 'all'
+        ? true
+        : filter === 'mine'
+          ? item.paid_by_me !== false
+          : item.paid_by_me === false,
+    )
+    .map((item) => ({ ...item, next_date: upcomingCharge(item, today) }))
+    .sort((a, b) => a.next_date.localeCompare(b.next_date));
   const activeVisible = visible.filter((item) => item.active);
   const monthlyTotal = activeVisible.reduce(
     (sum, item) =>
@@ -379,7 +383,7 @@ export function SubscriptionsCenter({
                     disabled={busy || !item.active}
                     onClick={() =>
                       void update(item, {
-                        next_date: nextMonth(item.next_date, item.billing_day),
+                        next_date: chargeAfter(item, item.next_date),
                       })
                     }
                   >
