@@ -398,10 +398,6 @@ export function PluggyRobotPanel() {
                 No e-mail, segure o botão de entrar e escolha “Copiar link”. Se
                 você abrir o link, quem entra é o seu navegador, não o robô.
               </p>
-              <p className="text-xs text-muted-foreground">
-                Se o e-mail do passo 1 não chegar, peça o link você mesmo em
-                meu.pluggy.ai, no seu navegador, e cole aqui do mesmo jeito.
-              </p>
               <div className="space-y-1.5">
                 <Label htmlFor="robot-link">Link do e-mail</Label>
                 <Textarea
