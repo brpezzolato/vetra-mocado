@@ -637,3 +637,71 @@ describe('fatura fechada que não fecha só com compras e crédito', () => {
     });
   });
 });
+
+describe('parcelas que o banco ainda não mandou', () => {
+  // PicPay: só manda a parcela atual. 6× R$ 67,50 de 29/10 na fatura de 05/12.
+  const cycle = {
+    account: 'PicPay',
+    kind: 'credit' as const,
+    closing_day: 29,
+    due_day: 5,
+    closing_offset_days: 7,
+  };
+  const installment = (number: number, due: string): FinancialEntry => ({
+    ...entry(`p${number}`, 'PicPay', '67.50', '2026-10-29T15:00:00Z'),
+    source: 'pluggy',
+    installment_group_id: 'g',
+    installment_number: number,
+    installment_total: 6,
+    installment_purchase_total: '405.00',
+    invoice_due_override: due,
+  });
+  const build = (entries: FinancialEntry[]) =>
+    buildCreditCardInvoices(
+      entries,
+      [card('PicPay', 'picpay')],
+      [cycle],
+      '2026-11-03',
+    )[0]!.invoices;
+  const projectedDues = (entries: FinancialEntry[]) =>
+    build(entries)
+      .flatMap((invoice) =>
+        invoice.entries
+          .filter((item) => item.projected)
+          .map((item) => `${item.installment_number}@${invoice.due}`),
+      )
+      .sort();
+
+  it('só a primeira chegou: as outras cinco caem uma por fatura', () => {
+    expect(projectedDues([installment(1, '2026-12-05')])).toEqual([
+      '2@2027-01-05',
+      '3@2027-02-05',
+      '4@2027-03-05',
+      '5@2027-04-05',
+      '6@2027-05-05',
+    ]);
+    const march = build([installment(1, '2026-12-05')]).find(
+      (invoice) => invoice.due === '2027-03-05',
+    );
+    expect(march?.total).toBe('67.50');
+  });
+
+  it('a de verdade toma o lugar da prevista', () => {
+    expect(
+      projectedDues([
+        installment(1, '2026-12-05'),
+        installment(2, '2027-01-05'),
+      ]),
+    ).toEqual(['3@2027-02-05', '4@2027-03-05', '5@2027-04-05', '6@2027-05-05']);
+  });
+
+  it('banco que manda todas (Nubank) não ganha prevista', () => {
+    expect(
+      projectedDues(
+        [1, 2, 3, 4, 5, 6].map((number) =>
+          installment(number, `2027-0${number}-05`),
+        ),
+      ),
+    ).toEqual([]);
+  });
+});

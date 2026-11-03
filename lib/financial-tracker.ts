@@ -39,6 +39,11 @@ export type FinancialEntry = {
    * cheio fica aqui. Nunca é gravado.
    */
   full_amount?: number | string;
+  /**
+   * Parcela prevista pela fatura (lib/card-invoices.ts) porque o banco só
+   * mandou as anteriores. Nunca é gravada.
+   */
+  projected?: boolean;
   created_at: string;
   updated_at: string;
 };

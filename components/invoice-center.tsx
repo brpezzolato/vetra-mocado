@@ -606,7 +606,11 @@ function ExpenseList({ invoice }: { invoice: CardInvoice }) {
                           {entry.installment_number && entry.installment_total
                             ? ` · parcela ${entry.installment_number}/${entry.installment_total}`
                             : ''}
-                          {entry.bank_status === 'PENDING' ? ' · pendente' : ''}
+                          {entry.projected
+                            ? ' · prevista'
+                            : entry.bank_status === 'PENDING'
+                              ? ' · pendente'
+                              : ''}
                           {entry.excluded_from_totals
                             ? ' · fora das contas'
                             : ''}

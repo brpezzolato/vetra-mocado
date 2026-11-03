@@ -65,6 +65,56 @@ function addMonths(date: string, months: number) {
   return result.toISOString().slice(0, 10);
 }
 
+/**
+ * Parcelas que o banco ainda não mandou (o PicPay só manda a atual): cada
+ * compra parcelada ganha, depois da última que chegou, as que faltam, uma por
+ * fatura, até a última. Calculadas na hora, nunca gravadas: quando o banco
+ * lança a de verdade, ela passa a ser a última e a prevista some.
+ */
+export function projectInstallments(
+  entries: FinancialEntry[],
+  cycle: CardCycle,
+  dueOf: (entry: FinancialEntry) => string,
+): FinancialEntry[] {
+  const last = new Map<string, FinancialEntry>();
+  for (const entry of entries) {
+    if (
+      entry.entry_type !== 'expense' ||
+      !entry.installment_group_id ||
+      !entry.installment_number ||
+      !entry.installment_total
+    )
+      continue;
+    const current = last.get(entry.installment_group_id);
+    if (!current || entry.installment_number > current.installment_number!)
+      last.set(entry.installment_group_id, entry);
+  }
+  return [...last.values()].flatMap((entry) => {
+    const baseMonth = `${dueOf(entry).slice(0, 7)}-01`;
+    return Array.from(
+      { length: entry.installment_total! - entry.installment_number! },
+      (_, index) => {
+        const number = entry.installment_number! + index + 1;
+        const month = addMonths(baseMonth, index + 1).slice(0, 7);
+        return {
+          ...entry,
+          id: `${entry.id}:prevista:${number}`,
+          external_id: null,
+          // Mesmo dia da compra, um mês depois de cada anterior.
+          occurred_at: `${addMonths(saoDate(entry.occurred_at), index + 1)}T15:00:00Z`,
+          installment_number: number,
+          invoice_due_override: settleDue(
+            monthDay(month, cycle.due_day),
+            cycle,
+          ),
+          bank_status: 'PENDING' as const,
+          projected: true,
+        };
+      },
+    );
+  });
+}
+
 export type CardInvoice = {
   account: string;
   bankId: PaymentCard['bank_id'];
@@ -162,9 +212,15 @@ export function buildCreditCardInvoices(
         payments: CardInvoicePayment[];
       }
     >();
-    for (const entry of entries) {
+    const own = entries.filter((entry) => entry.account === card.account);
+    const projected = projectInstallments(
+      own,
+      cycle,
+      (entry) =>
+        entry.invoice_due_override ?? period(saoDate(entry.occurred_at)).due,
+    );
+    for (const entry of [...own, ...projected]) {
       // Receita na conta do cartão é estorno do banco: abate a fatura.
-      if (entry.account !== card.account) continue;
       const calculated = period(saoDate(entry.occurred_at));
       const due = entry.invoice_due_override ?? calculated.due;
       const group = grouped.get(due) ?? {
