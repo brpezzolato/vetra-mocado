@@ -44,15 +44,18 @@ export const REFUND_CATEGORY = 'Estorno';
 const cents = (value: number) =>
   new Decimal(Math.abs(value)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 
-/** Remove o "5/8" do fim da descrição (Nubank) para não separar as parcelas. */
-const INSTALLMENT_SUFFIX = /\s+\d{1,2}\s*\/\s*\d{1,2}$/;
+/**
+ * Remove o "5/8" do fim da descrição para não separar as parcelas. O PicPay
+ * cola no nome ("INTERPARC01/06"): sai antes de esconder números, senão
+ * "01/06" vira "[número oculto]".
+ */
+const INSTALLMENT_SUFFIX = /(?:\s+|(?<=[A-Za-z]))\d{1,2}\s*\/\s*\d{1,2}$/;
 
 export function cleanDescription(value: string) {
   const name = normalizeMerchant(
-    stripEmoji(scrubIdentifiers(value))
+    stripEmoji(scrubIdentifiers(value.trim().replace(INSTALLMENT_SUFFIX, '')))
       .replace(/\s+/g, ' ')
-      .trim()
-      .replace(INSTALLMENT_SUFFIX, ''),
+      .trim(),
   );
   return (name || 'Compra no cartão').slice(0, 160);
 }

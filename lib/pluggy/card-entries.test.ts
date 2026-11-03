@@ -131,6 +131,13 @@ describe('transações de cartão de crédito', () => {
     expect(entries.map((entry) => entry.externalId)).toEqual(['lancada']);
   });
 
+  it('parcela colada no nome sai sem virar número oculto', () => {
+    expect(cleanDescription('LEVEL UP INTERPARC01/06')).toBe(
+      cleanDescription('LEVEL UP INTERPARC'),
+    );
+    expect(cleanDescription('Loja 3/10')).toBe(cleanDescription('Loja'));
+  });
+
   it('número de cartão não chega à descrição', () => {
     expect(cleanDescription('Pgto 5162920012345678 Loja')).not.toMatch(/5162/);
   });
