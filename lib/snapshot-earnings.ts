@@ -70,6 +70,34 @@ function split(amount: Decimal, weights: Decimal[]) {
   });
 }
 
+/**
+ * Quanto somar ao saldo do banco para valer como fechamento do dia. A Pluggy
+ * pode mandar o resgate antes de atualizar o saldo da reserva (Mercado Pago,
+ * 03/11: saldo de 4.207,56 já com os saques de 100 e 4.107,56 no extrato).
+ * Se a diferença para o fechamento modelado não cabe num dia de rendimento e
+ * descontar os últimos movimentos do dia a explica melhor, o saldo é de antes
+ * deles; senão, nada muda.
+ */
+export function lateMovementsShift(
+  residual: Decimal,
+  dayMovements: Pick<TransactionRow, 'kind' | 'amount'>[],
+  limit: Decimal,
+) {
+  if (residual.abs().lte(limit)) return new Decimal(0);
+  let shift = new Decimal(0);
+  let best = { shift, gap: residual.abs() };
+  for (const movement of [...dayMovements].reverse()) {
+    if (movement.kind === 'adjustment') continue;
+    shift =
+      movement.kind === 'deposit'
+        ? shift.plus(movement.amount)
+        : shift.minus(movement.amount);
+    const gap = residual.plus(shift).abs();
+    if (gap.lt(best.gap)) best = { shift, gap };
+  }
+  return best.gap.lte(limit) ? best.shift : new Decimal(0);
+}
+
 type Point = {
   id: string;
   date: string;
@@ -134,6 +162,18 @@ export function snapshotEarnings(
         return sum.minus(transaction.amount);
       return sum;
     }, new Decimal(0));
+    // Saldo lido antes dos últimos movimentos do dia vale como fechamento.
+    const late = lateMovementsShift(
+      current.net.minus(previous.net).minus(flows),
+      transactions
+        .filter((transaction) => day(transaction.occurred_at) === current.date)
+        .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)),
+      Decimal.max(previous.gross, current.gross).mul('.01').plus('.05'),
+    );
+    if (!late.isZero()) {
+      current.net = Decimal.max(0, current.net.plus(late));
+      current.gross = Decimal.max(0, current.gross.plus(late));
+    }
     const netAmount = current.net.minus(previous.net).minus(flows);
     const grossAmount = current.gross.minus(previous.gross).minus(flows);
     const iof =

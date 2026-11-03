@@ -387,3 +387,30 @@ describe('Mercado Pago paga com o CDI de dois dias úteis antes', () => {
     expect(lagged.estimatedDates).toEqual([]);
   });
 });
+
+describe('Mercado Pago: saldo da reserva atrasado em relação ao extrato', () => {
+  it('saque que zera o cofrinho não vira rendimento', () => {
+    const before = run();
+    const balance = before.netBalance.toFixed(2);
+    const subject = bank();
+    subject.transactions.push(
+      movement('out', balance, '2026-09-04T15:10:00Z', 'withdrawal'),
+    );
+    // A Pluggy ainda informa o saldo de antes do saque.
+    subject.snapshots.push({
+      id: 'snap',
+      user_id: 'user',
+      piggy_bank_id: 'mp',
+      snapshot_date: '2026-09-04',
+      gross_balance: balance,
+      net_balance: balance,
+      source: 'pluggy',
+      created_at: '2026-09-04T15:15:00Z',
+    });
+    const after = run(subject);
+    expect(after.netBalance.toFixed(2)).toBe('0.00');
+    expect(after.lifetimeNetGain.toFixed(2)).toBe(
+      before.lifetimeNetGain.toFixed(2),
+    );
+  });
+});

@@ -10,6 +10,7 @@ import {
   isFinancialBusinessDay,
   isNationalFinancialHoliday,
 } from './business-calendar';
+import { lateMovementsShift } from './snapshot-earnings';
 import {
   calibrationSource,
   evaluateCalibration,
@@ -1054,8 +1055,19 @@ export function calculate(
     const modeledClosing = settledAt(cursor);
     const snapshot = snapshotsByDate.get(date);
     if (snapshot) {
-      const targetGross = new Decimal(snapshot.gross_balance);
-      const targetNet = new Decimal(snapshot.net_balance);
+      const late = lateMovementsShift(
+        new Decimal(snapshot.gross_balance).minus(modeledClosing.grossBalance),
+        dailyEvents,
+        dailyYieldSafetyLimit(bank),
+      );
+      const targetGross = Decimal.max(
+        0,
+        new Decimal(snapshot.gross_balance).plus(late),
+      );
+      const targetNet = Decimal.max(
+        0,
+        new Decimal(snapshot.net_balance).plus(late),
+      );
       snapshotAudits.push({
         snapshot,
         calculatedGross: modeledClosing.grossBalance,

@@ -1,7 +1,7 @@
 import Decimal from 'decimal.js';
 import { describe, expect, it } from 'vitest';
 import type { SnapshotRow, TransactionRow } from './domain';
-import { snapshotEarnings } from './snapshot-earnings';
+import { lateMovementsShift, snapshotEarnings } from './snapshot-earnings';
 
 const snapshot = (
   snapshot_date: string,
@@ -134,5 +134,62 @@ describe('intervalo de vários dias', () => {
     expect(
       earnings.map((earning) => [earning.date, earning.netAmount.toFixed(2)]),
     ).toEqual([['2026-09-11', '0.37']]);
+  });
+});
+
+describe('saldo do banco lido antes dos últimos movimentos do dia', () => {
+  // Mercado Pago, 03/11/2026: a reserva seguia com 4.207,56 na Pluggy, mas
+  // os saques de 100 e 4.107,56 (que a zeram) já estavam no extrato.
+  const day = [
+    movement('withdrawal', '200', '2026-11-03T18:01:41Z'),
+    movement('withdrawal', '100', '2026-11-03T20:21:52Z'),
+    movement('withdrawal', '4107.56', '2026-11-03T20:27:40Z'),
+  ];
+
+  it('não vira rendimento; o dia rende só a diferença pequena', () => {
+    const earnings = snapshotEarnings(
+      [
+        snapshot('2026-11-02', '4405.50', '4405.50'),
+        snapshot('2026-11-03', '4207.56', '4207.56'),
+      ],
+      day,
+    );
+    expect(earnings.map((e) => e.netAmount.toFixed(2))).toEqual(['2.06']);
+  });
+
+  it('o dia seguinte parte do saldo já sem os saques', () => {
+    const earnings = snapshotEarnings(
+      [
+        snapshot('2026-11-02', '4405.50', '4405.50'),
+        snapshot('2026-11-03', '4207.56', '4207.56'),
+        snapshot('2026-11-04', '0.00', '0.00'),
+      ],
+      day,
+    );
+    expect(earnings.at(-1)?.netAmount.toFixed(2)).toBe('0.00');
+  });
+
+  it('saldo atualizado não muda nada', () => {
+    const earnings = snapshotEarnings(
+      [
+        snapshot('2026-11-02', '4405.50', '4405.50'),
+        snapshot('2026-11-03', '0.00', '0.00'),
+      ],
+      day,
+    );
+    expect(earnings[0].netAmount.toFixed(2)).toBe('2.06');
+  });
+
+  it('diferença grande que nenhum movimento explica continua como está', () => {
+    expect(
+      lateMovementsShift(new Decimal('3000'), day, new Decimal('44')).toFixed(
+        2,
+      ),
+    ).toBe('0.00');
+    expect(
+      lateMovementsShift(new Decimal('1.07'), day, new Decimal('44')).toFixed(
+        2,
+      ),
+    ).toBe('0.00');
   });
 });
