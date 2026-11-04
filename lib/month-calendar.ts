@@ -1,6 +1,10 @@
 import Decimal from 'decimal.js';
 import { expectedNextDeposit } from './benefit-cards';
 import {
+  isFinancialBusinessDay,
+  nationalHolidayNames,
+} from './business-calendar';
+import {
   buildCreditCardInvoices,
   type CardBill,
   type CardInvoicePayment,
@@ -17,14 +21,27 @@ import { FLASH_ACCOUNT } from './flash-statement';
 import type { PaymentCard } from './payment-cards';
 
 /**
- * Calendário do mês: vencimentos de fatura, cobranças de assinatura e
- * depósitos do Flash (feitos e o próximo esperado).
+ * Calendário do mês: vencimentos de fatura (a paga sai e fica só o dia do
+ * pagamento), cobranças de assinatura, depósitos do Flash (feitos e o próximo
+ * esperado), salário e adiantamento (pela `IncomeSchedule`) e feriados.
  * "Dia pesado" = quanto sai do bolso no dia. Assinatura no cartão aparece mas
  * não pesa (já está na fatura); só pesa a paga fora do cartão.
  */
 
 export type CalendarEventKind =
-  'invoice' | 'payment' | 'subscription' | 'benefit';
+  'invoice' | 'payment' | 'subscription' | 'benefit' | 'income' | 'holiday';
+
+/** Quando caem o salário e o adiantamento (preferência `calendar-income`). */
+export type IncomeSchedule = {
+  salary: { enabled: boolean; day: 'last-business' | 'last' };
+  /** No dia, ou no dia útil anterior se ele não for útil. */
+  advance: { enabled: boolean; day: number };
+};
+
+export const DEFAULT_INCOME_SCHEDULE: IncomeSchedule = {
+  salary: { enabled: true, day: 'last-business' },
+  advance: { enabled: true, day: 15 },
+};
 
 export type CalendarEvent = {
   kind: CalendarEventKind;
@@ -61,6 +78,39 @@ const daysIn = (month: string) =>
     Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
   ).getUTCDate();
 
+const shiftDay = (day: string, days: number) => {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+/** O próprio dia, se útil; senão o dia útil anterior. */
+export function businessDayOnOrBefore(day: string) {
+  let date = day;
+  while (!isFinancialBusinessDay(new Date(`${date}T12:00:00Z`)))
+    date = shiftDay(date, -1);
+  return date;
+}
+
+/** Dias previstos do salário e do adiantamento no mês. */
+export function incomeDays(month: string, schedule: IncomeSchedule) {
+  const last = `${month}-${String(daysIn(month)).padStart(2, '0')}`;
+  const days: { title: 'Salário' | 'Adiantamento'; day: string }[] = [];
+  if (schedule.advance.enabled) {
+    const day = Math.min(Math.max(1, schedule.advance.day), daysIn(month));
+    days.push({
+      title: 'Adiantamento',
+      day: businessDayOnOrBefore(`${month}-${String(day).padStart(2, '0')}`),
+    });
+  }
+  if (schedule.salary.enabled)
+    days.push({
+      title: 'Salário',
+      day: schedule.salary.day === 'last' ? last : businessDayOnOrBefore(last),
+    });
+  return days;
+}
+
 /** Cobranças do mês a partir da próxima data; as anteriores já estão nos lançamentos. */
 export function subscriptionDays(item: RecurringExpense, month: string) {
   const days: string[] = [];
@@ -83,6 +133,7 @@ export function monthCalendar({
   invoiceEntries = entries,
   bills = [],
   limits = [],
+  income = DEFAULT_INCOME_SCHEDULE,
 }: {
   month: string;
   today: string;
@@ -98,6 +149,7 @@ export function monthCalendar({
   invoiceEntries?: FinancialEntry[];
   bills?: CardBill[];
   limits?: CardLimitInfo[];
+  income?: IncomeSchedule;
 }): MonthCalendar {
   const events: CalendarEvent[] = [];
 
@@ -143,6 +195,8 @@ export function monthCalendar({
       const total = new Decimal(invoice.total);
       if (total.isZero() && balance.isZero()) continue;
       const lastPayment = settledOn ?? invoice.paidOn.at(-1)?.date;
+      // Paga: fica só o dia do pagamento, que já tem o seu evento.
+      if (balance.lte(0) && lastPayment) continue;
       events.push({
         kind: 'invoice',
         day: invoice.due,
@@ -218,6 +272,57 @@ export function monthCalendar({
       estimated: true,
       note: 'Previsto pelo intervalo de costume',
     });
+
+  for (const { title, day } of incomeDays(month, income)) {
+    const ofKind = entries.filter(
+      (entry) => entry.entry_type === 'income' && entry.category === title,
+    );
+    // Já caiu: o que entrou com essa categoria perto do dia previsto.
+    const received = ofKind.filter((entry) => {
+      const on = saoDate(entry.occurred_at);
+      return on >= shiftDay(day, -7) && on <= shiftDay(day, 5);
+    });
+    const last = ofKind
+      .filter((entry) => saoDate(entry.occurred_at) < day)
+      .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))[0];
+    const receivedOn = received
+      .map((entry) => saoDate(entry.occurred_at))
+      .sort()
+      .at(-1);
+    events.push({
+      kind: 'income',
+      day,
+      title,
+      amount: received.length
+        ? received
+            .reduce((sum, entry) => sum.plus(entry.amount), new Decimal(0))
+            .toFixed(2)
+        : last
+          ? new Decimal(last.amount).toFixed(2)
+          : null,
+      weighs: false,
+      settled: received.length > 0,
+      estimated: !received.length,
+      note: receivedOn
+        ? `Recebido em ${receivedOn.slice(8, 10)}/${receivedOn.slice(5, 7)}`
+        : last
+          ? 'Previsto pelo último recebido'
+          : 'Previsto',
+    });
+  }
+
+  for (const [day, name] of nationalHolidayNames(Number(month.slice(0, 4))))
+    if (day.slice(0, 7) === month)
+      events.push({
+        kind: 'holiday',
+        day,
+        title: name,
+        amount: null,
+        weighs: false,
+        settled: false,
+        estimated: false,
+        note: 'Feriado nacional',
+      });
 
   const spentByDay = new Map<string, Decimal>();
   for (const entry of entries) {

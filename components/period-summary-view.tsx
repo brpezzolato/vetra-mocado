@@ -3,13 +3,16 @@
 import { useMemo, useRef, useState } from 'react';
 import Decimal from 'decimal.js';
 import {
+  Banknote,
   CalendarCheck,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
   CreditCard,
+  PartyPopper,
   Repeat2,
+  SlidersHorizontal,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -21,9 +24,31 @@ import { toTotalsView } from '@/lib/entry-share';
 import { NavigationBackButton } from '@/components/navigation-back-button';
 import { Private } from '@/components/private-value';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { useAccountPreference } from '@/lib/use-account-preference';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import { saoDate, type RecurringExpense } from '@/lib/expense-insights';
-import { monthCalendar, type CalendarEventKind } from '@/lib/month-calendar';
+import {
+  DEFAULT_INCOME_SCHEDULE,
+  monthCalendar,
+  type CalendarEventKind,
+  type IncomeSchedule,
+} from '@/lib/month-calendar';
 import {
   daysInTheBlue,
   provisionalSince,
@@ -357,7 +382,7 @@ const dayTitle = (day: string, today: string) =>
 const shortDay = (day: string) => `${day.slice(8)}/${day.slice(5, 7)}`;
 
 // Cor por tipo (ponto, legenda e ícone): roxo fatura, azul recorrente,
-// verde depósito Flash, âmbar fatura paga.
+// verde depósito Flash, âmbar fatura paga, verde-água salário, rosa feriado.
 const KIND: Record<
   CalendarEventKind,
   { icon: LucideIcon; label: string; dot: string; soft: string }
@@ -387,7 +412,22 @@ const KIND: Record<
     dot: 'bg-emerald-500',
     soft: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   },
+  income: {
+    icon: Banknote,
+    label: 'Salário',
+    dot: 'bg-teal-500',
+    soft: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
+  },
+  holiday: {
+    icon: PartyPopper,
+    label: 'Feriado',
+    dot: 'bg-rose-500',
+    soft: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+  },
 };
+
+/** O que entra (mostra "+" no valor). */
+const INCOMING = new Set<CalendarEventKind>(['benefit', 'income']);
 
 /** Dia aberto ao chegar num mês: hoje, o último (passado) ou o primeiro (futuro). */
 const dayToOpen = (month: string, today: string) =>
@@ -433,6 +473,11 @@ export function PeriodSummaryView({
   // De que lado veio o último passo, para o conteúdo entrar deslizando dele.
   const [direction, setDirection] = useState(1);
   const swipe = useRef<{ x: number; y: number } | null>(null);
+  // Salário e adiantamento no calendário: iguais no celular e no computador.
+  const { value: savedIncome, save: saveIncome } =
+    useAccountPreference<IncomeSchedule>('calendar-income');
+  const income = savedIncome ?? DEFAULT_INCOME_SCHEDULE;
+  const [configuring, setConfiguring] = useState(false);
 
   // Inclui "Compra a chegar" (lib/unidentified-spend.ts) na lista e nos totais.
   const counted = useMemo(
@@ -458,6 +503,7 @@ export function PeriodSummaryView({
       invoiceEntries: invoices?.entries ?? [],
       bills: invoices?.bills ?? [],
       limits: invoices?.limits ?? [],
+      income,
     });
   const calendar = useMemo(
     () =>
@@ -472,8 +518,9 @@ export function PeriodSummaryView({
         invoiceEntries: invoices?.entries ?? [],
         bills: invoices?.bills ?? [],
         limits: invoices?.limits ?? [],
+        income,
       }),
-    [month, todayIso, counted, invoices, subscriptions],
+    [month, todayIso, counted, invoices, subscriptions, income],
   );
   const calendarDay = calendar.days.find((item) => item.day === day);
   const upcoming = calendar.days.filter(
@@ -790,11 +837,14 @@ export function PeriodSummaryView({
                       item.day < todayIso && 'text-muted-foreground',
                       isToday && 'font-semibold ring-1 ring-foreground/40',
                       isSelected && 'ring-2 ring-foreground',
+                      kinds.includes('holiday') &&
+                        'text-rose-600 dark:text-rose-400',
                     )}
                   >
                     <span>{Number(item.day.slice(8))}</span>
                     <span className="flex h-2 gap-0.5" aria-hidden="true">
-                      {kinds.map((kind) => (
+                      {/* Até quatro pontos cabem na célula; o detalhe mostra tudo. */}
+                      {kinds.slice(0, 4).map((kind) => (
                         <span
                           key={kind}
                           className={cn('size-2 rounded-full', KIND[kind].dot)}
@@ -829,6 +879,17 @@ export function PeriodSummaryView({
                   </li>
                 );
               })}
+              <li className="ml-auto">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-muted-foreground"
+                  onClick={() => setConfiguring(true)}
+                >
+                  <SlidersHorizontal /> Salário
+                </Button>
+              </li>
             </ul>
             {/* Os números do mês que não precisam de cartão próprio. */}
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t px-1 pt-4 text-xs sm:grid-cols-3">
@@ -916,13 +977,13 @@ export function PeriodSummaryView({
                               event.settled && 'text-muted-foreground',
                             )}
                           >
-                            {event.amount === null ? (
-                              'Previsto'
-                            ) : (
+                            {event.amount !== null ? (
                               <Private>
-                                {event.kind === 'benefit' ? '+' : ''}
+                                {INCOMING.has(event.kind) ? '+' : ''}
                                 {money(event.amount)}
                               </Private>
+                            ) : (
+                              event.kind !== 'holiday' && 'Previsto'
                             )}
                           </span>
                         </li>
@@ -1118,6 +1179,111 @@ export function PeriodSummaryView({
           </section>
         </div>
       </div>
+      <Dialog open={configuring} onOpenChange={setConfiguring}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Salário no calendário</DialogTitle>
+            <DialogDescription>
+              Os dias em que o salário e o adiantamento costumam cair. O valor
+              vem do último recebido; quando cai, aparece o valor real.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5">
+            <div className="grid gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="income-salary">Salário</Label>
+                <Switch
+                  id="income-salary"
+                  checked={income.salary.enabled}
+                  onCheckedChange={(enabled) =>
+                    saveIncome({
+                      ...income,
+                      salary: { ...income.salary, enabled },
+                    })
+                  }
+                />
+              </div>
+              <Select
+                value={income.salary.day}
+                disabled={!income.salary.enabled}
+                onValueChange={(day) =>
+                  day &&
+                  saveIncome({
+                    ...income,
+                    salary: {
+                      ...income.salary,
+                      day: day as IncomeSchedule['salary']['day'],
+                    },
+                  })
+                }
+              >
+                <SelectTrigger
+                  id="income-salary-day"
+                  aria-label="Dia do salário"
+                  className="w-full"
+                >
+                  <SelectValue>
+                    {income.salary.day === 'last'
+                      ? 'Último dia do mês'
+                      : 'Último dia útil do mês'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="last-business">
+                    Último dia útil do mês
+                  </SelectItem>
+                  <SelectItem value="last">Último dia do mês</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-3 border-t pt-5">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="income-advance">Adiantamento</Label>
+                <Switch
+                  id="income-advance"
+                  checked={income.advance.enabled}
+                  onCheckedChange={(enabled) =>
+                    saveIncome({
+                      ...income,
+                      advance: { ...income.advance, enabled },
+                    })
+                  }
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="income-advance-day"
+                  className="text-xs font-normal text-muted-foreground"
+                >
+                  Dia do mês (se não for dia útil, o dia útil anterior)
+                </Label>
+                <Select
+                  value={String(income.advance.day)}
+                  disabled={!income.advance.enabled}
+                  onValueChange={(day) =>
+                    day &&
+                    saveIncome({
+                      ...income,
+                      advance: { ...income.advance, day: Number(day) },
+                    })
+                  }
+                >
+                  <SelectTrigger id="income-advance-day" className="w-full">
+                    <SelectValue>Dia {income.advance.day}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 28 }, (_, index) => (
+                      <SelectItem key={index} value={String(index + 1)}>
+                        Dia {index + 1}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       {selected && (
         <EntryDetails
           key={selected.id}

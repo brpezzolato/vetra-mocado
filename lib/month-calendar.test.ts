@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CardCycle, RecurringExpense } from './expense-insights';
 import type { FinancialEntry } from './financial-tracker';
-import { monthCalendar } from './month-calendar';
+import { incomeDays, monthCalendar } from './month-calendar';
 import type { PaymentCard } from './payment-cards';
 
 let counter = 0;
@@ -195,10 +195,78 @@ describe('calendário do mês', () => {
       (event) => event.kind === 'payment',
     )!;
     expect(early.title).toBe('Pagamento antecipado Nubank');
-    const due = on(calendar, '2026-10-06').events.find(
-      (event) => event.kind === 'invoice',
+    // Paga: o vencimento sai do calendário, fica só o dia do pagamento.
+    expect(
+      on(calendar, '2026-10-06').events.some(
+        (event) => event.kind === 'invoice',
+      ),
+    ).toBe(false);
+  });
+
+  it('marca os feriados nacionais com o nome', () => {
+    const calendar = build([]);
+    const holiday = on(calendar, '2026-10-12').events.find(
+      (event) => event.kind === 'holiday',
     )!;
-    expect(due.note).toBe('Paga em 02/10');
-    expect(due.weighs).toBe(false);
+    expect(holiday.title).toBe('Nossa Senhora Aparecida');
+    expect(holiday.weighs).toBe(false);
+    expect(holiday.amount).toBeNull();
+  });
+
+  it('prevê salário e adiantamento e mostra o valor real quando cai', () => {
+    const calendar = build([
+      entry('2026-09-30T13:00:00Z', '3000.00', {
+        entry_type: 'income',
+        category: 'Salário',
+      }),
+      entry('2026-10-15T13:00:00Z', '1200.00', {
+        entry_type: 'income',
+        category: 'Adiantamento',
+      }),
+    ]);
+    const advance = on(calendar, '2026-10-15').events.find(
+      (event) => event.kind === 'income',
+    )!;
+    expect(advance).toMatchObject({
+      title: 'Adiantamento',
+      amount: '1200.00',
+      settled: true,
+      note: 'Recebido em 15/10',
+    });
+    // 31/10/2026 é sábado: o último dia útil é 30/10.
+    const salary = on(calendar, '2026-10-30').events.find(
+      (event) => event.kind === 'income',
+    )!;
+    expect(salary).toMatchObject({
+      title: 'Salário',
+      amount: '3000.00',
+      settled: false,
+      estimated: true,
+      weighs: false,
+    });
+  });
+});
+
+describe('dias do salário e do adiantamento', () => {
+  it('dia 15 no fim de semana vai para o dia útil anterior', () => {
+    // 15/11/2026 é domingo e feriado; 14 é sábado.
+    expect(
+      incomeDays('2026-11', {
+        salary: { enabled: true, day: 'last-business' },
+        advance: { enabled: true, day: 15 },
+      }),
+    ).toEqual([
+      { title: 'Adiantamento', day: '2026-11-13' },
+      { title: 'Salário', day: '2026-11-30' },
+    ]);
+  });
+
+  it('respeita o último dia corrido e o que foi desligado', () => {
+    expect(
+      incomeDays('2026-10', {
+        salary: { enabled: true, day: 'last' },
+        advance: { enabled: false, day: 15 },
+      }),
+    ).toEqual([{ title: 'Salário', day: '2026-10-31' }]);
   });
 });

@@ -21,27 +21,45 @@ function easter(year: number) {
   return new Date(Date.UTC(year, month - 1, day, 12));
 }
 
+const names = new Map<number, Map<string, string>>();
+
+/** Feriados nacionais do mercado financeiro, com o nome (calendário do Resumo). */
+export function nationalHolidayNames(year: number) {
+  const saved = names.get(year);
+  if (saved) return saved;
+  const holidays = new Map<string, string>(
+    (
+      [
+        ['01-01', 'Confraternização Universal'],
+        ['04-21', 'Tiradentes'],
+        ['05-01', 'Dia do Trabalho'],
+        ['09-07', 'Independência do Brasil'],
+        ['10-12', 'Nossa Senhora Aparecida'],
+        ['11-02', 'Finados'],
+        ['11-15', 'Proclamação da República'],
+        ['12-25', 'Natal'],
+      ] as const
+    ).map(([day, name]) => [`${year}-${day}`, name]),
+  );
+  if (year >= 2024) holidays.set(`${year}-11-20`, 'Consciência Negra');
+  for (const [offset, name] of [
+    [-48, 'Carnaval'],
+    [-47, 'Carnaval'],
+    [-2, 'Sexta-feira Santa'],
+    [60, 'Corpus Christi'],
+  ] as const) {
+    const date = easter(year);
+    date.setUTCDate(date.getUTCDate() + offset);
+    holidays.set(date.toISOString().slice(0, 10), name);
+  }
+  names.set(year, holidays);
+  return holidays;
+}
+
 export function nationalFinancialHolidays(year: number) {
   const saved = cache.get(year);
   if (saved) return saved;
-  const holidays = new Set(
-    [
-      '01-01',
-      '04-21',
-      '05-01',
-      '09-07',
-      '10-12',
-      '11-02',
-      '11-15',
-      '12-25',
-    ].map((day) => `${year}-${day}`),
-  );
-  if (year >= 2024) holidays.add(`${year}-11-20`);
-  for (const offset of [-48, -47, -2, 60]) {
-    const date = easter(year);
-    date.setUTCDate(date.getUTCDate() + offset);
-    holidays.add(date.toISOString().slice(0, 10));
-  }
+  const holidays = new Set(nationalHolidayNames(year).keys());
   cache.set(year, holidays);
   return holidays;
 }
