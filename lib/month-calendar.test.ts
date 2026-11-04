@@ -225,7 +225,7 @@ describe('calendário do mês', () => {
       }),
     ]);
     const advance = on(calendar, '2026-10-15').events.find(
-      (event) => event.kind === 'income',
+      (event) => event.kind === 'advance',
     )!;
     expect(advance).toMatchObject({
       title: 'Adiantamento',
@@ -235,7 +235,7 @@ describe('calendário do mês', () => {
     });
     // 31/10/2026 é sábado: o último dia útil é 30/10.
     const salary = on(calendar, '2026-10-30').events.find(
-      (event) => event.kind === 'income',
+      (event) => event.kind === 'salary',
     )!;
     expect(salary).toMatchObject({
       title: 'Salário',
@@ -256,8 +256,8 @@ describe('dias do salário e do adiantamento', () => {
         advance: { enabled: true, day: 15 },
       }),
     ).toEqual([
-      { title: 'Adiantamento', day: '2026-11-13' },
-      { title: 'Salário', day: '2026-11-30' },
+      { kind: 'advance', title: 'Adiantamento', day: '2026-11-13' },
+      { kind: 'salary', title: 'Salário', day: '2026-11-30' },
     ]);
   });
 
@@ -267,6 +267,38 @@ describe('dias do salário e do adiantamento', () => {
         salary: { enabled: true, day: 'last' },
         advance: { enabled: false, day: 15 },
       }),
-    ).toEqual([{ title: 'Salário', day: '2026-10-31' }]);
+    ).toEqual([{ kind: 'salary', title: 'Salário', day: '2026-10-31' }]);
+  });
+});
+
+describe('lembretes próprios e tipos escondidos', () => {
+  it('lembrete no último dia útil e tipo escondido fora do calendário', () => {
+    const calendar = monthCalendar({
+      month: '2026-10',
+      today: '2026-10-02',
+      entries: [],
+      cards,
+      cycles,
+      payments: [],
+      subscriptions: [subscription('Cinema', 'Pix', '2026-10-20')],
+      custom: [
+        {
+          id: 'aluguel',
+          label: 'Aluguel',
+          icon: 'house',
+          color: 'orange',
+          day: 'last',
+          businessBefore: true,
+        },
+      ],
+      hidden: ['holiday', 'subscription'],
+    });
+    expect(on(calendar, '2026-10-30').events).toContainEqual(
+      expect.objectContaining({ kind: 'custom', itemId: 'aluguel' }),
+    );
+    expect(on(calendar, '2026-10-12').events).toEqual([]);
+    expect(on(calendar, '2026-10-20').events).toEqual([]);
+    // Escondida, a assinatura fora do cartão também não pesa.
+    expect(calendar.totalOutflow).toBe('0.00');
   });
 });

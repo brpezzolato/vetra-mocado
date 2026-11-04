@@ -17,21 +17,30 @@ import {
   type RecurringExpense,
 } from './expense-insights';
 import type { FinancialEntry } from './financial-tracker';
+import type { CustomCalendarItem } from './calendar-settings';
 import { FLASH_ACCOUNT } from './flash-statement';
 import type { PaymentCard } from './payment-cards';
 
 /**
  * Calendário do mês: vencimentos de fatura (a paga sai e fica só o dia do
  * pagamento), cobranças de assinatura, depósitos do Flash (feitos e o próximo
- * esperado), salário e adiantamento (pela `IncomeSchedule`) e feriados.
+ * esperado), salário e adiantamento (pela `IncomeSchedule`), feriados e
+ * lembretes próprios (lib/calendar-settings.ts). Tipo escondido não entra.
  * "Dia pesado" = quanto sai do bolso no dia. Assinatura no cartão aparece mas
  * não pesa (já está na fatura); só pesa a paga fora do cartão.
  */
 
 export type CalendarEventKind =
-  'invoice' | 'payment' | 'subscription' | 'benefit' | 'income' | 'holiday';
+  | 'invoice'
+  | 'payment'
+  | 'subscription'
+  | 'benefit'
+  | 'salary'
+  | 'advance'
+  | 'holiday'
+  | 'custom';
 
-/** Quando caem o salário e o adiantamento (preferência `calendar-income`). */
+/** Quando caem o salário e o adiantamento (preferência `calendar`). */
 export type IncomeSchedule = {
   salary: { enabled: boolean; day: 'last-business' | 'last' };
   /** No dia, ou no dia útil anterior se ele não for útil. */
@@ -55,6 +64,8 @@ export type CalendarEvent = {
   /** Estimativa, não data marcada — o próximo depósito do Flash. */
   estimated: boolean;
   note?: string;
+  /** O lembrete próprio (`kind: 'custom'`). */
+  itemId?: string;
 };
 
 export type CalendarDay = {
@@ -95,20 +106,37 @@ export function businessDayOnOrBefore(day: string) {
 /** Dias previstos do salário e do adiantamento no mês. */
 export function incomeDays(month: string, schedule: IncomeSchedule) {
   const last = `${month}-${String(daysIn(month)).padStart(2, '0')}`;
-  const days: { title: 'Salário' | 'Adiantamento'; day: string }[] = [];
+  const days: {
+    kind: 'salary' | 'advance';
+    title: 'Salário' | 'Adiantamento';
+    day: string;
+  }[] = [];
   if (schedule.advance.enabled) {
     const day = Math.min(Math.max(1, schedule.advance.day), daysIn(month));
     days.push({
+      kind: 'advance',
       title: 'Adiantamento',
       day: businessDayOnOrBefore(`${month}-${String(day).padStart(2, '0')}`),
     });
   }
   if (schedule.salary.enabled)
     days.push({
+      kind: 'salary',
       title: 'Salário',
       day: schedule.salary.day === 'last' ? last : businessDayOnOrBefore(last),
     });
   return days;
+}
+
+/** Dia do lembrete próprio no mês. */
+export function customDay(
+  month: string,
+  item: Pick<CustomCalendarItem, 'day' | 'businessBefore'>,
+) {
+  const day =
+    item.day === 'last' ? daysIn(month) : Math.min(item.day, daysIn(month));
+  const date = `${month}-${String(Math.max(1, day)).padStart(2, '0')}`;
+  return item.businessBefore ? businessDayOnOrBefore(date) : date;
 }
 
 /** Cobranças do mês a partir da próxima data; as anteriores já estão nos lançamentos. */
@@ -134,6 +162,8 @@ export function monthCalendar({
   bills = [],
   limits = [],
   income = DEFAULT_INCOME_SCHEDULE,
+  custom = [],
+  hidden = [],
 }: {
   month: string;
   today: string;
@@ -150,6 +180,9 @@ export function monthCalendar({
   bills?: CardBill[];
   limits?: CardLimitInfo[];
   income?: IncomeSchedule;
+  custom?: CustomCalendarItem[];
+  /** Tipos escondidos (`invoice`, `custom:<id>`…): não aparecem nem pesam. */
+  hidden?: string[];
 }): MonthCalendar {
   const events: CalendarEvent[] = [];
 
@@ -273,7 +306,7 @@ export function monthCalendar({
       note: 'Previsto pelo intervalo de costume',
     });
 
-  for (const { title, day } of incomeDays(month, income)) {
+  for (const { kind, title, day } of incomeDays(month, income)) {
     const ofKind = entries.filter(
       (entry) => entry.entry_type === 'income' && entry.category === title,
     );
@@ -290,7 +323,7 @@ export function monthCalendar({
       .sort()
       .at(-1);
     events.push({
-      kind: 'income',
+      kind,
       day,
       title,
       amount: received.length
@@ -324,6 +357,26 @@ export function monthCalendar({
         note: 'Feriado nacional',
       });
 
+  for (const item of custom)
+    events.push({
+      kind: 'custom',
+      itemId: item.id,
+      day: customDay(month, item),
+      title: item.label,
+      amount: null,
+      weighs: false,
+      settled: false,
+      estimated: false,
+    });
+
+  const hiddenKeys = new Set(hidden);
+  const shown = events.filter(
+    (event) =>
+      !hiddenKeys.has(
+        event.kind === 'custom' ? `custom:${event.itemId}` : event.kind,
+      ),
+  );
+
   const spentByDay = new Map<string, Decimal>();
   for (const entry of entries) {
     if (entry.entry_type !== 'expense') continue;
@@ -339,7 +392,7 @@ export function monthCalendar({
     { length: daysIn(month) },
     (_, index) => {
       const day = `${month}-${String(index + 1).padStart(2, '0')}`;
-      const own = events.filter((event) => event.day === day);
+      const own = shown.filter((event) => event.day === day);
       const outflow = own
         .filter((event) => event.weighs && event.amount)
         .reduce((sum, event) => sum.plus(event.amount!), new Decimal(0));

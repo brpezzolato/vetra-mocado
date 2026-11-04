@@ -3,18 +3,11 @@
 import { useMemo, useRef, useState } from 'react';
 import Decimal from 'decimal.js';
 import {
-  Banknote,
   CalendarCheck,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  CircleCheck,
-  CreditCard,
-  PartyPopper,
-  Repeat2,
   SlidersHorizontal,
-  Wallet,
-  type LucideIcon,
 } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
 import { EntryDetails } from '@/components/entry-details';
@@ -24,30 +17,22 @@ import { toTotalsView } from '@/lib/entry-share';
 import { NavigationBackButton } from '@/components/navigation-back-button';
 import { Private } from '@/components/private-value';
 import { Button } from '@/components/ui/button';
+import { CalendarIcon } from '@/components/calendar-icon';
+import { CalendarSettingsDialog } from '@/components/calendar-settings-dialog';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+  CALENDAR_COLORS,
+  calendarItems,
+  incomeSchedule,
+  itemKey,
+  type CalendarSettings,
+} from '@/lib/calendar-settings';
 import { useAccountPreference } from '@/lib/use-account-preference';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import { saoDate, type RecurringExpense } from '@/lib/expense-insights';
 import {
-  DEFAULT_INCOME_SCHEDULE,
   monthCalendar,
+  type CalendarEvent,
   type CalendarEventKind,
-  type IncomeSchedule,
 } from '@/lib/month-calendar';
 import {
   daysInTheBlue,
@@ -381,53 +366,10 @@ const dayTitle = (day: string, today: string) =>
 
 const shortDay = (day: string) => `${day.slice(8)}/${day.slice(5, 7)}`;
 
-// Cor por tipo (ponto, legenda e ícone): roxo fatura, azul recorrente,
-// verde depósito Flash, âmbar fatura paga, verde-água salário, rosa feriado.
-const KIND: Record<
-  CalendarEventKind,
-  { icon: LucideIcon; label: string; dot: string; soft: string }
-> = {
-  invoice: {
-    icon: CreditCard,
-    label: 'Fatura',
-    dot: 'bg-violet-500',
-    soft: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
-  },
-  // O dia em que a fatura foi paga de verdade (data do banco).
-  payment: {
-    icon: CircleCheck,
-    label: 'Pagamento',
-    dot: 'bg-amber-500',
-    soft: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  },
-  subscription: {
-    icon: Repeat2,
-    label: 'Assinatura',
-    dot: 'bg-sky-500',
-    soft: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
-  },
-  benefit: {
-    icon: Wallet,
-    label: 'Flash',
-    dot: 'bg-emerald-500',
-    soft: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  },
-  income: {
-    icon: Banknote,
-    label: 'Salário',
-    dot: 'bg-teal-500',
-    soft: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
-  },
-  holiday: {
-    icon: PartyPopper,
-    label: 'Feriado',
-    dot: 'bg-rose-500',
-    soft: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
-  },
-};
-
 /** O que entra (mostra "+" no valor). */
-const INCOMING = new Set<CalendarEventKind>(['benefit', 'income']);
+const INCOMING = new Set<CalendarEventKind>(['benefit', 'salary', 'advance']);
+/** Tipos que nunca têm valor (não mostram "Previsto"). */
+const NO_AMOUNT = new Set<CalendarEventKind>(['holiday', 'custom']);
 
 /** Dia aberto ao chegar num mês: hoje, o último (passado) ou o primeiro (futuro). */
 const dayToOpen = (month: string, today: string) =>
@@ -473,11 +415,27 @@ export function PeriodSummaryView({
   // De que lado veio o último passo, para o conteúdo entrar deslizando dele.
   const [direction, setDirection] = useState(1);
   const swipe = useRef<{ x: number; y: number } | null>(null);
-  // Salário e adiantamento no calendário: iguais no celular e no computador.
-  const { value: savedIncome, save: saveIncome } =
-    useAccountPreference<IncomeSchedule>('calendar-income');
-  const income = savedIncome ?? DEFAULT_INCOME_SCHEDULE;
+  // Cores, ícones, o que aparece e lembretes: iguais no celular e no computador.
+  const { value: calendarPrefs, save: saveCalendar } =
+    useAccountPreference<CalendarSettings>('calendar');
   const [configuring, setConfiguring] = useState(false);
+  const items = useMemo(() => calendarItems(calendarPrefs), [calendarPrefs]);
+  const order = useMemo(() => [...items.keys()], [items]);
+  const calendarOptions = useMemo(
+    () => ({
+      income: incomeSchedule(calendarPrefs),
+      custom: calendarPrefs?.custom ?? [],
+      hidden: [...items].filter(([, item]) => item.hidden).map(([key]) => key),
+    }),
+    [calendarPrefs, items],
+  );
+  const styleOf = (event: Pick<CalendarEvent, 'kind' | 'itemId'>) => {
+    const item = items.get(itemKey(event.kind, event.itemId));
+    return {
+      icon: item?.icon ?? 'circle',
+      ...CALENDAR_COLORS[item?.color ?? 'slate'],
+    };
+  };
 
   // Inclui "Compra a chegar" (lib/unidentified-spend.ts) na lista e nos totais.
   const counted = useMemo(
@@ -503,7 +461,7 @@ export function PeriodSummaryView({
       invoiceEntries: invoices?.entries ?? [],
       bills: invoices?.bills ?? [],
       limits: invoices?.limits ?? [],
-      income,
+      ...calendarOptions,
     });
   const calendar = useMemo(
     () =>
@@ -518,9 +476,9 @@ export function PeriodSummaryView({
         invoiceEntries: invoices?.entries ?? [],
         bills: invoices?.bills ?? [],
         limits: invoices?.limits ?? [],
-        income,
+        ...calendarOptions,
       }),
-    [month, todayIso, counted, invoices, subscriptions, income],
+    [month, todayIso, counted, invoices, subscriptions, calendarOptions],
   );
   const calendarDay = calendar.days.find((item) => item.day === day);
   const upcoming = calendar.days.filter(
@@ -816,9 +774,17 @@ export function PeriodSummaryView({
                 <span key={`gap-${index}`} aria-hidden="true" />
               ))}
               {calendar.days.map((item) => {
+                // Um ponto por tipo, na ordem da legenda; o primeiro pinta o número.
                 const kinds = [
-                  ...new Set(item.events.map((event) => event.kind)),
-                ];
+                  ...new Map(
+                    item.events.map((event) => [
+                      itemKey(event.kind, event.itemId),
+                      event,
+                    ]),
+                  ),
+                ]
+                  .sort(([a], [b]) => order.indexOf(a) - order.indexOf(b))
+                  .map(([key, event]) => ({ key, style: styleOf(event) }));
                 const isToday = item.day === todayIso;
                 const isSelected = item.day === day;
                 return (
@@ -837,17 +803,16 @@ export function PeriodSummaryView({
                       item.day < todayIso && 'text-muted-foreground',
                       isToday && 'font-semibold ring-1 ring-foreground/40',
                       isSelected && 'ring-2 ring-foreground',
-                      kinds.includes('holiday') &&
-                        'text-rose-600 dark:text-rose-400',
+                      kinds[0]?.style.text,
                     )}
                   >
                     <span>{Number(item.day.slice(8))}</span>
                     <span className="flex h-2 gap-0.5" aria-hidden="true">
                       {/* Até quatro pontos cabem na célula; o detalhe mostra tudo. */}
-                      {kinds.slice(0, 4).map((kind) => (
+                      {kinds.slice(0, 4).map(({ key, style }) => (
                         <span
-                          key={kind}
-                          className={cn('size-2 rounded-full', KIND[kind].dot)}
+                          key={key}
+                          className={cn('size-2 rounded-full', style.dot)}
                         />
                       ))}
                     </span>
@@ -856,29 +821,28 @@ export function PeriodSummaryView({
               })}
             </div>
             <ul className="mt-4 flex flex-wrap gap-2 px-1 text-xs font-medium">
-              {(Object.keys(KIND) as CalendarEventKind[]).map((kind) => {
-                const Icon = KIND[kind].icon;
-                return (
+              {[...items]
+                .filter(([, item]) => !item.hidden)
+                .map(([key, item]) => (
                   <li
-                    key={kind}
+                    key={key}
                     className={cn(
                       'flex items-center gap-1.5 rounded-full py-1 pr-2.5 pl-1',
-                      KIND[kind].soft,
+                      CALENDAR_COLORS[item.color].soft,
                     )}
                   >
                     <span
                       aria-hidden="true"
                       className={cn(
                         'grid size-5 place-items-center rounded-full text-white',
-                        KIND[kind].dot,
+                        CALENDAR_COLORS[item.color].dot,
                       )}
                     >
-                      <Icon className="size-3" />
+                      <CalendarIcon name={item.icon} className="size-3" />
                     </span>
-                    {KIND[kind].label}
+                    {item.label || 'Lembrete'}
                   </li>
-                );
-              })}
+                ))}
               <li className="ml-auto">
                 <Button
                   type="button"
@@ -887,7 +851,7 @@ export function PeriodSummaryView({
                   className="h-7 text-muted-foreground"
                   onClick={() => setConfiguring(true)}
                 >
-                  <SlidersHorizontal /> Salário
+                  <SlidersHorizontal /> Personalizar
                 </Button>
               </li>
             </ul>
@@ -947,7 +911,7 @@ export function PeriodSummaryView({
                 {calendarDay?.events.length ? (
                   <ul className="mt-3 space-y-3">
                     {calendarDay.events.map((event, index) => {
-                      const Icon = KIND[event.kind].icon;
+                      const style = styleOf(event);
                       return (
                         <li
                           key={`${event.kind}-${event.title}-${index}`}
@@ -956,10 +920,13 @@ export function PeriodSummaryView({
                           <span
                             className={cn(
                               'grid size-8 shrink-0 place-items-center rounded-full',
-                              KIND[event.kind].soft,
+                              style.soft,
                             )}
                           >
-                            <Icon className="size-4" aria-hidden="true" />
+                            <CalendarIcon
+                              name={style.icon}
+                              className="size-4"
+                            />
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium">
@@ -983,7 +950,7 @@ export function PeriodSummaryView({
                                 {money(event.amount)}
                               </Private>
                             ) : (
-                              event.kind !== 'holiday' && 'Previsto'
+                              !NO_AMOUNT.has(event.kind) && 'Previsto'
                             )}
                           </span>
                         </li>
@@ -1071,17 +1038,17 @@ export function PeriodSummaryView({
                             aria-hidden="true"
                             className={cn(
                               'size-2 shrink-0 rounded-full',
-                              KIND[event.kind].dot,
+                              styleOf(event).dot,
                             )}
                           />
                           <span className="min-w-0 flex-1 truncate">
                             {event.title}
                           </span>
                           <span className="shrink-0 tabular-nums">
-                            {event.amount === null ? (
-                              'Previsto'
-                            ) : (
+                            {event.amount !== null ? (
                               <Private>{money(event.amount)}</Private>
+                            ) : (
+                              !NO_AMOUNT.has(event.kind) && 'Previsto'
                             )}
                           </span>
                         </button>
@@ -1179,111 +1146,12 @@ export function PeriodSummaryView({
           </section>
         </div>
       </div>
-      <Dialog open={configuring} onOpenChange={setConfiguring}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Salário no calendário</DialogTitle>
-            <DialogDescription>
-              Os dias em que o salário e o adiantamento costumam cair. O valor
-              vem do último recebido; quando cai, aparece o valor real.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-5">
-            <div className="grid gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="income-salary">Salário</Label>
-                <Switch
-                  id="income-salary"
-                  checked={income.salary.enabled}
-                  onCheckedChange={(enabled) =>
-                    saveIncome({
-                      ...income,
-                      salary: { ...income.salary, enabled },
-                    })
-                  }
-                />
-              </div>
-              <Select
-                value={income.salary.day}
-                disabled={!income.salary.enabled}
-                onValueChange={(day) =>
-                  day &&
-                  saveIncome({
-                    ...income,
-                    salary: {
-                      ...income.salary,
-                      day: day as IncomeSchedule['salary']['day'],
-                    },
-                  })
-                }
-              >
-                <SelectTrigger
-                  id="income-salary-day"
-                  aria-label="Dia do salário"
-                  className="w-full"
-                >
-                  <SelectValue>
-                    {income.salary.day === 'last'
-                      ? 'Último dia do mês'
-                      : 'Último dia útil do mês'}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="last-business">
-                    Último dia útil do mês
-                  </SelectItem>
-                  <SelectItem value="last">Último dia do mês</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-3 border-t pt-5">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="income-advance">Adiantamento</Label>
-                <Switch
-                  id="income-advance"
-                  checked={income.advance.enabled}
-                  onCheckedChange={(enabled) =>
-                    saveIncome({
-                      ...income,
-                      advance: { ...income.advance, enabled },
-                    })
-                  }
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label
-                  htmlFor="income-advance-day"
-                  className="text-xs font-normal text-muted-foreground"
-                >
-                  Dia do mês (se não for dia útil, o dia útil anterior)
-                </Label>
-                <Select
-                  value={String(income.advance.day)}
-                  disabled={!income.advance.enabled}
-                  onValueChange={(day) =>
-                    day &&
-                    saveIncome({
-                      ...income,
-                      advance: { ...income.advance, day: Number(day) },
-                    })
-                  }
-                >
-                  <SelectTrigger id="income-advance-day" className="w-full">
-                    <SelectValue>Dia {income.advance.day}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 28 }, (_, index) => (
-                      <SelectItem key={index} value={String(index + 1)}>
-                        Dia {index + 1}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CalendarSettingsDialog
+        open={configuring}
+        onOpenChange={setConfiguring}
+        settings={calendarPrefs ?? {}}
+        onChange={saveCalendar}
+      />
       {selected && (
         <EntryDetails
           key={selected.id}
