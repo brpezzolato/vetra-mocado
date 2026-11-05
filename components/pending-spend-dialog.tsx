@@ -17,21 +17,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { createClient } from '@/lib/supabase/client';
 import { loadUnidentifiedSpend } from '@/lib/unidentified-spend-query';
 import { refreshWidgetsOnce } from '@/lib/manual-refresh';
 import { saoDate } from '@/lib/expense-insights';
 import type { SplitPart } from '@/lib/unidentified-spend';
 
-/* Dividir uma compra a chegar: a queda do limite de um dia pode ser várias
-   compras, e o dia em que o app viu a queda pode não ser o da compra. As
-   partes ficam em pending_spend_splits e somem sozinhas quando as compras
-   chegam do banco (applySplits, lib/unidentified-spend.ts). */
+/* Compra a chegar: o limite caiu e a compra ainda não veio do banco. Abre com
+   uma compra só (o valor todo, no dia da queda); "Separar outra compra" cria a
+   seguinte já com o que falta, e o que nenhuma pegou segue a chegar. As
+   compras ficam em pending_spend_splits e somem sozinhas quando chegam do
+   banco (applySplits, lib/unidentified-spend.ts). */
 
 const money = (value: Decimal.Value) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
     new Decimal(value).toNumber(),
   );
+/** Digitação em centavos: "1234" vira "R$ 12,34". */
 const moneyInput = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 12);
   return digits ? money(new Decimal(digits).div(100)) : '';
@@ -48,12 +60,17 @@ const addDays = (day: string, days: number) => {
 };
 
 type Row = {
+  /** Chave estável: tirar uma compra não troca os campos das outras. */
+  id: number;
   amount: string;
   day: string;
   description: string;
   /** "Fora das contas" desde já (`SplitPart.excluded`). */
   excluded: boolean;
 };
+
+let nextId = 0;
+const newRow = (row: Omit<Row, 'id'>): Row => ({ id: ++nextId, ...row });
 
 export function PendingSpendDialog({
   account,
@@ -77,7 +94,6 @@ export function PendingSpendDialog({
   const [error, setError] = useState('');
   // Passou de 3 dias úteis sem chegar: o usuário decide se tira.
   const [overdue, setOverdue] = useState(false);
-  // Excluir pede um segundo toque (não há como desfazer pela tela).
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
@@ -101,9 +117,9 @@ export function PendingSpendDialog({
       const divided = mine.find((item) => item.split);
       const plain = mine.find((item) => !item.split);
       const amount = divided?.split?.total ?? plain?.amount ?? null;
+      const now = saoDate(new Date());
       setTotal(amount);
       setOverdue(mine.some((item) => item.overdue));
-      setConfirming(false);
       setSeenUntil(
         divided ? (split.data?.seen_until ?? divided.at) : (plain?.at ?? null),
       );
@@ -112,27 +128,21 @@ export function PendingSpendDialog({
       setSaved(parts.length > 0);
       setRows(
         parts.length
-          ? parts.map((part) => ({
-              amount: money(part.amount),
-              day: part.day,
-              description: part.description ?? '',
-              excluded: part.excluded === true,
-            }))
-          : // Começa com duas partes no dia anterior: o caso mais comum é o
-            // limite ter caído de noite e só aparecer na leitura da manhã.
-            [
-              {
-                amount: '',
-                day: addDays(day, -1),
+          ? parts.map((part) =>
+              newRow({
+                amount: money(part.amount),
+                day: part.day,
+                description: part.description ?? '',
+                excluded: part.excluded === true,
+              }),
+            )
+          : [
+              newRow({
+                amount: amount ? money(amount) : '',
+                day: day > now ? now : day,
                 description: '',
                 excluded: false,
-              },
-              {
-                amount: '',
-                day: addDays(day, -1),
-                description: '',
-                excluded: false,
-              },
+              }),
             ],
       );
       setError('');
@@ -147,17 +157,27 @@ export function PendingSpendDialog({
     new Decimal(0),
   );
   const rest = total ? new Decimal(total).minus(sum) : new Decimal(0);
-  const over = rest.lt(-0.005);
-  const done = !over && rest.lte(0.005);
-  const distributed = total
-    ? Math.min(100, sum.div(total).times(100).toNumber())
-    : 0;
+  const over = rest.lt(-0.05);
   const today = saoDate(new Date());
+  const earliest = addDays(day, -7);
+  const single = rows.length === 1;
 
-  const update = (index: number, patch: Partial<Row>) =>
+  const update = (id: number, patch: Partial<Row>) =>
     setRows((current) =>
-      current.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+      current.map((row) => (row.id === id ? { ...row, ...patch } : row)),
     );
+
+  // A próxima compra já vem com o que falta distribuir.
+  const addRow = () =>
+    setRows((current) => [
+      ...current,
+      newRow({
+        amount: rest.gt(0.005) ? money(rest) : '',
+        day: current.at(-1)?.day ?? day,
+        description: '',
+        excluded: false,
+      }),
+    ]);
 
   async function save() {
     if (!total) return;
@@ -169,15 +189,14 @@ export function PendingSpendDialog({
         description: row.description.trim().slice(0, 60) || null,
         ...(row.excluded && { excluded: true }),
       }));
-    if (!parts.length)
-      return setError('Informe o valor de pelo menos uma compra.');
-    if (rest.lt(-0.05))
+    if (!parts.length) return setError('Informe o valor da compra.');
+    if (over)
       return setError(
-        `As partes passam do valor que caiu no limite (${money(total)}).`,
+        `As compras passam do valor que caiu no limite (${money(total)}).`,
       );
-    if (parts.some((part) => part.day > today || part.day < addDays(day, -7)))
+    if (parts.some((part) => part.day > today || part.day < earliest))
       return setError(
-        'As datas vão até 7 dias antes da queda do limite, e não depois de hoje.',
+        `A data vai de ${shortDay(earliest)} até hoje; a compra não pode ser de depois.`,
       );
     setBusy(true);
     setError('');
@@ -223,224 +242,212 @@ export function PendingSpendDialog({
       .from('pending_spend_dismissals')
       .upsert({ account, day }, { onConflict: 'user_id,account,day' });
     setBusy(false);
-    if (failure) return setError('Não foi possível excluir. Tente de novo.');
+    setConfirming(false);
+    if (failure)
+      return setError('Não foi possível tirar a compra. Tente de novo.');
     onOpenChange(false);
     await refreshWidgetsOnce();
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Compra a chegar</DialogTitle>
-          <DialogDescription>
-            O limite do {account} caiu{' '}
-            {total ? <Private>{money(total)}</Private> : 'um valor'} até{' '}
-            {shortDay(day)}. Separe as compras, corrija as datas e marque o que
-            fica fora das contas; quando elas chegarem do banco, somem daqui
-            sozinhas.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Compra a chegar</DialogTitle>
+            <DialogDescription>
+              O limite do {account} caiu{' '}
+              {total ? <Private>{money(total)}</Private> : 'um valor'} em{' '}
+              {shortDay(day)} e a compra ainda não veio do banco. Dê um nome,
+              acerte a data ou separe em várias compras; quando chegarem, somem
+              daqui sozinhas.
+            </DialogDescription>
+          </DialogHeader>
 
-        {overdue && (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
-            <p className="flex items-center gap-2 text-sm font-medium">
-              <Clock className="size-4 text-amber-600 dark:text-amber-400" />
-              Já passou de 3 dias e não chegou
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Alguns bancos, como o PicPay, demoram. Ela fica esperando até 7
-              dias; se você sabe que não vai chegar, pode excluir no botão
-              abaixo.
-            </p>
-          </div>
-        )}
-
-        {/* O que falta distribuir desce a cada valor digitado. */}
-        {total && (
-          <div className="rounded-2xl bg-muted/50 p-4" aria-live="polite">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs text-muted-foreground">
-                Total que caiu no limite
-              </span>
-              <span className="text-sm font-semibold tabular-nums">
-                <Private>{money(total)}</Private>
-              </span>
-            </div>
-            <div
-              aria-hidden="true"
-              className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10"
-            >
-              <span
-                className={`block h-full rounded-full transition-[width] duration-300 ${over ? 'bg-destructive' : 'bg-emerald-500'}`}
-                style={{ width: `${distributed}%` }}
-              />
-            </div>
-            <p
-              className={`mt-3 text-base font-semibold tracking-tight ${over ? 'text-destructive' : ''}`}
-            >
-              {over ? (
-                <>
-                  Passou <Private>{money(rest.negated())}</Private> do total
-                </>
-              ) : done ? (
-                'Tudo distribuído'
-              ) : (
-                <>
-                  Ainda restam <Private>{money(rest)}</Private> para distribuir
-                </>
-              )}
-            </p>
-            {!over && !done && (
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                O que sobrar segue como compra a chegar.
+          {overdue && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Clock className="size-4 text-amber-600 dark:text-amber-400" />
+                Passou de 3 dias e não chegou
               </p>
-            )}
-          </div>
-        )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Alguns bancos, como o PicPay, demoram até 7 dias. Se você sabe
+                que ela não vai chegar, toque em “Não vai chegar”.
+              </p>
+            </div>
+          )}
 
-        <ul className="grid gap-3">
-          {rows.map((row, index) => (
-            <li key={index} className="grid gap-2 rounded-2xl border p-3">
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <div className="relative">
+          <ul className="grid gap-3">
+            {rows.map((row, index) => {
+              const label = single ? 'da compra' : `da compra ${index + 1}`;
+              return (
+                <li key={row.id} className="grid gap-3 rounded-2xl border p-3">
+                  {!single && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Compra {index + 1}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="-my-1 h-8 gap-1 px-2 text-xs text-muted-foreground"
+                        onClick={() =>
+                          setRows((current) =>
+                            current.filter((item) => item.id !== row.id),
+                          )
+                        }
+                      >
+                        <Trash2 className="size-3.5" />
+                        Tirar
+                      </Button>
+                    </div>
+                  )}
                   <Input
-                    aria-label={`Valor da compra ${index + 1}`}
-                    placeholder={
-                      rest.gt(0.005) ? `Restam ${money(rest)}` : 'R$ 0,00'
-                    }
-                    inputMode="numeric"
-                    className={`h-11 tabular-nums ${!row.amount && rest.gt(0.005) ? 'pr-28' : ''}`}
-                    value={row.amount}
+                    aria-label={`Nome ${label} (opcional)`}
+                    placeholder="Nome (ex.: Padaria)"
+                    maxLength={60}
+                    className="h-11"
+                    value={row.description}
                     onChange={(event) =>
-                      update(index, { amount: moneyInput(event.target.value) })
+                      update(row.id, { description: event.target.value })
                     }
                   />
-                  {!row.amount && rest.gt(0.005) && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute top-1/2 right-1.5 h-8 -translate-y-1/2 px-2.5 text-xs"
-                      onClick={() => update(index, { amount: money(rest) })}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      aria-label={`Valor ${label}`}
+                      placeholder="R$ 0,00"
+                      inputMode="numeric"
+                      className="h-11 tabular-nums"
+                      value={row.amount}
+                      onChange={(event) =>
+                        update(row.id, {
+                          amount: moneyInput(event.target.value),
+                        })
+                      }
+                    />
+                    <DateInput
+                      id={`pending-day-${row.id}`}
+                      value={row.day}
+                      min={earliest}
+                      max={today}
+                      onValueChange={(value) => update(row.id, { day: value })}
+                    />
+                  </div>
+                  {/* Segue na fatura, sai dos gastos; chega do banco já assim. */}
+                  <div className="flex items-center justify-between gap-3">
+                    <Label
+                      htmlFor={`pending-excluded-${row.id}`}
+                      className="grid gap-0.5 text-sm font-normal"
                     >
-                      Usar o resto
-                    </Button>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-11 text-muted-foreground"
-                  aria-label={`Tirar a compra ${index + 1}`}
-                  disabled={rows.length === 1}
-                  onClick={() =>
-                    setRows((current) => current.filter((_, i) => i !== index))
-                  }
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-              <div className="grid grid-cols-[10.5rem_minmax(0,1fr)] gap-2">
-                <DateInput
-                  id={`pending-day-${index}`}
-                  value={row.day}
-                  min={addDays(day, -7)}
-                  max={today}
-                  onValueChange={(value) => update(index, { day: value })}
-                />
-                <Input
-                  aria-label={`Nome da compra ${index + 1} (opcional)`}
-                  placeholder="Nome"
-                  maxLength={60}
-                  className="h-11"
-                  value={row.description}
-                  onChange={(event) =>
-                    update(index, { description: event.target.value })
-                  }
-                />
-              </div>
-              {/* Segue na fatura, sai dos gastos; chega do banco já assim. */}
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <Label
-                  htmlFor={`pending-excluded-${index}`}
-                  className="text-sm font-normal"
-                >
-                  Fora das contas
-                </Label>
-                <Switch
-                  id={`pending-excluded-${index}`}
-                  checked={row.excluded}
-                  onCheckedChange={(checked) =>
-                    update(index, { excluded: checked })
-                  }
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
+                      Fora das contas
+                      <span className="text-xs text-muted-foreground">
+                        Fica na fatura, mas não conta como gasto
+                      </span>
+                    </Label>
+                    <Switch
+                      id={`pending-excluded-${row.id}`}
+                      checked={row.excluded}
+                      onCheckedChange={(checked) =>
+                        update(row.id, { excluded: checked })
+                      }
+                    />
+                  </div>
+                </li>
+              );
+            })}
 
-        <Button
-          type="button"
-          variant="glass-quiet"
-          className="w-full gap-1.5"
-          disabled={rows.length >= 12}
-          onClick={() =>
-            setRows((current) => [
-              ...current,
-              {
-                amount: '',
-                day: current.at(-1)?.day ?? addDays(day, -1),
-                description: '',
-                excluded: false,
-              },
-            ])
-          }
-        >
-          <Plus className="size-4" />
-          Mais uma compra
-        </Button>
+            {/* O que nenhuma compra pegou: segue a chegar, sem conta a fazer. */}
+            {total && rest.gt(0.005) && (
+              <li className="flex items-center justify-between gap-3 rounded-2xl border border-dashed px-3 py-2.5 text-sm">
+                <span className="text-muted-foreground">
+                  Resto, continua a chegar
+                </span>
+                <span className="font-medium tabular-nums">
+                  <Private>{money(rest)}</Private>
+                </span>
+              </li>
+            )}
+          </ul>
 
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
+          {over && total && (
+            <p role="alert" className="text-xs text-destructive">
+              As compras passam <Private>{money(rest.negated())}</Private> do
+              valor que caiu no limite. Diminua algum valor.
+            </p>
+          )}
 
-        <DialogFooter className="gap-2">
           <Button
             type="button"
-            variant="ghost"
-            className="gap-1.5 text-destructive hover:text-destructive sm:mr-auto"
-            disabled={busy || !total}
-            onClick={() => (confirming ? void dismiss() : setConfirming(true))}
+            variant="glass-quiet"
+            className="w-full gap-1.5"
+            disabled={rows.length >= 12 || !total}
+            onClick={addRow}
           >
-            <Trash2 className="size-4" />
-            {confirming
-              ? 'Toque de novo para excluir'
-              : 'Excluir compra a chegar'}
+            <Plus className="size-4" />
+            Separar outra compra
           </Button>
-          {saved && (
+
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
+          <DialogFooter className="gap-2">
             <Button
               type="button"
-              variant="glass-quiet"
-              disabled={busy}
-              onClick={() => void undo()}
+              variant="ghost"
+              className="gap-1.5 text-destructive hover:text-destructive sm:mr-auto"
+              disabled={busy || !total}
+              onClick={() => setConfirming(true)}
             >
-              Desfazer divisão
+              <Trash2 className="size-4" />
+              Não vai chegar
             </Button>
-          )}
-          <Button
-            type="button"
-            variant="glass"
-            disabled={busy || !total}
-            onClick={() => void save()}
-          >
-            Salvar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {saved && (
+              <Button
+                type="button"
+                variant="glass-quiet"
+                disabled={busy}
+                onClick={() => void undo()}
+              >
+                Voltar ao original
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="glass"
+              disabled={busy || !total || over}
+              onClick={() => void save()}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tirar esta compra a chegar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ela sai da lista e das contas. Se a compra chegar do banco depois,
+              entra normalmente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="glass-destructive"
+              disabled={busy}
+              onClick={() => void dismiss()}
+            >
+              Tirar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

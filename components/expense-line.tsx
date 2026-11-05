@@ -189,7 +189,7 @@ function PendingLine({
                 ? 'Fora das contas · chega em até 7 dias'
                 : split
                   ? 'Dividida por você · chega em até 7 dias'
-                  : `${entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} · toque para dividir ou tirar das contas`}
+                  : `${entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} · toque para nomear ou separar`}
             </span>
           )}
         </span>
