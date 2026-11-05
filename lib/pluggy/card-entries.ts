@@ -293,6 +293,8 @@ export type ExistingCardEntry = {
   invoice_due_override: string | null;
   installment_group_id: string | null;
   installment_number: number | null;
+  /** Data acertada pelo usuário: fica como está. */
+  date_edited?: boolean | null;
 };
 
 export type CardWritePlan = {
@@ -367,7 +369,10 @@ export function planCardWrites(
       patch.entry_type = entry.entryType;
     if (!new Decimal(current.amount).eq(entry.amount))
       patch.amount = entry.amount;
-    if (Date.parse(current.occurred_at) !== Date.parse(entry.occurredAt))
+    if (
+      !current.date_edited &&
+      Date.parse(current.occurred_at) !== Date.parse(entry.occurredAt)
+    )
       patch.occurred_at = entry.occurredAt;
     if (current.bank_status !== entry.bankStatus)
       patch.bank_status = entry.bankStatus;

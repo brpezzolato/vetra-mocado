@@ -126,7 +126,7 @@ export async function syncCardsFromPluggy(
       admin
         .from('financial_entries')
         .select(
-          'id, external_id, entry_type, amount, occurred_at, bank_status, invoice_due_override, installment_group_id, installment_number',
+          'id, external_id, entry_type, amount, occurred_at, bank_status, invoice_due_override, installment_group_id, installment_number, date_edited',
         )
         .eq('user_id', target.user_id)
         .eq('account', target.account)

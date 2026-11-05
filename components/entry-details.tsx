@@ -161,6 +161,10 @@ export function EntryDetails({
           category,
           account: selectedPayment.account,
           occurred_at: new Date(`${occurredAt}:00-03:00`).toISOString(),
+          // A data que o usuário acertou vale mais que a do banco.
+          ...(occurredAt !== saoLocalDateTime(entry.occurred_at) && {
+            date_edited: true,
+          }),
           notes: notes.trim(),
           excluded_from_totals: excluded,
           excluded_from_daily:

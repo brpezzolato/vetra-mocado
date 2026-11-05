@@ -199,6 +199,22 @@ describe('o que gravar', () => {
     expect(plan.remove).toEqual([]);
   });
 
+  it('não regrava a data que o usuário acertou', () => {
+    const bank = bankEntry({ occurredAt: '2026-11-05T04:26:49Z' });
+    const edited = row({ occurred_at: '2026-11-05T01:26:00Z' });
+    expect(
+      planCardWrites(
+        [bank],
+        [{ ...edited, date_edited: true }],
+        new Set(),
+        '2026-08-01',
+      ).update,
+    ).toEqual([]);
+    expect(
+      planCardWrites([bank], [edited], new Set(), '2026-08-01').update,
+    ).toEqual([{ id: 'r', patch: { occurred_at: '2026-11-05T04:26:49Z' } }]);
+  });
+
   it('atualiza o que o banco mudou, sem tocar em descrição ou categoria', () => {
     const plan = planCardWrites(
       [bankEntry({ bankStatus: 'POSTED', invoiceDue: '2026-10-08' })],

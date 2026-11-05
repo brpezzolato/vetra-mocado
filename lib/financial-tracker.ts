@@ -30,6 +30,8 @@ export type FinancialEntry = {
   pending_overdue?: boolean;
   /** Não conta no valor do dia (presente, gasto extraordinário). */
   excluded_from_daily?: boolean;
+  /** Data e hora corrigidas pelo usuário: a sincronização não regrava. */
+  date_edited?: boolean;
   /** Compra dividida: a parte do usuário (`amount` é o valor cheio). Ver lib/entry-share.ts. */
   split_share?: number | string | null;
   /** Dividida por igual entre tantas pessoas, ele incluído. */
