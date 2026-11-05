@@ -35,7 +35,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  NOTICE_DESTINATIONS,
+  noticeTarget,
   noticeIcon,
   noticeWhen,
   type Notice,
@@ -216,7 +216,7 @@ export function NotificationsPage() {
           {loaded &&
             items.map((notice) => {
               const Icon = noticeIcon(notice);
-              const canOpen = NOTICE_DESTINATIONS.has(notice.href);
+              const target = noticeTarget(notice);
               return (
                 <article
                   key={notice.id}
@@ -268,12 +268,12 @@ export function NotificationsPage() {
                       <MoreHorizontal />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-52">
-                      {canOpen && (
+                      {target && (
                         <DropdownMenuItem
                           onClick={() => {
                             if (!notice.read_at)
                               void patch([notice.id], { read_at: now() });
-                            router.push(notice.href);
+                            router.push(target);
                           }}
                         >
                           <ExternalLink />

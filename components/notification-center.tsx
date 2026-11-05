@@ -22,7 +22,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import {
-  NOTICE_DESTINATIONS,
+  noticeTarget,
   noticeIcon,
   noticeWhen,
   type Notice,
@@ -200,10 +200,11 @@ export function NotificationCenter() {
             );
             const row =
               'flex items-center gap-3 px-5 py-3 text-left transition-colors';
-            return NOTICE_DESTINATIONS.has(notice.href) ? (
+            const target = noticeTarget(notice);
+            return target ? (
               <Link
                 key={notice.id}
-                href={notice.href}
+                href={target}
                 onClick={() => setOpen(false)}
                 className={`${row} hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none`}
               >

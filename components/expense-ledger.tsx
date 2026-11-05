@@ -139,6 +139,7 @@ export function ExpenseLedger({
   initialPending,
   initialError,
   cycles,
+  openEntryId,
 }: {
   userId: string;
   initialEntries: FinancialEntry[];
@@ -148,6 +149,8 @@ export function ExpenseLedger({
   initialError: string;
   /** Os ciclos de crédito, para pôr cada parcela no mês de gasto da fatura. */
   cycles: CardCycle[];
+  /** Detalhe aberto ao chegar (`/financeiro?lancamento=<id>`). */
+  openEntryId?: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [entries, setEntries] = useState(initialEntries);
@@ -155,7 +158,9 @@ export function ExpenseLedger({
   const [pending, setPending] = useState(initialPending);
   const [error, setError] = useState(initialError);
   const [entryOpen, setEntryOpen] = useState(false);
-  const [selected, setSelected] = useState<FinancialEntry | null>(null);
+  const [selected, setSelected] = useState<FinancialEntry | null>(
+    () => initialEntries.find((entry) => entry.id === openEntryId) ?? null,
+  );
   const [status, setStatus] = useState<Status>('all');
   // A lista segue o filtro em segundo plano: a pílula responde na hora.
   const listStatus = useDeferredValue(status);
@@ -637,7 +642,12 @@ export function ExpenseLedger({
           onDelete={deleteEntry}
           entry={selected}
           cards={sortedCards}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelected(null);
+            // Tira o `?lancamento=` sem recarregar: voltar não reabre.
+            if (openEntryId)
+              window.history.replaceState(null, '', '/financeiro');
+          }}
           onRuleApplied={reload}
           onSaved={(updated) =>
             setEntries((previous) =>

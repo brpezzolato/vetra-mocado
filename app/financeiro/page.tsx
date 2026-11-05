@@ -7,7 +7,14 @@ import { loadUnidentifiedSpend } from '@/lib/unidentified-spend-query';
 import type { PaymentCard } from '@/lib/payment-cards';
 import type { CardCycle } from '@/lib/expense-insights';
 
-export default async function FinancialPage() {
+export default async function FinancialPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lancamento?: string | string[] }>;
+}) {
+  // `?lancamento=<id>`: o toque no aviso de compra abre o detalhe dela.
+  const { lancamento } = await searchParams;
+  const openEntryId = typeof lancamento === 'string' ? lancamento : undefined;
   const supabase = await createClient();
   const {
     data: { user },
@@ -24,6 +31,9 @@ export default async function FinancialPage() {
   ]);
   return (
     <ExpenseLedger
+      // Outro aviso tocado com a tela já aberta: monta de novo com ele aberto.
+      key={openEntryId ?? ''}
+      openEntryId={openEntryId}
       userId={user.id}
       initialEntries={(entries.data ?? []) as FinancialEntry[]}
       initialCards={(cards.data ?? []) as PaymentCard[]}
