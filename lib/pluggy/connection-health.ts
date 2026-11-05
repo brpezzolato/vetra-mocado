@@ -14,7 +14,90 @@ export type ConnectionHealth = {
   state: 'ok' | 'updating' | 'stale' | 'error';
   /** Dias inteiros desde a última atualização. */
   days: number | null;
+  /** O banco pede uma ação no Meu Pluggy (código, confirmação). */
+  waitingInput?: boolean;
+  consentExpiresAt?: string | null;
+  autoSyncOff?: boolean;
 };
+
+/** Aviso do sininho; `key` dá um por situação (o dia entra quando repete). */
+export type ConnectionNotice = { key: string; title: string; body: string };
+
+export type RobotState = { status: string; last_error: string | null } | null;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * O que avisar sobre as conexões e o robô do Meu Pluggy. Pura, para os testes.
+ * Consentimento: aos 15, 7 e 1 dia do fim (uma vez em cada).
+ */
+export function connectionNotices(
+  connections: ConnectionHealth[],
+  robot: RobotState,
+  day: string,
+  now = Date.now(),
+): ConnectionNotice[] {
+  const notices: ConnectionNotice[] = [];
+  for (const connection of connections) {
+    const bank = connection.bank ?? 'banco';
+    const name = connection.bank
+      ? (BANK_NAME[connection.bank] ?? 'Um banco')
+      : 'Um banco';
+    if (connection.waitingInput)
+      notices.push({
+        key: `pluggy-input:${bank}:${day}`,
+        title: `${name} pede uma confirmação`,
+        body: 'O banco espera uma ação sua no Meu Pluggy (código ou confirmação) para voltar a atualizar.',
+      });
+    else if (connection.state === 'error' || connection.state === 'stale')
+      notices.push({
+        key: `pluggy-health:${bank}:${day}`,
+        title:
+          connection.state === 'error'
+            ? `${name} com problema na conexão`
+            : `${name} sem atualizar há ${connection.days ?? 2} dias`,
+        body:
+          connection.state === 'error'
+            ? 'A conexão parou de trazer dados. Veja em Conexões; pode ser preciso reconectar no Meu Pluggy.'
+            : 'Os números deste banco podem estar velhos. Veja em Conexões.',
+      });
+    if (connection.autoSyncOff)
+      notices.push({
+        key: `pluggy-autosync:${bank}:${day}`,
+        title: `Atualização automática do ${name} desligada`,
+        body: 'A Pluggy parou de atualizar este banco sozinha depois de falhas seguidas. Reconecte no Meu Pluggy.',
+      });
+    const expires = connection.consentExpiresAt
+      ? Date.parse(connection.consentExpiresAt)
+      : NaN;
+    if (Number.isFinite(expires)) {
+      const left = Math.ceil((expires - now) / DAY_MS);
+      const step = [1, 7, 15].find((limit) => left <= limit);
+      if (left < 1)
+        notices.push({
+          key: `pluggy-consent:${bank}:${connection.consentExpiresAt!.slice(0, 10)}:0`,
+          title: `Consentimento do ${name} venceu`,
+          body: 'Os dados deste banco pararam de chegar. Renove o consentimento no Meu Pluggy.',
+        });
+      else if (step)
+        notices.push({
+          key: `pluggy-consent:${bank}:${connection.consentExpiresAt!.slice(0, 10)}:${step}`,
+          title: `Consentimento do ${name} vence ${left === 1 ? 'amanhã' : `em ${left} dias`}`,
+          body: 'Renove no Meu Pluggy para os dados continuarem chegando.',
+        });
+    }
+  }
+  if (robot && robot.status !== 'active')
+    notices.push({
+      key: `pluggy-robot:${robot.status}:${day}`,
+      title:
+        robot.status === 'expired'
+          ? 'Sessão do robô do Meu Pluggy expirou'
+          : 'Robô do Meu Pluggy parado',
+      body: `${robot.last_error ?? 'O robô não está pedindo atualização aos bancos.'} Sem ele, os dados chegam só quando a Pluggy atualiza sozinha.`,
+    });
+  return notices;
+}
 
 /** O estado de uma conexão, pelo item da Pluggy. Pura, para os testes. */
 export function connectionState(
@@ -73,6 +156,9 @@ export async function loadConnectionHealth(
         bank,
         updatedAt: item?.lastUpdatedAt ?? null,
         ...connectionState(item, accounts.length > 0),
+        waitingInput: item?.status === 'WAITING_USER_INPUT',
+        consentExpiresAt: item?.consentExpiresAt ?? null,
+        autoSyncOff: !!item?.autoSyncDisabledAt,
       };
     }),
   );
@@ -82,41 +168,39 @@ export async function loadConnectionHealth(
   );
 }
 
-const BANK_NAME: Record<string, string> = {
+export const BANK_NAME: Record<string, string> = {
   nubank: 'Nubank',
   itau: 'Itaú',
   picpay: 'PicPay',
   'mercado-pago': 'Mercado Pago',
 };
 
-/** Avisa uma vez por dia por banco; roda com as atualizações automáticas. */
+/** Avisa das conexões e do robô; roda com as atualizações automáticas. */
 export async function notifyUnhealthyConnections(
   admin: SupabaseClient,
   pluggy: PluggyClient,
   userId: string,
   day: string,
 ) {
-  for (const connection of await loadConnectionHealth(admin, pluggy, userId)) {
-    if (connection.state !== 'stale' && connection.state !== 'error') continue;
-    const name = connection.bank
-      ? (BANK_NAME[connection.bank] ?? 'Um banco')
-      : 'Um banco';
-    await admin.from('app_notifications').upsert(
-      {
-        user_id: userId,
-        event_key: `pluggy-health:${connection.bank ?? 'banco'}:${day}`,
-        kind: 'integration',
-        title:
-          connection.state === 'error'
-            ? `${name} com problema na conexão`
-            : `${name} sem atualizar há ${connection.days ?? 2} dias`,
-        body:
-          connection.state === 'error'
-            ? 'A conexão parou de trazer dados. Veja em Conexões; pode ser preciso reconectar no Meu Pluggy.'
-            : 'Os números deste banco podem estar velhos. Veja em Conexões.',
-        href: '/conexoes',
-      },
-      { onConflict: 'user_id,event_key', ignoreDuplicates: true },
-    );
-  }
+  const [connections, { data: robot }] = await Promise.all([
+    loadConnectionHealth(admin, pluggy, userId),
+    admin
+      .from('pluggy_robot')
+      .select('status, last_error')
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ]);
+  const notices = connectionNotices(connections, robot as RobotState, day);
+  if (!notices.length) return;
+  await admin.from('app_notifications').upsert(
+    notices.map((notice) => ({
+      user_id: userId,
+      event_key: notice.key,
+      kind: 'integration',
+      title: notice.title,
+      body: notice.body,
+      href: '/conexoes',
+    })),
+    { onConflict: 'user_id,event_key', ignoreDuplicates: true },
+  );
 }

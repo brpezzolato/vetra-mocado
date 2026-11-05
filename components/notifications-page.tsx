@@ -243,7 +243,7 @@ export function NotificationsPage() {
                         <span className="sr-only"> (não lida)</span>
                       )}
                     </h2>
-                    <p className="mt-0.5 text-xs leading-relaxed break-words text-muted-foreground">
+                    <p className="mt-0.5 text-xs leading-relaxed whitespace-pre-line break-words text-muted-foreground">
                       {notice.body}
                     </p>
                     <time

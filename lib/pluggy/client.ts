@@ -175,6 +175,8 @@ function toItem(raw: Json): PluggyItem {
     executionStatus: strOrNull(raw.executionStatus),
     lastUpdatedAt: strOrNull(raw.lastUpdatedAt),
     nextAutoSyncAt: strOrNull(raw.nextAutoSyncAt),
+    consentExpiresAt: strOrNull(raw.consentExpiresAt),
+    autoSyncDisabledAt: strOrNull(raw.autoSyncDisabledAt),
   };
 }
 

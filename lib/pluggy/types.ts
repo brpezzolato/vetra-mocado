@@ -62,6 +62,10 @@ export type PluggyItem = {
   lastUpdatedAt: string | null;
   /** Próxima atualização automática (o Meu Pluggy não aceita PATCH /items). */
   nextAutoSyncAt: string | null;
+  /** Fim do consentimento do Open Finance (renova no Meu Pluggy). */
+  consentExpiresAt: string | null;
+  /** A Pluggy desligou a atualização automática (falhas seguidas). */
+  autoSyncDisabledAt: string | null;
 };
 
 /**

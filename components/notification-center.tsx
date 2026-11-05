@@ -186,7 +186,7 @@ export function NotificationCenter() {
                   <span className="block text-sm leading-snug font-semibold">
                     {notice.title}
                   </span>
-                  <span className="mt-0.5 block text-xs leading-relaxed break-words text-muted-foreground">
+                  <span className="mt-0.5 block text-xs leading-relaxed whitespace-pre-line break-words text-muted-foreground">
                     {notice.body}
                   </span>
                   <time
