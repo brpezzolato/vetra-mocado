@@ -24,6 +24,7 @@ export type Notice = {
 
 /** Para onde a notificação pode levar (a mesma lista da regra do banco). */
 export const NOTICE_DESTINATIONS = new Set([
+  '/',
   '/financeiro',
   '/cofrinhos',
   '/configuracoes',
@@ -47,8 +48,8 @@ export function noticeTarget(
 export function noticeIcon(notice: Pick<Notice, 'kind' | 'href'>): LucideIcon {
   if (notice.kind === 'expense') return ReceiptText;
   if (notice.kind === 'earning') return PiggyBank;
-  // Avisos dos bancos (cron, conexão) levam a Conexões.
-  if (notice.href === '/conexoes') return Landmark;
+  // Avisos dos bancos: rodada concluída (tela inicial) e conexão (Conexões).
+  if (notice.href === '/conexoes' || notice.href === '/') return Landmark;
   return TriangleAlert;
 }
 

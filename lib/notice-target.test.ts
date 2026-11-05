@@ -23,6 +23,9 @@ describe('para onde o toque no aviso leva', () => {
     expect(
       noticeTarget({ href: '/faturas', event_key: 'pluggy-new-card:abc' }),
     ).toBe('/faturas');
+    expect(
+      noticeTarget({ href: '/', event_key: 'pluggy-cron:2026-11-04:14' }),
+    ).toBe('/');
   });
 
   it('destino fora da lista não abre nada', () => {
