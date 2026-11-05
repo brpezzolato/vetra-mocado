@@ -4,7 +4,6 @@ import {
   cleanDescription,
   mapCardTransactions,
   planCardWrites,
-  purchaseInstant,
   type CardEntry,
 } from './card-entries';
 import type { PluggyTransaction } from './types';
@@ -546,37 +545,5 @@ describe('pagamentos de fatura na lista do cartão', () => {
         (payment) => payment.transactionId,
       ),
     ).toEqual(['b']);
-  });
-});
-
-describe('purchaseInstant', () => {
-  it('tira as 3h adiantadas do crédito do Itaú', () => {
-    expect(
-      purchaseInstant('2026-11-05T04:26:49.000Z', {
-        bank: 'itau',
-        kind: 'credit',
-      }),
-    ).toBe('2026-11-05T01:26:49.000Z');
-  });
-
-  it('não mexe em data sem hora, no débito nem em outro banco', () => {
-    expect(
-      purchaseInstant('2026-11-03T03:00:00.000Z', {
-        bank: 'itau',
-        kind: 'credit',
-      }),
-    ).toBe('2026-11-03T03:00:00.000Z');
-    expect(
-      purchaseInstant('2026-11-03T19:47:03.008Z', {
-        bank: 'itau',
-        kind: 'debit_purchases',
-      }),
-    ).toBe('2026-11-03T19:47:03.008Z');
-    expect(
-      purchaseInstant('2026-11-05T04:26:49.000Z', {
-        bank: 'nubank',
-        kind: 'credit',
-      }),
-    ).toBe('2026-11-05T04:26:49.000Z');
   });
 });

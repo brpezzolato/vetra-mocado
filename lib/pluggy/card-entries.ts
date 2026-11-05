@@ -102,26 +102,6 @@ function forecastShift(
   return shift === 0 || shift === 1 ? shift : 0;
 }
 
-/** Só a data, sem hora: meia-noite de Brasília. */
-const DATE_ONLY = /T03:00:00(\.000)?Z$/;
-
-/**
- * Hora em que o cartão foi passado. No crédito do Itaú a Pluggy entrega a hora
- * 3h adiantada (fuso aplicado duas vezes): sem as 3h ela bate, por minutos,
- * com a do Atalho no iPhone (conferido em 05/11/2026). Data sem hora fica.
- */
-export function purchaseInstant(
-  date: string,
-  options: { bank?: string | null; kind: CardLinkKind },
-) {
-  if (options.bank !== 'itau' || options.kind !== 'credit') return date;
-  if (DATE_ONLY.test(date)) return date;
-  const time = Date.parse(date);
-  return Number.isFinite(time)
-    ? new Date(time - 3 * 3_600_000).toISOString()
-    : date;
-}
-
 /**
  * Id estável por compra parcelada: conta, dia, nº de parcelas e loja (sem
  * valor: a 1ª parcela pode diferir em centavos).
@@ -189,8 +169,6 @@ export function mapCardTransactions(
   options: {
     account: string;
     kind: CardLinkKind;
-    /** Banco do cartão (`payment_cards.bank_id`), para a hora da compra. */
-    bank?: string | null;
     /** billId → vencimento da fatura fechada. */
     billDue: Map<string, string>;
     /** Vencimento real da fatura de um mês (lib/card-due-dates.ts ou fatura publicada). */
@@ -254,7 +232,7 @@ export function mapCardTransactions(
         entryType: transaction.type === 'CREDIT' ? 'income' : 'expense',
         amount: amount.toFixed(2),
         description,
-        occurredAt: purchaseInstant(transaction.date, options),
+        occurredAt: transaction.date,
         bankStatus: pending ? 'PENDING' : 'POSTED',
         invoiceDue,
         installment,
