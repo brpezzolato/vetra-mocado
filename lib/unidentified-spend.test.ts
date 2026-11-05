@@ -5,6 +5,7 @@ import {
   openingGap,
   pendingEntries,
   pendingKey,
+  takeExcludedPart,
   unidentifiedSpend,
 } from './unidentified-spend';
 
@@ -403,5 +404,51 @@ describe('divisão da compra a chegar', () => {
       account: 'Nubank',
       day: '2026-10-13',
     });
+  });
+});
+
+describe('compra a chegar fora das contas', () => {
+  const whole = {
+    day: '2026-11-05',
+    account: 'Nubank',
+    amount: '80.00',
+    at: '2026-11-05T13:00:00Z',
+  };
+
+  it('a parte marcada fica na fatura com a marca e sai dos gastos', () => {
+    const items = applySplits(
+      [whole],
+      [
+        {
+          account: 'Nubank',
+          day: '2026-11-05',
+          parts: [
+            { amount: '50.00', day: '2026-11-04', excluded: true },
+            { amount: '30.00', day: '2026-11-04' },
+          ],
+        },
+      ],
+    );
+    const entries = pendingEntries(items);
+    expect(entries.map((entry) => entry.excluded_from_totals)).toEqual([
+      true,
+      undefined,
+    ]);
+  });
+
+  it('a compra que chega cumpre a parte uma vez só', () => {
+    const parts = [
+      { amount: '50.00', day: '2026-11-04', excluded: true },
+      { amount: '30.00', day: '2026-11-04' },
+    ];
+    expect(
+      takeExcludedPart(parts, { amount: '30.00', day: '2026-11-04' }),
+    ).toBe(false);
+    expect(
+      takeExcludedPart(parts, { amount: '50.02', day: '2026-11-06' }),
+    ).toBe(true);
+    expect(
+      takeExcludedPart(parts, { amount: '50.00', day: '2026-11-04' }),
+    ).toBe(false);
   });
 });

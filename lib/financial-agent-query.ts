@@ -61,7 +61,9 @@ export async function loadFinancialAgentData(client: SupabaseClient) {
     loadFinancialEntries(client, { includeExcluded: true }),
     client
       .from('card_bills')
-      .select('account, due_date, closing_date, total, minimum, paid, payments'),
+      .select(
+        'account, due_date, closing_date, total, minimum, paid, payments',
+      ),
     client
       .from('pluggy_card_links')
       .select('account, credit_limit, available_limit'),
@@ -106,7 +108,11 @@ export async function loadFinancialAgentData(client: SupabaseClient) {
   if (error) return { data: null, error };
   return {
     data: {
-      entries: [...(entries.data ?? []), ...pendingEntries(pending)],
+      // "Fora das contas" já marcada sai dos gastos, mas segue na fatura.
+      entries: [
+        ...(entries.data ?? []),
+        ...pendingEntries(pending.filter((item) => !item.excluded)),
+      ],
       invoiceEntries: [
         ...(invoiceEntries.data ?? []),
         ...pendingEntries(pending),

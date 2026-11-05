@@ -47,6 +47,8 @@ export type UnidentifiedSpend = {
   opening?: boolean;
   /** Passou de 3 dias úteis sem a compra chegar: o usuário decide se tira. */
   overdue?: boolean;
+  /** Marcada "fora das contas" pelo usuário (`SplitPart.excluded`). */
+  excluded?: boolean;
   /** Parte de uma divisão feita pelo usuário (`applySplits`). */
   split?: {
     /** Dia em que o app viu a queda: a chave da divisão. */
@@ -62,6 +64,9 @@ export type SplitPart = {
   amount: string;
   day: string;
   description?: string | null;
+  /** "Fora das contas" desde já: segue na fatura, sai dos gastos, e a
+      compra entra assim quando chega do banco (`takeExcludedPart`). */
+  excluded?: boolean;
 };
 
 export type PendingSplit = {
@@ -165,6 +170,7 @@ function splitInto(
     account: item.account,
     amount: new Decimal(part.amount).toFixed(2),
     at: `${part.day}T12:00:00-03:00`,
+    ...(part.excluded && { excluded: true }),
     split: {
       day: item.day,
       total: item.amount,
@@ -360,9 +366,29 @@ export function pendingEntries(items: UnidentifiedSpend[]): FinancialEntry[] {
       notes: 'Feita antes da primeira leitura do limite',
     }),
     ...(item.split && { notes: 'Dividida por você' }),
+    ...(item.excluded && { excluded_from_totals: true }),
     created_at: item.at,
     updated_at: item.at,
   }));
+}
+
+/**
+ * A parte "fora das contas" que a compra recém-chegada do banco cumpre: mesmo
+ * valor (até 5 centavos) e até 3 dias de diferença do dia informado. Tira a
+ * parte da lista, para uma parte valer uma compra só.
+ */
+export function takeExcludedPart(
+  parts: SplitPart[],
+  entry: { amount: Decimal.Value; day: string },
+) {
+  const time = (day: string) => Date.parse(`${day}T12:00:00Z`);
+  const index = parts.findIndex(
+    (part) =>
+      part.excluded &&
+      new Decimal(part.amount).minus(entry.amount).abs().lte(CENT_TOLERANCE) &&
+      Math.abs(time(part.day) - time(entry.day)) <= 3 * 86_400_000,
+  );
+  return index < 0 ? false : (parts.splice(index, 1), true);
 }
 
 export const isPendingSpend = (entry: Pick<FinancialEntry, 'id'>) =>

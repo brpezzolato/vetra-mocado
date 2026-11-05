@@ -185,9 +185,11 @@ function PendingLine({
             </span>
           ) : (
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-              {split
-                ? 'Dividida por você · chega em até 7 dias'
-                : `${entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} · toque para dividir ou excluir`}
+              {entry.excluded_from_totals
+                ? 'Fora das contas · chega em até 7 dias'
+                : split
+                  ? 'Dividida por você · chega em até 7 dias'
+                  : `${entry.notes ?? `O limite caiu às ${time(entry.occurred_at)}`} · toque para dividir ou tirar das contas`}
             </span>
           )}
         </span>

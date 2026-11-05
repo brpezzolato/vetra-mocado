@@ -1,8 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type {
-  CardBill,
-  CardInvoicePayment,
-  CardLimitInfo,
+import {
+  earlyPayments,
+  type CardBill,
+  type CardInvoicePayment,
+  type CardLimitInfo,
+  type CardPaymentEvent,
 } from './card-invoices';
 import type { CardCycle } from './expense-insights';
 import type { FinancialEntry } from './financial-tracker';
@@ -54,29 +56,37 @@ export async function loadCardInvoiceInputs(
     if (!data || data.length < pageSize) break;
   }
 
-  const [cards, cycles, payments, bills, limits, pending] = await Promise.all([
-    scoped(client.from('payment_cards').select('*')),
-    scoped(client.from('card_cycles').select('*').eq('kind', 'credit')),
-    scoped(client.from('card_invoice_payments').select('*')).order('paid_at', {
-      ascending: false,
-    }),
-    scoped(
-      client
-        .from('card_bills')
-        .select(
-          'account, due_date, closing_date, total, minimum, paid, payments',
-        ),
-    ),
-    scoped(
-      client
-        .from('pluggy_card_links')
-        .select('account, credit_limit, available_limit, synced_at')
-        .eq('kind', 'credit'),
-    ),
-    // "Compra a chegar" na fatura aberta (lib/unidentified-spend.ts); falha não
-    // derruba a fatura.
-    loadUnidentifiedSpend(client, userId).catch(() => []),
-  ]);
+  const [cards, cycles, payments, bills, limits, pending, events] =
+    await Promise.all([
+      scoped(client.from('payment_cards').select('*')),
+      scoped(client.from('card_cycles').select('*').eq('kind', 'credit')),
+      scoped(client.from('card_invoice_payments').select('*')).order(
+        'paid_at',
+        {
+          ascending: false,
+        },
+      ),
+      scoped(
+        client
+          .from('card_bills')
+          .select(
+            'account, due_date, closing_date, total, minimum, paid, payments',
+          ),
+      ),
+      scoped(
+        client
+          .from('pluggy_card_links')
+          .select('account, credit_limit, available_limit, synced_at')
+          .eq('kind', 'credit'),
+      ),
+      // "Compra a chegar" na fatura aberta (lib/unidentified-spend.ts); falha não
+      // derruba a fatura.
+      loadUnidentifiedSpend(client, userId).catch(() => []),
+      // Pagamento antecipado visto na lista do cartão (`earlyPayments`).
+      scoped(
+        client.from('card_payment_events').select('account, paid_on, amount'),
+      ),
+    ]);
   const error =
     cards.error ??
     cycles.error ??
@@ -99,7 +109,15 @@ export async function loadCardInvoiceInputs(
         (card) => card.show_in_invoices !== false,
       ),
       cycles: (cycles.data ?? []) as CardCycle[],
-      payments: (payments.data ?? []) as CardInvoicePayment[],
+      payments: [
+        ...((payments.data ?? []) as CardInvoicePayment[]),
+        ...earlyPayments(
+          (events.data ?? []) as CardPaymentEvent[],
+          (bills.data ?? []) as CardBill[],
+          (payments.data ?? []) as CardInvoicePayment[],
+          (cycles.data ?? []) as CardCycle[],
+        ),
+      ],
       bills: (bills.data ?? []) as CardBill[],
       limits: (limits.data ?? []) as CardInvoiceInputs['limits'],
     },

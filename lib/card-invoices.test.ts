@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildCreditCardInvoices, invoiceSpendingMonth } from './card-invoices';
+import {
+  buildCreditCardInvoices,
+  earlyPayments,
+  invoiceSpendingMonth,
+  type CardInvoicePayment,
+} from './card-invoices';
 import type { CardCycle } from './expense-insights';
 import type { FinancialEntry } from './financial-tracker';
 import type { PaymentCard } from './payment-cards';
@@ -701,6 +706,66 @@ describe('parcelas que o banco ainda não mandou', () => {
         [1, 2, 3, 4, 5, 6].map((number) =>
           installment(number, `2027-0${number}-05`),
         ),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('earlyPayments', () => {
+  const cycle = {
+    account: 'PicPay Gold',
+    kind: 'credit',
+    due_day: 5,
+    closing_day: 29,
+    due_rolls_forward: false,
+    closing_offset_days: 7,
+  } as CardCycle;
+  const bill = {
+    account: 'PicPay Gold',
+    due_date: '2026-11-05',
+    closing_date: '2026-10-29',
+    total: 1256.73,
+    minimum: 62.84,
+    paid: 1256.73,
+    payments: [{ date: '2026-11-03', amount: 1256.73 }],
+  };
+
+  it('pagamento fora da fatura fechada abate a aberta, uma vez só', () => {
+    const result = earlyPayments(
+      [
+        { account: 'PicPay Gold', paid_on: '2026-11-03', amount: 1256.73 },
+        { account: 'PicPay Gold', paid_on: '2026-11-03', amount: 167.5 },
+        { account: 'PicPay Gold', paid_on: '2026-11-03', amount: '167.50' },
+      ],
+      [bill],
+      [],
+      [cycle],
+      '2026-11-05',
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      invoice_due: '2026-12-05',
+      amount: '167.50',
+    });
+  });
+
+  it('não repete pagamento lançado nem conta fatura já vencida', () => {
+    expect(
+      earlyPayments(
+        [
+          { account: 'PicPay Gold', paid_on: '2026-11-03', amount: 167.5 },
+          { account: 'PicPay Gold', paid_on: '2026-07-04', amount: 197.21 },
+        ],
+        [],
+        [
+          {
+            account: 'PicPay Gold',
+            paid_at: '2026-11-03T15:00:00Z',
+            amount: '167.50',
+          } as CardInvoicePayment,
+        ],
+        [cycle],
+        '2026-11-05',
       ),
     ).toEqual([]);
   });

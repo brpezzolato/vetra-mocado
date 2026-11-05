@@ -224,7 +224,7 @@ export function FinanceOverview({
               ...entryResult,
               data: [
                 ...(entryResult.data as FinancialEntry[]),
-                ...pendingEntries(pending),
+                ...pendingEntries(pending.filter((item) => !item.excluded)),
               ],
             }
           : entryResult,

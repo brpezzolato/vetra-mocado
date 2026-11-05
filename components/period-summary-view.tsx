@@ -439,7 +439,10 @@ export function PeriodSummaryView({
 
   // Inclui "Compra a chegar" (lib/unidentified-spend.ts) na lista e nos totais.
   const counted = useMemo(
-    () => [...entries, ...pendingEntries(unidentified)],
+    () => [
+      ...entries,
+      ...pendingEntries(unidentified.filter((item) => !item.excluded)),
+    ],
     [entries, unidentified],
   );
   const dayView = useMemo(() => daySummary(counted, day), [counted, day]);

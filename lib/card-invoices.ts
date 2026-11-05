@@ -181,6 +181,64 @@ export type CreditCardInvoices = {
   invoices: CardInvoice[];
 };
 
+/** Pagamento visto na lista do cartão (`card_payment_events`). */
+export type CardPaymentEvent = {
+  account: string;
+  paid_on: string;
+  amount: number | string;
+};
+
+/**
+ * Pagamento que o banco mostrou na lista do cartão e que nenhuma fatura
+ * fechada nem pagamento lançado conta: é antecipado e abate a fatura aberta
+ * no dia (PicPay, 03/11/2026, R$ 167,50). A mesma operação chega com ids
+ * diferentes; conta uma vez por cartão, dia e valor. Quando a fatura fecha, o
+ * banco passa a listá-lo e ele sai daqui.
+ */
+export function earlyPayments(
+  events: CardPaymentEvent[],
+  bills: CardBill[],
+  recorded: CardInvoicePayment[],
+  cycles: CardCycle[],
+  today = saoDate(new Date().toISOString()),
+): CardInvoicePayment[] {
+  const key = (account: string, date: string, amount: Decimal.Value) =>
+    `${account}|${date}|${new Decimal(amount).toFixed(2)}`;
+  const seen = new Set([
+    ...bills.flatMap((bill) =>
+      (bill.payments ?? []).map((payment) =>
+        key(bill.account, payment.date, payment.amount),
+      ),
+    ),
+    ...recorded.map((payment) =>
+      key(payment.account, saoDate(payment.paid_at), payment.amount),
+    ),
+  ]);
+  const result: CardInvoicePayment[] = [];
+  for (const event of events) {
+    const id = key(event.account, event.paid_on, event.amount);
+    const cycle = cycles.find((item) => item.account === event.account);
+    if (seen.has(id) || !cycle || new Decimal(event.amount).lte(0)) continue;
+    seen.add(id);
+    // Só fatura que ainda não venceu: a passada já se resolveu com o banco.
+    const due = invoiceFor(event.paid_on, cycle).due;
+    if (due < today) continue;
+    const at = `${event.paid_on}T12:00:00-03:00`;
+    result.push({
+      id: `event:${id}`,
+      user_id: '',
+      account: event.account,
+      invoice_due: due,
+      amount: new Decimal(event.amount).toFixed(2),
+      paid_at: at,
+      notes: 'Visto na lista do cartão',
+      created_at: at,
+      updated_at: at,
+    });
+  }
+  return result;
+}
+
 export function buildCreditCardInvoices(
   entries: FinancialEntry[],
   cards: PaymentCard[],

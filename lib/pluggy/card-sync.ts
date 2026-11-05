@@ -30,6 +30,7 @@ import { discoverCreditCards } from './card-discovery';
 import { syncCheckingBillPayments } from './bill-payments';
 import type { PluggyBill, PluggyTransaction } from './types';
 import { saoPauloDay } from './vault-movements';
+import { takeExcludedPart, type SplitPart } from '../unidentified-spend';
 
 export type CardSyncResult = {
   cards: number;
@@ -162,6 +163,16 @@ export async function syncCardsFromPluggy(
         ]),
       );
       const aliases = (aliasRows ?? []) as MerchantAlias[];
+      // Compras a chegar marcadas "fora das contas" entram assim.
+      const { data: splitRows } = await admin
+        .from('pending_spend_splits')
+        .select('parts')
+        .eq('user_id', target.user_id)
+        .eq('account', target.account)
+        .gte('day', new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10));
+      const excludedParts = (splitRows ?? []).flatMap((row) =>
+        ((row.parts ?? []) as SplitPart[]).filter((part) => part.excluded),
+      );
       const rows = [];
       for (const bankEntry of plan.insert) {
         // Regras de nome do usuário antes da categoria e da IA.
@@ -202,9 +213,13 @@ export async function syncCardsFromPluggy(
           installment_number: entry.installment?.number ?? null,
           installment_total: entry.installment?.total ?? null,
           installment_purchase_total: entry.installment?.purchaseTotal ?? null,
-          ...(entry.excluded !== undefined && {
-            excluded_from_totals: entry.excluded,
-          }),
+          ...(entry.excluded !== undefined
+            ? { excluded_from_totals: entry.excluded }
+            : entry.entryType === 'expense' &&
+              takeExcludedPart(excludedParts, {
+                amount: entry.amount,
+                day: saoPauloDay(entry.occurredAt),
+              }) && { excluded_from_totals: true }),
         });
       }
       const { error: insertError } = await admin

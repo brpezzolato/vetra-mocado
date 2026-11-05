@@ -5,6 +5,8 @@ import Decimal from 'decimal.js';
 import { Clock, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { DateInput } from '@/components/date-input';
 import { Private } from '@/components/private-value';
 import {
@@ -45,7 +47,13 @@ const addDays = (day: string, days: number) => {
   return date.toISOString().slice(0, 10);
 };
 
-type Row = { amount: string; day: string; description: string };
+type Row = {
+  amount: string;
+  day: string;
+  description: string;
+  /** "Fora das contas" desde já (`SplitPart.excluded`). */
+  excluded: boolean;
+};
 
 export function PendingSpendDialog({
   account,
@@ -108,12 +116,23 @@ export function PendingSpendDialog({
               amount: money(part.amount),
               day: part.day,
               description: part.description ?? '',
+              excluded: part.excluded === true,
             }))
           : // Começa com duas partes no dia anterior: o caso mais comum é o
             // limite ter caído de noite e só aparecer na leitura da manhã.
             [
-              { amount: '', day: addDays(day, -1), description: '' },
-              { amount: '', day: addDays(day, -1), description: '' },
+              {
+                amount: '',
+                day: addDays(day, -1),
+                description: '',
+                excluded: false,
+              },
+              {
+                amount: '',
+                day: addDays(day, -1),
+                description: '',
+                excluded: false,
+              },
             ],
       );
       setError('');
@@ -148,6 +167,7 @@ export function PendingSpendDialog({
         amount: moneyValue(row.amount).toFixed(2),
         day: row.day,
         description: row.description.trim().slice(0, 60) || null,
+        ...(row.excluded && { excluded: true }),
       }));
     if (!parts.length)
       return setError('Informe o valor de pelo menos uma compra.');
@@ -212,12 +232,13 @@ export function PendingSpendDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Dividir compra a chegar</DialogTitle>
+          <DialogTitle>Compra a chegar</DialogTitle>
           <DialogDescription>
             O limite do {account} caiu{' '}
             {total ? <Private>{money(total)}</Private> : 'um valor'} até{' '}
-            {shortDay(day)}. Separe as compras e corrija as datas; quando elas
-            chegarem do banco, somem daqui sozinhas.
+            {shortDay(day)}. Separe as compras, corrija as datas e marque o que
+            fica fora das contas; quando elas chegarem do banco, somem daqui
+            sozinhas.
           </DialogDescription>
         </DialogHeader>
 
@@ -340,6 +361,22 @@ export function PendingSpendDialog({
                   }
                 />
               </div>
+              {/* Segue na fatura, sai dos gastos; chega do banco já assim. */}
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <Label
+                  htmlFor={`pending-excluded-${index}`}
+                  className="text-sm font-normal"
+                >
+                  Fora das contas
+                </Label>
+                <Switch
+                  id={`pending-excluded-${index}`}
+                  checked={row.excluded}
+                  onCheckedChange={(checked) =>
+                    update(index, { excluded: checked })
+                  }
+                />
+              </div>
             </li>
           ))}
         </ul>
@@ -356,6 +393,7 @@ export function PendingSpendDialog({
                 amount: '',
                 day: current.at(-1)?.day ?? addDays(day, -1),
                 description: '',
+                excluded: false,
               },
             ])
           }
