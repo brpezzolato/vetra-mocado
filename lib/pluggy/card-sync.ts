@@ -96,6 +96,15 @@ export async function syncCardsFromPluggy(
   if (error) throw new Error('Não foi possível ler os cartões.');
   const links = (data ?? []) as CardLink[];
   result.cards = links.length;
+  // Banco de cada cartão, para a hora da compra (`purchaseInstant`).
+  const { data: banks } = await admin
+    .from('payment_cards')
+    .select('user_id, account, bank_id')
+    .in('user_id', [...new Set(links.map((link) => link.user_id))]);
+  const bankOf = (link: CardLink) =>
+    banks?.find(
+      (card) => card.user_id === link.user_id && card.account === link.account,
+    )?.bank_id ?? null;
   let aiBudget = options.aiLimit ?? 15;
   // Hora dos dados de cada conexão (`lastUpdatedAt`) para a foto do limite.
   // Uma consulta por item, só se houver foto.
@@ -370,6 +379,7 @@ export async function syncCardsFromPluggy(
       const bankEntries = mapCardTransactions(transactions, {
         account: link.account,
         kind: link.kind,
+        bank: bankOf(link),
         billDue,
         dueForMonth,
       });
