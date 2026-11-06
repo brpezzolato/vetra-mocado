@@ -6,7 +6,7 @@
 //   60 dias somem os dois (cancelamentos, empréstimos devolvidos).
 // A descrição vira o nome de quem recebeu (motor de nomes do cartão).
 import Decimal from 'decimal.js';
-import { cleanDescription, type CardEntry } from './card-entries';
+import { bankText, cleanDescription, type CardEntry } from './card-entries';
 import type { PluggyTransaction } from './types';
 
 const RETURN_WINDOW_DAYS = 60;
@@ -90,6 +90,7 @@ export function mapPixTransactions(
       entryType: 'expense',
       amount: cents(transaction.amount).toFixed(2),
       description: cleanDescription(counterpart(transaction.description)),
+      bankDescription: bankText(counterpart(transaction.description)),
       occurredAt: transaction.date,
       bankStatus: transaction.status === 'POSTED' ? 'POSTED' : 'PENDING',
       invoiceDue: null,

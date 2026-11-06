@@ -20,6 +20,7 @@ import {
   type ExistingCardEntry,
 } from './card-entries';
 import { matchMerchantAlias, type MerchantAlias } from '../merchant-aliases';
+import { merchantMemory, type NamedEntry } from '../merchant-memory';
 import { mapPixTransactions } from './pix-entries';
 import {
   INCOME_ACCOUNT,
@@ -155,16 +156,28 @@ export async function syncCardsFromPluggy(
     );
 
     if (plan.insert.length) {
-      const [{ data: rules }, { data: aliasRows }] = await Promise.all([
-        admin
-          .from('merchant_rules')
-          .select('merchant, category')
-          .eq('user_id', target.user_id),
-        admin
-          .from('merchant_aliases')
-          .select('id, match, pattern, name, category')
-          .eq('user_id', target.user_id),
-      ]);
+      const [{ data: rules }, { data: aliasRows }, { data: named }] =
+        await Promise.all([
+          admin
+            .from('merchant_rules')
+            .select('merchant, category')
+            .eq('user_id', target.user_id),
+          admin
+            .from('merchant_aliases')
+            .select('id, match, pattern, name, category')
+            .eq('user_id', target.user_id),
+          // Nomes já dados, para as novas seguirem (lib/merchant-memory.ts).
+          admin
+            .from('financial_entries')
+            .select(
+              'description, bank_description, installment_group_id, occurred_at',
+            )
+            .eq('user_id', target.user_id)
+            .eq('entry_type', 'expense')
+            .gte('occurred_at', new Date(Date.now() - 400 * DAY).toISOString())
+            .limit(5000),
+        ]);
+      const memory = merchantMemory((named ?? []) as NamedEntry[]);
       const learned = new Map(
         (rules ?? []).map((rule) => [
           String(rule.merchant).toLocaleLowerCase('pt-BR'),
@@ -184,14 +197,25 @@ export async function syncCardsFromPluggy(
       );
       const rows = [];
       for (const bankEntry of plan.insert) {
-        // Regras de nome do usuário antes da categoria e da IA.
+        // Regra de nome do usuário primeiro; sem ela, o nome que o lugar já
+        // tem. Antes da categoria e da IA.
         const alias =
           bankEntry.entryType === 'expense'
             ? matchMerchantAlias(bankEntry.description, aliases)
             : null;
-        const entry = alias
-          ? { ...bankEntry, description: alias.name }
-          : bankEntry;
+        const entry =
+          bankEntry.entryType !== 'expense'
+            ? bankEntry
+            : {
+                ...bankEntry,
+                description:
+                  alias?.name ??
+                  memory.name({
+                    description: bankEntry.description,
+                    bankDescription: bankEntry.bankDescription,
+                    installmentGroupId: bankEntry.installment?.groupId,
+                  }),
+              };
         let category =
           entry.entryType === 'income'
             ? (entry.category ?? REFUND_CATEGORY)
@@ -211,6 +235,7 @@ export async function syncCardsFromPluggy(
           entry_type: entry.entryType,
           amount: entry.amount,
           description: entry.description,
+          bank_description: entry.bankDescription ?? null,
           category: category ?? 'Outros',
           account: target.account,
           occurred_at: entry.occurredAt,

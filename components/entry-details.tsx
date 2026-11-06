@@ -40,7 +40,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Private } from '@/components/private-value';
-import { normalizeMerchant } from '@/lib/merchant-names';
+import { merchantKey, normalizeMerchant } from '@/lib/merchant-names';
 import { fullAmount, isSplit } from '@/lib/entry-share';
 import { MerchantAliasDialog } from '@/components/merchant-alias-dialog';
 import { refreshMountedWidgets } from '@/lib/manual-refresh';
@@ -249,6 +249,14 @@ export function EntryDetails({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
               />
+              {entry.bank_description &&
+                merchantKey(entry.bank_description) !==
+                  merchantKey(description) && (
+                  <span className="text-xs text-muted-foreground">
+                    No banco: {entry.bank_description}. As próximas compras
+                    desse lugar chegam com o nome que estiver aqui.
+                  </span>
+                )}
             </label>
             <div className="grid min-w-0 gap-3 sm:grid-cols-2">
               <label

@@ -32,6 +32,8 @@ export type FinancialEntry = {
   excluded_from_daily?: boolean;
   /** Data e hora corrigidas pelo usuário: a sincronização não regrava. */
   date_edited?: boolean;
+  /** Nome como veio do banco; o exibido pode ter sido limpo ou renomeado. */
+  bank_description?: string | null;
   /** Compra dividida: a parte do usuário (`amount` é o valor cheio). Ver lib/entry-share.ts. */
   split_share?: number | string | null;
   /** Dividida por igual entre tantas pessoas, ele incluído. */

@@ -2,7 +2,7 @@ import Decimal from 'decimal.js';
 import { parseCsv } from './csv';
 import type { ExpenseCategory } from './expense-categories';
 import type { FinancialEntryType } from './financial-tracker';
-import { normalizeMerchant } from './merchant-names';
+import { cleanBankMerchant, titleCase } from './merchant-names';
 
 /** Conta do extrato Flash; `suggestedCardBank` reconhece a marca e a cor. */
 export const FLASH_ACCOUNT = 'Flash';
@@ -56,19 +56,6 @@ const MERCHANTS: [RegExp, string][] = [
 
 const CITY_SUFFIX =
   /\s+(SAO PAULO|SAO CAETANO D(?:O SUL)?|SANTO ANDRE|SAO BERNARDO(?: DO CAMPO)?|DIADEMA|GUARULHOS|OSASCO)\s*(BRA?|BRASIL)?\s*$/i;
-
-const titleCase = (value: string) =>
-  value
-    .split(/\s+/)
-    .map((word, index) => {
-      const lower = word.toLocaleLowerCase('pt-BR');
-      // Connectives stay lowercase unless they open the name.
-      if (index > 0 && /^(de|da|do|das|dos|e)$/.test(lower)) return lower;
-      // Roman numerals are part of the brand: "Sonda II", not "Sonda Ii".
-      if (/^[IVX]+$/.test(word)) return word;
-      return lower.charAt(0).toLocaleUpperCase('pt-BR') + lower.slice(1);
-    })
-    .join(' ');
 
 export function cleanFlashMerchant(raw: string) {
   const value = raw.trim().replace(/\s+/g, ' ');
@@ -224,7 +211,7 @@ export function parseFlashStatement(text: string): FlashStatement {
       // Limpeza do extrato e depois a do app, para convergir com o lançamento manual.
       description:
         entryType === 'expense'
-          ? normalizeMerchant(cleanFlashMerchant(rawDescription))
+          ? cleanBankMerchant(cleanFlashMerchant(rawDescription))
           : cleanFlashMerchant(rawDescription),
       category,
       entryType,

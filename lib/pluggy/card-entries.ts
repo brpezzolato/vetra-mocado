@@ -6,12 +6,12 @@
 // - Parcela lançada vem com a data da compra original: o corte é pela fatura.
 // - Pendente com gêmea lançada é descartada (Nubank manda as duas).
 // - Débito Itaú: só `operationType` CARTAO.
-// Descrição passa por `scrubIdentifiers` e `normalizeMerchant`.
+// Descrição passa por `scrubIdentifiers` e `cleanBankMerchant`.
 import { createHash } from 'node:crypto';
 import Decimal from 'decimal.js';
 import { scrubIdentifiers } from '../ai-privacy';
 import { stripEmoji } from '../financial-tracker';
-import { normalizeMerchant } from '../merchant-names';
+import { cleanBankMerchant } from '../merchant-names';
 import type { PluggyTransaction } from './types';
 import { saoPauloDay } from './vault-movements';
 import { monthDay } from '../card-due-dates';
@@ -23,6 +23,8 @@ export type CardEntry = {
   entryType: 'expense' | 'income';
   amount: string;
   description: string;
+  /** Nome como veio do banco, sem número identificável nem parcela. */
+  bankDescription?: string;
   occurredAt: string;
   bankStatus: 'POSTED' | 'PENDING';
   /** Fatura fechada informada pelo banco. Nulo no débito e sem fatura. */
@@ -51,12 +53,15 @@ const cents = (value: number) =>
  */
 const INSTALLMENT_SUFFIX = /(?:\s+|(?<=[A-Za-z]))\d{1,2}\s*\/\s*\d{1,2}$/;
 
+/** Nome do banco sem parcela, número identificável nem emoji. */
+export const bankText = (value: string) =>
+  stripEmoji(scrubIdentifiers(value.trim().replace(INSTALLMENT_SUFFIX, '')))
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+
 export function cleanDescription(value: string) {
-  const name = normalizeMerchant(
-    stripEmoji(scrubIdentifiers(value.trim().replace(INSTALLMENT_SUFFIX, '')))
-      .replace(/\s+/g, ' ')
-      .trim(),
-  );
+  const name = cleanBankMerchant(bankText(value));
   return (name || 'Compra no cartão').slice(0, 160);
 }
 
@@ -255,6 +260,7 @@ export function mapCardTransactions(
         entryType: transaction.type === 'CREDIT' ? 'income' : 'expense',
         amount: amount.toFixed(2),
         description,
+        bankDescription: bankText(transaction.description),
         occurredAt: purchaseInstant(transaction.date, options),
         bankStatus: pending ? 'PENDING' : 'POSTED',
         invoiceDue,

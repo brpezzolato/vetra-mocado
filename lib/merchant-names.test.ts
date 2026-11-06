@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeMerchant } from './merchant-names';
+import { cleanBankMerchant, normalizeMerchant } from './merchant-names';
 
 describe('um nome por lugar', () => {
   // Cada grupo é o mesmo lugar, com as grafias encontradas no banco em
@@ -113,5 +113,49 @@ describe('um nome por lugar', () => {
     expect(normalizeMerchant('Magazine Luiza')).toBe('Magalu');
     // Não pega pedaço de outra palavra.
     expect(normalizeMerchant('Sheinberg Padaria')).toBe('Sheinberg Padaria');
+  });
+});
+
+describe('nome que vem do banco', () => {
+  // Grafias reais da Pluggy (06/11/2026): Itaú cola cidade e país, PicPay
+  // separa com " .", Nubank traz a maquininha antes.
+  const cases: [string, string][] = [
+    ['MEGA FARMASAO CAETANO DBRA', 'Mega Farma'],
+    ['PadronPerfumariaSAO CAETANO DBRA', 'Padron Perfumaria'],
+    ['TALMAN FONSECAITAPEVABRA', 'Talman Fonseca'],
+    ['ME.LINDA COSMETICOS EJUNDIAIBRA', 'Me.Linda Cosmeticos'],
+    ['LOJAS AMERICANAS 562SAO CAETANO DBRA', 'Americanas'],
+    ['[número oculto] DEVANIL LAURIITAPEVABRA', 'Devanil Lauri'],
+    ['LIMELIGHT .SAO PAULO BRA', 'Limelight'],
+    ['BEN-HUR PRODUTOS ALIM .SAO CAETAN BRA', 'Ben-Hur Produtos Alim'],
+    ['KFC SH SP SAO CAETANO .SAO CAETAN BRA', 'KFC'],
+    ['Mc Donalds - Arcos Dou .Barueri BRA', "McDonald's"],
+    ['MG FARMA MERCANTIL LTD .SAO CAETAN BRA', 'MG Farma Mercantil'],
+    ['Mlp*Netshoes-Adidas', 'Netshoes'],
+    ['Mp *Mariarosaling', 'Mariarosaling'],
+    ['Ifd*Quintal Del Carmem', 'Quintal Del Carmem'],
+    ['Compra débito Paralelo 17', 'Paralelo 17'],
+    ['Pagamento com Pix BOBDI BOO FANTASIAS', 'Bobdi Boo Fantasias'],
+    ['DROGARIA SAO PAULO269', 'Drogaria São Paulo'],
+    ['Dia Brasil Lj', 'Dia'],
+    ['Amazonprimebr', 'Amazon Prime'],
+    ['CENTAURO COM BR', 'Centauro'],
+    ['DL*UberRides SAO PAULO BRA', 'Uber'],
+    ['UBER *ONE MEMBERSHIP UBER SAO PAULO BRA', 'Uber One'],
+    ['PSN', 'PlayStation'],
+  ];
+  for (const [raw, name] of cases)
+    it(raw, () => expect(cleanBankMerchant(raw)).toBe(name));
+
+  it('não mexe no que já está limpo nem inventa cidade', () => {
+    for (const name of [
+      'Casa Das Alianças',
+      'RockField - Barbeiro',
+      'Bar Santos',
+      'Sao Caetano do Sul',
+      '3 Pasteis',
+      'Forever 21',
+    ])
+      expect(cleanBankMerchant(name), name).toBe(name);
   });
 });
