@@ -52,7 +52,17 @@ export async function loadUnidentifiedSpend(
   const { data: links } = await scoped(
     client.from('pluggy_card_links').select('account').eq('kind', 'credit'),
   );
-  const accounts = (links ?? []).map((row) => row.account as string);
+  // Cartão com a compra a chegar desligada (`count_limit_drops`) fica de fora.
+  const { data: off } = await scoped(
+    client
+      .from('payment_cards')
+      .select('account')
+      .eq('count_limit_drops', false),
+  );
+  const skipped = new Set((off ?? []).map((row) => row.account as string));
+  const accounts = (links ?? [])
+    .map((row) => row.account as string)
+    .filter((account) => !skipped.has(account));
   if (!accounts.length) return [];
 
   const [

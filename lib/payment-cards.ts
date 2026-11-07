@@ -24,6 +24,8 @@ export type PaymentCard = {
   bank_id: CardBankId;
   /** Aparece nas faturas (Faturas, calendário, página do banco, Vetra AI). */
   show_in_invoices?: boolean;
+  /** A queda do limite vira "compra a chegar" até a compra chegar do banco. */
+  count_limit_drops?: boolean;
   /** A outra função do mesmo plástico (débito ↔ crédito). */
   same_card_as?: string | null;
   created_at: string;

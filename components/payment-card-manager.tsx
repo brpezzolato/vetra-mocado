@@ -68,6 +68,7 @@ export function PaymentCardManager({
   const [closing, setClosing] = useState('');
   const [automatic, setAutomatic] = useState(true);
   const [showInInvoices, setShowInInvoices] = useState(true);
+  const [countLimitDrops, setCountLimitDrops] = useState(true);
   const [activeCard, setActiveCard] = useState(0);
   const carousel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -152,6 +153,9 @@ export function PaymentCardManager({
     setShowInInvoices(
       cards.find((card) => card.account === name)?.show_in_invoices !== false,
     );
+    setCountLimitDrops(
+      cards.find((card) => card.account === name)?.count_limit_drops !== false,
+    );
     setError('');
     setOpen(true);
   }
@@ -182,14 +186,22 @@ export function PaymentCardManager({
         },
       );
       if (saveError) throw saveError;
-      // Ligado ou desligado nas faturas: fica no próprio cartão.
+      // Ligado ou desligado nas faturas e na compra a chegar: fica no próprio
+      // cartão.
       const { error: showError } = await client
         .from('payment_cards')
-        .update({ show_in_invoices: showInInvoices })
+        .update({
+          show_in_invoices: showInInvoices,
+          count_limit_drops: countLimitDrops,
+        })
         .eq('user_id', userId)
         .eq('account', name);
       if (showError) throw showError;
-      onSaved({ ...(data as PaymentCard), show_in_invoices: showInInvoices });
+      onSaved({
+        ...(data as PaymentCard),
+        show_in_invoices: showInInvoices,
+        count_limit_drops: countLimitDrops,
+      });
       if (kind !== 'credit' || due)
         setCycles((previous) => [
           ...previous.filter((c) => c.account !== name),
@@ -568,6 +580,25 @@ export function PaymentCardManager({
                     id="card-show-invoices"
                     checked={showInInvoices}
                     onCheckedChange={setShowInInvoices}
+                  />
+                </div>
+              )}
+              {kind === 'credit' && (
+                <div className="flex items-start justify-between gap-4 rounded-xl border p-3">
+                  <label
+                    htmlFor="card-count-limit-drops"
+                    className="grid gap-1 text-sm"
+                  >
+                    Contar queda do limite como compra
+                    <span className="text-xs text-muted-foreground">
+                      Ligado, o limite que caiu vira uma compra a chegar até a
+                      compra vir do banco. Desligado, nada aparece antes disso.
+                    </span>
+                  </label>
+                  <Switch
+                    id="card-count-limit-drops"
+                    checked={countLimitDrops}
+                    onCheckedChange={setCountLimitDrops}
                   />
                 </div>
               )}
