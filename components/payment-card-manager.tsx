@@ -457,7 +457,9 @@ export function PaymentCardManager({
               </legend>
               <RadioGroup
                 value={bankId}
-                onValueChange={(value) => value && chooseBank(value as CardBankId)}
+                onValueChange={(value) =>
+                  value && chooseBank(value as CardBankId)
+                }
                 className="grid grid-cols-2 gap-2 sm:grid-cols-3"
               >
                 {CARD_BANKS.map((bank) => (

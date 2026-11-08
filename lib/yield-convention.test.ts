@@ -4,16 +4,18 @@ import { bankPolicy, type DailyRate, type PiggyBank } from './domain';
 import { calculate, isoDate, makeCalendar, parseDate } from './finance';
 import {
   conventionKey,
-  enumerateConventions,
   productionConvention,
   replayConvention,
   scoreConvention,
   productionConventionFor,
-  searchConventions,
-  selectConvention,
   type Evidence,
   type YieldConvention,
 } from './yield-convention';
+import {
+  enumerateConventions,
+  searchConventions,
+  selectConvention,
+} from './yield-convention-search';
 
 /** The Mercado Pago case documented in docs/MOTOR_REGRAS_BANCOS.md, revision
  * 04/09/2026: a R$ 1.835,00 deposit, SGS 12 at 0,051660% on 01-03/09, and the

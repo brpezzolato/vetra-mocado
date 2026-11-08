@@ -34,7 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SwipePager, type PagerControl } from '@/components/swipe-pager';
 import { RobotFreshness } from '@/components/robot-freshness';
 import { EntryDetails } from '@/components/entry-details';
-import { WeeklyExpenseSummary } from '@/components/expense-assistant';
+import { WeeklyExpenseSummary } from '@/components/weekly-expense-summary';
 import { FinanceOverviewDataSkeleton } from '@/components/data-skeletons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMediaQuery } from '@/lib/use-media-query';
