@@ -247,13 +247,16 @@ export async function syncCardsFromPluggy(
           installment_number: entry.installment?.number ?? null,
           installment_total: entry.installment?.total ?? null,
           installment_purchase_total: entry.installment?.purchaseTotal ?? null,
-          ...(entry.excluded !== undefined
-            ? { excluded_from_totals: entry.excluded }
-            : entry.entryType === 'expense' &&
+          // Sempre presente: num insert de várias linhas, a coluna que falta
+          // numa delas vai como null (e não o padrão), e a NOT NULL derruba o
+          // cartão inteiro (PicPay, 07/11).
+          excluded_from_totals:
+            entry.excluded ??
+            (entry.entryType === 'expense' &&
               takeExcludedPart(excludedParts, {
                 amount: entry.amount,
                 day: saoPauloDay(entry.occurredAt),
-              }) && { excluded_from_totals: true }),
+              })),
         });
       }
       const { error: insertError } = await admin
