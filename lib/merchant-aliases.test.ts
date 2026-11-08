@@ -11,7 +11,13 @@ const alias = (
   pattern: string,
   name: string,
   category: string | null = null,
-): MerchantAlias => ({ id, match, pattern: merchantText(pattern), name, category });
+): MerchantAlias => ({
+  id,
+  match,
+  pattern: merchantText(pattern),
+  name,
+  category,
+});
 
 describe('regras de nome', () => {
   it('compara sem maiúsculas e com os espaços colapsados', () => {

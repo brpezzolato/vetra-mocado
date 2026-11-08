@@ -26,10 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { normalizeMerchant } from '@/lib/merchant-names';
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value || 0).toNumber(),
-  );
+import { money } from '@/lib/money';
 const localDateTime = () => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo',

@@ -11,13 +11,9 @@ import { saoDate } from '@/lib/expense-insights';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import { createClient } from '@/lib/supabase/client';
 import { leftoverByDay, wishProgress, type WishlistItem } from '@/lib/wishlist';
+import { money } from '@/lib/money';
 
 /* Lista de desejos: sobra já juntada por desejo e dias que faltam (lib/wishlist.ts). */
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
 
 const moneyInput = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 12);

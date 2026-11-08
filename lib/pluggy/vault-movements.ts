@@ -3,6 +3,7 @@
 // - Mercado Pago: aparecem na conta corrente com `operationType`
 //   TRANSFERENCIA_SALDO_RESERVADO e "Dinheiro reservado/retirado <reserva>".
 import Decimal from 'decimal.js';
+import { saoDate } from '../expense-insights';
 import type { PiggySnapshot } from './investments';
 import type {
   PluggyInvestmentLot,
@@ -27,19 +28,9 @@ export type ExistingMovement = {
   external_id: string | null;
 };
 
-const TIME_ZONE = 'America/Sao_Paulo';
-
-/** O dia em São Paulo de um instante ISO. */
+/** O dia em São Paulo de um instante ISO (texto que não é data passa cortado). */
 export function saoPauloDay(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso.slice(0, 10);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
-  return parts;
+  return Number.isNaN(Date.parse(iso)) ? iso.slice(0, 10) : saoDate(iso);
 }
 
 /**

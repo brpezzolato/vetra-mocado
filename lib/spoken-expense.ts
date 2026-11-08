@@ -3,7 +3,12 @@
    perguntas seguem para o Vetra AI. */
 
 export type SpokenMethod =
-  'flash' | 'nubank' | 'picpay' | 'itau' | 'mercado-pago' | 'pix';
+  | 'flash'
+  | 'nubank'
+  | 'picpay'
+  | 'itau'
+  | 'mercado-pago'
+  | 'pix';
 
 export type SpokenExpense = {
   /** Em reais, com ponto: "32.00". */

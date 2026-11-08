@@ -47,16 +47,12 @@ import {
   type PaymentCard,
 } from '@/lib/payment-cards';
 import { createClient } from '@/lib/supabase/client';
+import { money } from '@/lib/money';
 
 type Filter = 'all' | 'mine' | 'others';
 type Frequency = 'monthly' | 'yearly';
 // A mesma conta que os gráficos separam do que saiu do bolso.
 const OTHER_ACCOUNT = OTHER_PAYER_ACCOUNT;
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value).toNumber());
 const displayDate = (value: string) => value.split('-').reverse().join('/');
 const emptyForm = () => ({
   id: '',

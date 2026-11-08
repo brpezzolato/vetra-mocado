@@ -177,7 +177,8 @@ export async function syncCheckingBillPayments(
       );
       if (paidAlready) continue;
       const cycle = (cycles ?? []).find((item) => item.account === account) as
-        CardCycle | undefined;
+        | CardCycle
+        | undefined;
       if (!cycle) continue;
       const { error: paymentError } = await admin
         .from('card_invoice_payments')

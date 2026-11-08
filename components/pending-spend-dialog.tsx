@@ -32,6 +32,7 @@ import { loadUnidentifiedSpend } from '@/lib/unidentified-spend-query';
 import { refreshWidgetsOnce } from '@/lib/manual-refresh';
 import { saoDate } from '@/lib/expense-insights';
 import type { SplitPart } from '@/lib/unidentified-spend';
+import { money } from '@/lib/money';
 
 /* Compra a chegar: o limite caiu e a compra ainda não veio do banco. Abre com
    uma compra só (o valor todo, no dia da queda); "Separar outra compra" cria a
@@ -39,10 +40,6 @@ import type { SplitPart } from '@/lib/unidentified-spend';
    compras ficam em pending_spend_splits e somem sozinhas quando chegam do
    banco (applySplits, lib/unidentified-spend.ts). */
 
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
 /** Digitação em centavos: "1234" vira "R$ 12,34". */
 const moneyInput = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 12);

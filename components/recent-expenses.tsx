@@ -14,17 +14,13 @@ import {
 import { saoDate } from '@/lib/expense-insights';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import type { PaymentCard } from '@/lib/payment-cards';
+import { money } from '@/lib/money';
 
 /* "Últimos gastos" da home: agrupados por dia, com arte do cartão, nome,
    categoria, hora e valor, paginados. */
 
 /** Gastos por página. */
 const PAGE = 5;
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
 
 export function RecentExpenses({
   entries,

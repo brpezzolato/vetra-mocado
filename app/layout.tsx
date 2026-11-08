@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { connection } from 'next/server';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
@@ -66,9 +67,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Toda página é montada no pedido: o nonce da política de scripts (proxy.ts)
+  // muda a cada vez, e uma página estática sairia com scripts bloqueados.
+  await connection();
   return (
     <html lang="pt-BR" className="dark" suppressHydrationWarning>
       <body

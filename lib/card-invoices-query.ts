@@ -1,3 +1,4 @@
+import { scopeQuery } from './supabase/scoped';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   earlyPayments,
@@ -31,16 +32,8 @@ export async function loadCardInvoiceInputs(
   { userId, accounts }: { userId?: string; accounts?: string[] } = {},
 ): Promise<{ data: CardInvoiceInputs | null; error: string | null }> {
   // Os mesmos filtros em toda tabela: todas têm `user_id` e `account`.
-  type Filterable = {
-    eq(column: string, value: string): Filterable;
-    in(column: string, values: string[]): Filterable;
-  };
-  const scoped = <Query>(query: Query): Query => {
-    let result = query as unknown as Filterable;
-    if (userId) result = result.eq('user_id', userId);
-    if (accounts) result = result.in('account', accounts);
-    return result as unknown as Query;
-  };
+  const scoped = <Query>(query: Query) =>
+    scopeQuery(query, { userId, accounts });
 
   const entries: FinancialEntry[] = [];
   const pageSize = 500;

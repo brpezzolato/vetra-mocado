@@ -33,6 +33,7 @@ import type {
 import { BANK_FOLLOW_UPS, subscribeManualRefresh } from '@/lib/manual-refresh';
 import { findPassThroughs, type PassThrough } from '@/lib/pluggy/bank-flows';
 import { cn } from '@/lib/utils';
+import { money } from '@/lib/money';
 
 /* Página de um banco (/bancos/[banco]), aberta pelos saldos da home: saldo,
    evolução, entradas/saídas, categorias, cartão, cofrinhos e extrato por dia.
@@ -59,11 +60,6 @@ const BANKS: Record<BankKey, { name: string; logo: string; color: string }> = {
 };
 
 const PERIODS = [30, 60, 90] as const;
-
-const money = (value: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    value,
-  );
 
 const dayFormat = new Intl.DateTimeFormat('pt-BR', {
   weekday: 'long',

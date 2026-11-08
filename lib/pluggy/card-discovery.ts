@@ -2,6 +2,7 @@
 // cartão das conexões conhecidas que ainda não está ligado, com nome, banco,
 // faturas, limite e compras; o ciclo vem das faturas (`saveCycle`).
 // Só service role. Nunca loga id nem nome vindo do banco.
+import { scopeQuery } from '../supabase/scoped';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PluggyClient } from './client';
 import type { PluggyAccount } from './types';
@@ -75,14 +76,7 @@ export async function discoverCreditCards(
   pluggy: PluggyClient,
   userId?: string,
 ) {
-  type Filterable = { eq(column: string, value: string): Filterable };
-  const scoped = <Query>(query: Query): Query =>
-    userId
-      ? ((query as unknown as Filterable).eq(
-          'user_id',
-          userId,
-        ) as unknown as Query)
-      : query;
+  const scoped = <Query>(query: Query) => scopeQuery(query, { userId });
   const [{ data: links }, { data: piggies }, { data: cards }] =
     await Promise.all([
       scoped(

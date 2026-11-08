@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Decimal from 'decimal.js';
 import { EyeOff } from 'lucide-react';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import { saoDate } from '@/lib/expense-insights';
@@ -11,14 +10,10 @@ import { Private } from '@/components/private-value';
 import { isSplit, myShare } from '@/lib/entry-share';
 import { isPendingSpend, pendingKey } from '@/lib/unidentified-spend';
 import { PendingSpendDialog } from '@/components/pending-spend-dialog';
+import { money } from '@/lib/money';
 
 /* Linha de lançamento comum ao app: arte do cartão, nome com categoria e
    hora, valor à direita. Agrupada por dia em `ExpenseDayList`. */
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
 
 const time = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {

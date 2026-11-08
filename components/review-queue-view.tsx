@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Decimal from 'decimal.js';
 import { AppHeader } from '@/components/app-header';
 import { NavigationBackButton } from '@/components/navigation-back-button';
 import { PaymentCardIcon } from '@/components/payment-card-icon';
@@ -13,14 +12,11 @@ import type { FinancialEntry } from '@/lib/financial-tracker';
 import { resolvePaymentMethod, type PaymentCard } from '@/lib/payment-cards';
 import { reviewKey, reviewQueue, type ReviewCard } from '@/lib/review-queue';
 import { createClient } from '@/lib/supabase/client';
+import { money } from '@/lib/money';
 
 /* Fila de revisão (lib/review-queue.ts), uma carta por vez. Salvar vira regra
    (`save_merchant_alias`) e corrige as compras existentes e as próximas. */
 
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
 const shortDay = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 const CATEGORIES = EXPENSE_CATEGORIES.filter((value) => value !== 'Outros');
 

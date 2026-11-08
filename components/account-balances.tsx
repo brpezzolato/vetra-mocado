@@ -35,6 +35,7 @@ import { barColour } from '@/lib/bank-colors';
 import { cardBankName, suggestedCardBank } from '@/lib/payment-cards';
 import { BANK_FOLLOW_UPS, subscribeManualRefresh } from '@/lib/manual-refresh';
 import { cn } from '@/lib/utils';
+import { money } from '@/lib/money';
 
 /* Saldos das contas correntes (Pluggy, /api/pluggy/balances). Sem conta
    ligada ou com a Pluggy fora, não aparece. */
@@ -81,12 +82,6 @@ const BANKS: Record<Account['bank'], { name: string; logo: string }> = {
   picpay: { name: 'PicPay', logo: '/logos/picpay-ui.webp' },
   'mercado-pago': { name: 'Mercado Pago', logo: '/logos/mercado-pago-ui.webp' },
 };
-
-const money = (value: number) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value).toNumber());
 
 async function fetchBalances(): Promise<Balances> {
   const response = await fetch('/api/pluggy/balances', { cache: 'no-store' });

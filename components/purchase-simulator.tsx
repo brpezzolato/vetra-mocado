@@ -39,11 +39,8 @@ import {
 import { useVaultData } from '@/lib/use-vault-data';
 import type { PiggyBank } from '@/lib/domain';
 import { Private } from '@/components/private-value';
+import { money } from '@/lib/money';
 
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
 const monthLabel = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
     month: 'short',

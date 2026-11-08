@@ -23,6 +23,7 @@ import { calculatePortfolio } from '@/lib/portfolio';
 import { useAccountPreference } from '@/lib/use-account-preference';
 import { useVaultData } from '@/lib/use-vault-data';
 import { cn } from '@/lib/utils';
+import { money } from '@/lib/money';
 
 // Cofrinho × faturas: o saldo de um cofrinho (ou de todos), mais um aporte
 // que o Bruno informa, contra o que falta pagar nas faturas dos cartões. As
@@ -31,11 +32,6 @@ import { cn } from '@/lib/utils';
 const ALL = 'all';
 const QUICK = [100, 500, 1000];
 
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value).toNumber());
 const dayMonth = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',

@@ -623,7 +623,8 @@ export type Observation = { date: string; netAmount: Decimal.Value };
  * (tests the interval since the previous one).
  */
 export type Evidence =
-  ({ kind?: 'credit' } & Observation) | ({ kind: 'balance' } & BalanceAnchor);
+  | ({ kind?: 'credit' } & Observation)
+  | ({ kind: 'balance' } & BalanceAnchor);
 
 const isBalance = (
   item: Evidence,

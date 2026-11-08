@@ -20,6 +20,7 @@ import {
   type RecurringExpense,
 } from './expense-insights';
 import type { PaymentCard } from './payment-cards';
+import { money } from '@/lib/money';
 
 type ChatEntry = {
   entry_type: 'income' | 'expense';
@@ -29,12 +30,6 @@ type ChatEntry = {
   account: string;
   occurred_at: string;
 };
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value).toDecimalPlaces(2).toNumber());
 
 const BANK_NAMES: Record<string, string> = {
   nubank: 'Nubank',

@@ -32,6 +32,7 @@ import { syncCheckingBillPayments } from './bill-payments';
 import type { PluggyBill, PluggyTransaction } from './types';
 import { saoPauloDay } from './vault-movements';
 import { takeExcludedPart, type SplitPart } from '../unidentified-spend';
+import { failureCode, type SyncFailure } from './run-summary';
 
 export type CardSyncResult = {
   cards: number;
@@ -43,6 +44,7 @@ export type CardSyncResult = {
   removed: number;
   bills: number;
   errors: number;
+  failures: SyncFailure[];
   /** Cartões de crédito novos que esta rodada achou e ligou. */
   discovered?: number;
 };
@@ -80,6 +82,7 @@ export async function syncCardsFromPluggy(
     removed: 0,
     bills: 0,
     errors: 0,
+    failures: [],
     discovered: 0,
   };
   // Primeiro, descobre cartão de crédito novo (card-discovery.ts).
@@ -107,6 +110,10 @@ export async function syncCardsFromPluggy(
     banks?.find(
       (card) => card.user_id === link.user_id && card.account === link.account,
     )?.bank_id ?? null;
+  const fail = (where: string, error: unknown) => {
+    result.errors++;
+    result.failures.push({ where, code: failureCode(error) });
+  };
   let aiBudget = options.aiLimit ?? 15;
   // Hora dos dados de cada conexão (`lastUpdatedAt`) para a foto do limite.
   // Uma consulta por item, só se houver foto.
@@ -335,8 +342,8 @@ export async function syncCardsFromPluggy(
         },
         mapIncomeTransactions(transactions, (sources ?? []) as IncomeSource[]),
       );
-    } catch {
-      result.errors++;
+    } catch (error) {
+      fail('pix', error);
     }
   }
 
@@ -444,17 +451,17 @@ export async function syncCardsFromPluggy(
       }
 
       await writeEntries(link, bankEntries, estimate);
-    } catch {
-      // Um cartão com erro não impede os outros; o motivo não é repassado (pode
-      // conter dados).
-      result.errors++;
+    } catch (error) {
+      // Um cartão com erro não impede os outros; só o código do motivo é
+      // guardado (a mensagem pode conter dados).
+      fail(bankOf(link) ?? 'cartao', error);
     }
   }
   // Pagamento de fatura que só aparece na corrente (Itaú), depois das fotos
   // do limite desta rodada.
-  await syncCheckingBillPayments(admin, pluggy, links).catch(() => {
-    result.errors++;
-  });
+  await syncCheckingBillPayments(admin, pluggy, links).catch((error) =>
+    fail('corrente', error),
+  );
   return result;
 }
 

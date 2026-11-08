@@ -38,15 +38,11 @@ import { Private } from '@/components/private-value';
 import { myShare } from '@/lib/entry-share';
 import { isPendingSpend, pendingKey } from '@/lib/unidentified-spend';
 import { PendingSpendDialog } from '@/components/pending-spend-dialog';
+import { money } from '@/lib/money';
 
 // Faturas em blocos: painel (valor, datas, limite), histórico em barras que
 // trocam a fatura, resumo e destaques, categorias e compras por dia.
 
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value).toNumber());
 const compactMoney = (value: Decimal.Value) =>
   `R$ ${new Intl.NumberFormat('pt-BR', {
     notation: 'compact',

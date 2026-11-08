@@ -38,8 +38,9 @@ function rendersMoney(line: string) {
   // Building a string is not painting it.
   if (/^(const|let|var|return)\b/.test(trimmed) || /^[?:]\s*`/.test(trimmed))
     return false;
-  // A bare template literal is an argument, not JSX.
-  if (trimmed.startsWith('`')) return false;
+  // A bare template literal is an argument, not JSX; so is one assigned to an
+  // object key (a `detail:` string), painted where the key is read.
+  if (trimmed.startsWith('`') || /^\w+:\s*`/.test(trimmed)) return false;
   // Read aloud or hovered, not painted as a figure on the surface.
   if (/(aria-label|title|placeholder|alt)=/.test(trimmed)) return false;
   if (!FORMATTERS.test(trimmed) || !trimmed.includes('{')) return false;

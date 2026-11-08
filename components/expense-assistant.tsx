@@ -55,13 +55,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Private } from '@/components/private-value';
+import { money } from '@/lib/money';
 
 type Rule = { merchant: string; category: string };
 type NameRule = MerchantAlias;
-const money = (v: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(v).toNumber(),
-  );
 const date = (s: string) =>
   new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo',

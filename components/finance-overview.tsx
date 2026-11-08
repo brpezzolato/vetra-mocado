@@ -39,11 +39,7 @@ import { FinanceOverviewDataSkeleton } from '@/components/data-skeletons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { ArrowRightSymbol } from '@/components/ui/glass-button';
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
+import { money } from '@/lib/money';
 
 /* Dados da home só em memória: volta sem esqueleto e só redesenha quando
    a `signature` muda. */

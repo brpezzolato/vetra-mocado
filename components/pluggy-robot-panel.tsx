@@ -15,11 +15,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  describeFailures,
   describeSummary,
   groupRounds,
   type SyncRun,
   type SyncTrigger,
 } from '@/lib/pluggy/run-summary';
+import { CARD_BANKS, cardBankName, type CardBankId } from '@/lib/payment-cards';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import type { ConnectionHealth } from '@/lib/pluggy/connection-health';
@@ -56,6 +58,18 @@ const RUN_STATUS = {
   },
   error: { label: 'Falhou', icon: XCircle, tone: 'text-destructive' },
 } as const;
+
+/** Nome de quem falhou na rodada (`SyncFailure.where`). */
+const FAILURE_WHERE: Record<string, string> = {
+  pix: 'Pix',
+  corrente: 'Conta corrente',
+  cartao: 'Cartão',
+};
+const failureWhere = (where: string) =>
+  FAILURE_WHERE[where] ??
+  (CARD_BANKS.some((bank) => bank.id === where)
+    ? cardBankName(where as CardBankId)
+    : where);
 
 const ROBOT: Record<string, string> = {
   done: 'Robô pediu atualização aos bancos',
@@ -550,6 +564,17 @@ export function PluggyRobotPanel() {
                               {' · '}
                               {item.error ?? describeSummary(item.summary)}
                             </p>
+                            {describeFailures(
+                              item.summary.failures,
+                              failureWhere,
+                            ).map((line) => (
+                              <p
+                                key={line}
+                                className="mt-0.5 text-xs text-amber-600 dark:text-amber-400"
+                              >
+                                {line}
+                              </p>
+                            ))}
                             {robotNote && (
                               <p className="mt-0.5 text-xs text-muted-foreground">
                                 {robotNote}

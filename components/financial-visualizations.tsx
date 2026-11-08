@@ -42,6 +42,7 @@ import {
 } from '@/lib/financial-visualizations';
 import { PAYMENT_METHOD_COLOUR, type PaymentCard } from '@/lib/payment-cards';
 import { cn } from '@/lib/utils';
+import { money } from '@/lib/money';
 
 // One accent for the subject, one gray for context. Dark mode uses its own
 // step of the same blue.
@@ -58,10 +59,6 @@ const config = {
 // The same blue for HTML bars, which the chart config does not reach.
 const accentFill = 'bg-[#2a78d6] dark:bg-[#3987e5]';
 
-const money = (value: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    value,
-  );
 const percent = (value: number) =>
   new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value);
 const dayMonth = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;

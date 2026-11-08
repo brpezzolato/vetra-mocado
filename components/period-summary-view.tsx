@@ -56,12 +56,7 @@ import {
 import { calculatePortfolio } from '@/lib/portfolio';
 import { useVaultData } from '@/lib/use-vault-data';
 import { daySummary, monthLabel, monthSummary } from '@/lib/period-summary';
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value || 0).toDecimalPlaces(2).toNumber());
+import { money } from '@/lib/money';
 
 /** "Minha Reserva +R$ 0,46": dica do resumo do dia. O <Private> do Headline mascara. */
 const vaultLabel = (item: { name: string; net: Decimal }) =>

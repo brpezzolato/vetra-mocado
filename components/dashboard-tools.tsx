@@ -1,15 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Decimal from 'decimal.js';
 import { CalendarClock } from 'lucide-react';
 import type { DailyRate, PiggyBank } from '@/lib/domain';
 import { calculateRealized } from '@/lib/portfolio';
-import {
-  makeCalendar,
-  parseDate,
-  iofExemptionAt,
-} from '@/lib/finance';
+import { makeCalendar, parseDate, iofExemptionAt } from '@/lib/finance';
 import {
   Dialog,
   DialogContent,
@@ -18,11 +13,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Private } from '@/components/private-value';
+import { money } from '@/lib/money';
 
-const money = (value: Decimal | string | number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value || 0).toDecimalPlaces(2).toNumber(),
-  );
 const dateBR = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo' }).format(
     new Date(`${value.slice(0, 10)}T12:00:00-03:00`),

@@ -18,11 +18,8 @@ const nextConfig: NextConfig = {
             value:
               'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()',
           },
-          {
-            key: 'Content-Security-Policy',
-            value:
-              "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests",
-          },
+          // A Content-Security-Policy sai do proxy.ts, com nonce por pedido
+          // (lib/csp.ts).
         ],
       },
     ];

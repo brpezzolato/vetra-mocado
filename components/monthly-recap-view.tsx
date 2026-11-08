@@ -34,12 +34,7 @@ import { monthLabel, monthsWithEntries } from '@/lib/period-summary';
 import { calculatePortfolio, yieldOnly } from '@/lib/portfolio';
 import { useVaultData } from '@/lib/use-vault-data';
 import { cn } from '@/lib/utils';
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value || 0).toNumber());
+import { money } from '@/lib/money';
 
 const dayLabel = (day: string) =>
   new Intl.DateTimeFormat('pt-BR', {

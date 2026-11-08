@@ -1,3 +1,4 @@
+import { scopeQuery } from './supabase/scoped';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { provisionalSince } from './daily-allowance';
 import { saoDate } from './expense-insights';
@@ -27,14 +28,7 @@ export async function loadUnidentifiedSpend(
   userId?: string,
   today = saoDate(new Date()),
 ): Promise<UnidentifiedSpend[]> {
-  type Filterable = { eq(column: string, value: string): Filterable };
-  const scoped = <Query>(query: Query): Query =>
-    userId
-      ? ((query as unknown as Filterable).eq(
-          'user_id',
-          userId,
-        ) as unknown as Query)
-      : query;
+  const scoped = <Query>(query: Query) => scopeQuery(query, { userId });
 
   // Os dias da janela, e uma folga antes para achar a foto que abre o 1º.
   const start = new Date(`${today}T12:00:00Z`);

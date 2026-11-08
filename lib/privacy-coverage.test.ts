@@ -8,8 +8,8 @@ describe('privacy mode conceals every figure on the surface', () => {
     // eye closed, and neither the type checker nor a unit test on the engine
     // would notice. This is the check that does.
     const gaps = findPrivacyGaps();
-    expect(
-      gaps.map((gap) => `${gap.file}:${gap.line}  ${gap.text}`),
-    ).toEqual([]);
+    expect(gaps.map((gap) => `${gap.file}:${gap.line}  ${gap.text}`)).toEqual(
+      [],
+    );
   });
 });

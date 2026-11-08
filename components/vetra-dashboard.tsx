@@ -74,11 +74,8 @@ import {
 } from '@/components/ui/popover';
 import { Private } from '@/components/private-value';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { money } from '@/lib/money';
 
-const money = (value: Decimal | string | number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value || 0).toDecimalPlaces(2).toNumber(),
-  );
 const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
 const dateBR = (date: string | Date) =>
   new Intl.DateTimeFormat('pt-BR', { timeZone: SAO_PAULO_TIME_ZONE }).format(
@@ -510,16 +507,13 @@ export default function VetraDashboard({
               className="mb-7 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200"
             >
               {calculationWarnings.length > 0 && (
-                <div
-                  className="mb-4 space-y-1 rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground"
-                  role="status"
-                >
+                <output className="mb-4 block space-y-1 rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
                   {calculationWarnings.map((warning) => (
-                    <p key={warning} data-private-value>
+                    <span key={warning} className="block" data-private-value>
                       {warning}
-                    </p>
+                    </span>
                   ))}
-                </div>
+                </output>
               )}
               <div>
                 <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -555,13 +549,10 @@ export default function VetraDashboard({
                   </p>
                 )}
                 {awaitingRates && (
-                  <p
-                    role="status"
-                    className="mt-2 text-xs text-muted-foreground"
-                  >
+                  <output className="mt-2 block text-xs text-muted-foreground">
                     Sincronização automática do CDI. O saldo ainda não inclui os
                     dias com taxas pendentes.
-                  </p>
+                  </output>
                 )}
               </div>
             </section>
@@ -1452,7 +1443,6 @@ function DateField({
             onValueChange(saoPauloDate(date));
             setOpen(false);
           }}
-          initialFocus
         />
       </PopoverContent>
     </Popover>

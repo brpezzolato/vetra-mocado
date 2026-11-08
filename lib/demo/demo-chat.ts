@@ -220,7 +220,7 @@ export async function demoChatFetch(url: string, init?: RequestInit) {
     return json(null, 204);
   }
 
-  const body = JSON.parse(String(init?.body ?? '{}')) as {
+  const body = JSON.parse((init?.body as string | undefined) ?? '{}') as {
     message?: string;
     conversationId?: string;
   };

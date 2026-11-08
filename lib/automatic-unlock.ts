@@ -2,7 +2,10 @@
 // Deferring also allows React Strict Mode to clean up its first effect run.
 export function scheduleAutomaticUnlock(
   start: () => void,
-  page: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>,
+  page: Pick<
+    Document,
+    'visibilityState' | 'addEventListener' | 'removeEventListener'
+  >,
 ) {
   let attempted = false;
   let timer: ReturnType<typeof setTimeout> | undefined;

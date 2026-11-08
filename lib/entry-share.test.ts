@@ -39,9 +39,9 @@ describe('compra dividida', () => {
   });
 
   it('a parte nunca passa do valor (o banco mudou o valor depois)', () => {
-    expect(myShare(entry({ amount: '40.00', split_share: '50.00' })).toFixed(2)).toBe(
-      '40.00',
-    );
+    expect(
+      myShare(entry({ amount: '40.00', split_share: '50.00' })).toFixed(2),
+    ).toBe('40.00');
   });
 
   it('fora das contas não pesa nada, dividida ou não', () => {

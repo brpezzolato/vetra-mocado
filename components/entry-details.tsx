@@ -44,11 +44,7 @@ import { merchantKey, normalizeMerchant } from '@/lib/merchant-names';
 import { fullAmount, isSplit } from '@/lib/entry-share';
 import { MerchantAliasDialog } from '@/components/merchant-alias-dialog';
 import { refreshMountedWidgets } from '@/lib/manual-refresh';
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value || 0).toNumber(),
-  );
+import { money } from '@/lib/money';
 
 const moneyInput = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 15);

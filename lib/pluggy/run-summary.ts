@@ -1,3 +1,4 @@
+import { money } from '../money';
 import type { PiggySyncResult } from './piggy-sync';
 import type { CardSyncResult } from './card-sync';
 
@@ -17,7 +18,61 @@ export type RunSummary = {
   vaultsCreated: number;
   vaultsArchived: number;
   errors: number;
+  /** Onde e por que cada erro aconteceu, sem dado nenhum (`failureCode`). */
+  failures?: SyncFailure[];
 };
+
+type CountKey = Exclude<keyof RunSummary, 'failures'>;
+
+/** Uma parte da rodada que falhou: o banco (ou "pix", "renda"…) e o código. */
+export type SyncFailure = { where: string; code: string };
+
+/**
+ * O motivo de um erro em código curto, sem mensagem (pode trazer dados):
+ * `pluggy-<status HTTP>`, `db-<código do Postgres>`, `tempo` ou `erro`.
+ */
+export function failureCode(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const { status, code, name } = error as {
+      status?: unknown;
+      code?: unknown;
+      name?: unknown;
+    };
+    if (typeof status === 'number') return `pluggy-${status}`;
+    if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code))
+      return `db-${code}`;
+    if (name === 'TimeoutError' || name === 'AbortError') return 'tempo';
+  }
+  return 'erro';
+}
+
+const FAILURE_TEXT: Record<string, string> = {
+  'db-23502': 'campo obrigatório vazio ao gravar',
+  'db-23505': 'lançamento repetido ao gravar',
+  'db-23514': 'valor recusado ao gravar',
+  tempo: 'demorou demais',
+  'pluggy-401': 'a Pluggy recusou o acesso',
+  'pluggy-403': 'a Pluggy recusou o acesso',
+  'pluggy-404': 'a conta sumiu da Pluggy',
+  'pluggy-429': 'a Pluggy pediu para esperar',
+};
+
+/** "PicPay: campo obrigatório vazio ao gravar (db-23502)", um por linha. */
+export function describeFailures(
+  failures: SyncFailure[] | undefined,
+  label: (where: string) => string,
+): string[] {
+  const seen = new Set<string>();
+  return (failures ?? []).flatMap(({ where, code }) => {
+    const key = `${where}|${code}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const text =
+      FAILURE_TEXT[code] ??
+      (code.startsWith('pluggy-5') ? 'a Pluggy está com problema' : 'falhou');
+    return [`${label(where)}: ${text} (${code})`];
+  });
+}
 
 export type SyncRun = {
   id: number;
@@ -29,11 +84,6 @@ export type SyncRun = {
   summary: Partial<RunSummary>;
   error: string | null;
 };
-
-const money = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-});
 
 export function summarize(
   piggy: PiggySyncResult | null,
@@ -49,6 +99,7 @@ export function summarize(
     vaultsCreated: piggy?.created ?? 0,
     vaultsArchived: piggy?.archived ?? 0,
     errors: (piggy?.errors ?? 0) + (cards?.errors ?? 0),
+    failures: [...(piggy?.failures ?? []), ...(cards?.failures ?? [])],
   };
 }
 
@@ -62,8 +113,8 @@ export function describeSummary(summary: Partial<RunSummary>): string {
   const entries = summary.entries ?? 0;
   if (entries) {
     const totals = [
-      summary.spent ? `${money.format(summary.spent)} em saídas` : '',
-      summary.earned ? `${money.format(summary.earned)} em entradas` : '',
+      summary.spent ? `${money(summary.spent)} em saídas` : '',
+      summary.earned ? `${money(summary.earned)} em entradas` : '',
     ].filter(Boolean);
     parts.push(
       plural(entries, 'lançamento novo', 'lançamentos novos') +
@@ -141,8 +192,8 @@ export function groupRounds(runs: SyncRun[]): SyncRun[] {
     merged.error = merged.error ?? run.error;
     const a = merged.summary;
     const b = run.summary;
-    const add = (key: keyof RunSummary) => (a[key] ?? 0) + (b[key] ?? 0);
-    const max = (key: keyof RunSummary) => Math.max(a[key] ?? 0, b[key] ?? 0);
+    const add = (key: CountKey) => (a[key] ?? 0) + (b[key] ?? 0);
+    const max = (key: CountKey) => Math.max(a[key] ?? 0, b[key] ?? 0);
     merged.summary = {
       entries: add('entries'),
       spent: Math.round(add('spent') * 100) / 100,
@@ -151,6 +202,7 @@ export function groupRounds(runs: SyncRun[]): SyncRun[] {
       vaultsCreated: add('vaultsCreated'),
       vaultsArchived: add('vaultsArchived'),
       errors: add('errors'),
+      failures: [...(a.failures ?? []), ...(b.failures ?? [])],
       updated: max('updated'),
       removed: max('removed'),
     };

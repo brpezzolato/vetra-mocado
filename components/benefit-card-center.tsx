@@ -53,12 +53,7 @@ import { FLASH_ACCOUNT } from '@/lib/flash-statement';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import type { PaymentCard } from '@/lib/payment-cards';
 import { createClient } from '@/lib/supabase/client';
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value || 0).toDecimalPlaces(2).toNumber());
+import { money } from '@/lib/money';
 
 const dayLabel = (day: string) =>
   new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(

@@ -27,6 +27,7 @@ import {
   staleBankDate,
 } from './portfolio';
 import { normalizedBank } from './vault-shape';
+import { money } from '@/lib/money';
 
 /**
  * Números que o Vetra AI recebe prontos, calculados com o mesmo código das
@@ -38,12 +39,6 @@ type Entry = Pick<
   FinancialEntry,
   'entry_type' | 'amount' | 'description' | 'category' | 'account'
 > & { occurred_at: string };
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(new Decimal(value).toDecimalPlaces(2).toNumber());
 
 export const saoDay = (value: Date | string) =>
   new Intl.DateTimeFormat('en-CA', {

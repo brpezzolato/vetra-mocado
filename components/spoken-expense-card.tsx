@@ -19,14 +19,11 @@ import { normalizeMerchant } from '@/lib/merchant-names';
 import type { PaymentCard } from '@/lib/payment-cards';
 import type { SpokenExpense } from '@/lib/spoken-expense';
 import { createClient } from '@/lib/supabase/client';
+import { money } from '@/lib/money';
 
 /* Confirmação do gasto falado (lib/spoken-expense.ts): tudo editável, grava
    no "Confirmar" como o formulário (nome normalizado, categoria, origem manual). */
 
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value).toNumber(),
-  );
 const moneyInput = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 12);
   return digits ? money(new Decimal(digits).div(100)) : '';

@@ -1,5 +1,6 @@
 'use client';
 
+import { money } from '@/lib/money';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BILLING_RULES } from '@/lib/card-billing';
 import Decimal from 'decimal.js';
@@ -456,7 +457,7 @@ export function PaymentCardManager({
               </legend>
               <RadioGroup
                 value={bankId}
-                onValueChange={(value) => value && chooseBank(value as never)}
+                onValueChange={(value) => value && chooseBank(value as CardBankId)}
                 className="grid grid-cols-2 gap-2 sm:grid-cols-3"
               >
                 {CARD_BANKS.map((bank) => (
@@ -509,12 +510,8 @@ export function PaymentCardManager({
                     return [...grouped]
                       .sort(([a], [b]) => a.localeCompare(b))
                       .map(([date, total]) => (
-                        <p key={date} className="mt-2">
-                          {date.split('-').reverse().join('/')} ·{' '}
-                          {new Intl.NumberFormat('pt-BR', {
-                            style: 'currency',
-                            currency: 'BRL',
-                          }).format(total.toNumber())}
+                        <p key={date} className="mt-2 tabular-nums">
+                          {date.split('-').reverse().join('/')} · {money(total)}
                         </p>
                       ));
                   })()}

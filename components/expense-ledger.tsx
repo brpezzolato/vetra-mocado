@@ -48,17 +48,13 @@ import { Private } from '@/components/private-value';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PillSwitch } from '@/components/pill-switch';
+import { money } from '@/lib/money';
 
 /* Extrato (/financeiro): o mês em destaque, busca, filtros por situação
    (pendentes, parcelas, divididas, fora das contas) e por cartão, e os
    gastos por mês e dia. "Pendentes" são as compras a chegar
    (lib/unidentified-spend.ts): só aparecem lá e não somam no extrato até
    chegarem do banco. */
-
-const money = (value: Decimal.Value) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-    new Decimal(value || 0).toDecimalPlaces(2).toNumber(),
-  );
 
 const monthKey = (value: Date | string = new Date()) =>
   new Intl.DateTimeFormat('en-CA', {

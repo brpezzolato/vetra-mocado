@@ -11,6 +11,7 @@ import {
   piggySnapshotFromLots,
   type PiggySnapshot,
 } from './investments';
+import { failureCode, type SyncFailure } from './run-summary';
 import type { PluggyInvestmentMovement, PluggyTransaction } from './types';
 import {
   archiveStillCovers,
@@ -48,6 +49,7 @@ export type PiggySyncResult = {
   archived: number;
   movements: number;
   errors: number;
+  failures: SyncFailure[];
   banks: BankFreshness[];
 };
 
@@ -87,6 +89,7 @@ class Sync {
     archived: 0,
     movements: 0,
     errors: 0,
+    failures: [],
     banks: [],
   };
   private readonly admin: SupabaseClient;
@@ -119,9 +122,14 @@ class Sync {
         if (group[0].pluggy_source === 'reserved_balance')
           await this.syncReserves(group);
         else await this.syncInvestments(group);
-      } catch {
-        // Uma conexão com erro não impede as outras; o motivo não é repassado.
+      } catch (error) {
+        // Uma conexão com erro não impede as outras; só o código do motivo é
+        // guardado.
         this.result.errors++;
+        this.result.failures.push({
+          where: group[0].bank,
+          code: failureCode(error),
+        });
       }
     }
     return this.result;

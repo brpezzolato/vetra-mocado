@@ -1,5 +1,6 @@
 'use client';
 
+import { money } from '@/lib/money';
 import { useEffect, useRef } from 'react';
 import Link from '@/components/navigation-link';
 import Image from 'next/image';
@@ -31,11 +32,6 @@ export function VaultCards({
   const centered = useRef(false);
   const portfolio = calculatePortfolio(banks, rates);
   const generalNetGain = portfolio.lifetimeNetGain;
-  const formattedMoney = (value: Decimal.Value) =>
-    new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(new Decimal(value).toNumber());
   useEffect(() => {
     const track = ref.current;
     if (!track || stacked || list) return;
@@ -68,7 +64,7 @@ export function VaultCards({
   // Ganho = só rendimento (`yieldOnly`), nunca negativo; fecha com o card
   // geral (`lifetimeNetGain`).
   const signedGain = (gain: Decimal) => ({
-    detail: `${gain.isNegative() ? '−' : '+'}${formattedMoney(gain.abs())}`,
+    detail: `${gain.isNegative() ? '−' : '+'}${money(gain.abs())}`,
     gainIsNegative: gain.isNegative(),
   });
   const cards = [
@@ -108,7 +104,7 @@ export function VaultCards({
               Guardado nos cofrinhos
             </span>
             <span className="mt-1 block text-3xl font-semibold tracking-tight tabular-nums">
-              {formattedMoney(total.value)}
+              {money(total.value)}
             </span>
             {total.detail && (
               <span
@@ -160,7 +156,7 @@ export function VaultCards({
                   </span>
                   <span className="shrink-0 text-right">
                     <span className="block text-[15px] font-semibold tabular-nums">
-                      {formattedMoney(vault.value)}
+                      {money(vault.value)}
                     </span>
                     {vault.detail && (
                       <span
@@ -243,7 +239,7 @@ export function VaultCards({
               {card.name}
             </span>
             <span className="block truncate text-xs tabular-nums text-muted-foreground">
-              {formattedMoney(card.value)}
+              {money(card.value)}
             </span>
             {/* Saldo só do banco: sem atualização hoje, mostra o último dia informado. */}
             {card.stale && (

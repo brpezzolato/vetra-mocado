@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describeFailures,
   describeSummary,
+  failureCode,
   groupRounds,
   runStatus,
   summarize,
@@ -19,6 +21,7 @@ describe('summarize', () => {
         archived: 0,
         movements: 3,
         errors: 0,
+        failures: [],
         banks: [],
       },
       {
@@ -30,6 +33,7 @@ describe('summarize', () => {
         removed: 0,
         bills: 1,
         errors: 1,
+        failures: [{ where: 'picpay', code: 'db-23502' }],
       },
     );
     expect(summary).toEqual({
@@ -42,9 +46,44 @@ describe('summarize', () => {
       vaultsCreated: 1,
       vaultsArchived: 0,
       errors: 1,
+      failures: [{ where: 'picpay', code: 'db-23502' }],
     });
     expect(runStatus(summary, false)).toBe('partial');
     expect(runStatus(summary, true)).toBe('error');
+  });
+});
+
+describe('failureCode', () => {
+  it('guarda só o código, nunca a mensagem', () => {
+    expect(failureCode({ status: 503, message: 'conta 123' })).toBe(
+      'pluggy-503',
+    );
+    expect(failureCode({ code: '23502', message: 'null value…' })).toBe(
+      'db-23502',
+    );
+    expect(
+      failureCode(Object.assign(new Error('x'), { name: 'TimeoutError' })),
+    ).toBe('tempo');
+    expect(failureCode(new Error('dados'))).toBe('erro');
+    expect(failureCode({ code: 'nada de dado aqui' })).toBe('erro');
+  });
+});
+
+describe('describeFailures', () => {
+  it('uma linha por banco e motivo, sem repetir', () => {
+    expect(
+      describeFailures(
+        [
+          { where: 'picpay', code: 'db-23502' },
+          { where: 'picpay', code: 'db-23502' },
+          { where: 'itau', code: 'pluggy-500' },
+        ],
+        (where) => where.toUpperCase(),
+      ),
+    ).toEqual([
+      'PICPAY: campo obrigatório vazio ao gravar (db-23502)',
+      'ITAU: a Pluggy está com problema (pluggy-500)',
+    ]);
   });
 });
 
