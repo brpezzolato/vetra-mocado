@@ -13,7 +13,12 @@ import { CloseSymbol, GlassButton } from '@/components/ui/glass-button';
  * área visível, movida até ela: cabeçalho no alto, só a lista rola, campo
  * embaixo (`layout="sheet"`). O documento fica travado.
  */
-export function AssistantScreen() {
+export function AssistantScreen({
+  onClose,
+}: {
+  /** Aberta por cima da tela atual (o porquinho): fechar só esconde. */
+  onClose?: () => void;
+} = {}) {
   const router = useRouter();
   const screenRef = useRef<HTMLElement>(null);
 
@@ -114,7 +119,8 @@ export function AssistantScreen() {
               className="ml-auto size-9"
               aria-label="Fechar Vetra AI"
               onClick={() => {
-                if (window.history.length > 1) router.back();
+                if (onClose) onClose();
+                else if (window.history.length > 1) router.back();
                 else router.push('/');
               }}
             >

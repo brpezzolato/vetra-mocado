@@ -759,7 +759,8 @@ html[data-vetra-privacy='true'] [data-vetra-private] .recharts-wrapper {
 }
 
 /* Com qualquer diálogo aberto a bolha some. */
-body:has([role='dialog'], [role='alertdialog']) .vetra-ai-bubble-layer {
+body:has([role='dialog'], [role='alertdialog'], dialog[open])
+  .vetra-ai-bubble-layer {
   display: none;
 }
 

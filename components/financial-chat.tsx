@@ -81,14 +81,50 @@ const thinkingMessages = [
  */
 export type ChatLayout = 'inline' | 'sheet' | 'page';
 
+type ChatPayload = {
+  conversations?: Conversation[];
+  activeConversation?: Conversation | null;
+  messages?: Message[];
+  dataPolicy?: DataPolicy;
+  error?: string;
+};
+
+/* A conversa atual, guardada em memória: abrir o Vetra AI mostra na hora o
+   que já estava lá e confere no servidor em silêncio. `preloadConversation`
+   baixa antes do toque (financial-chat-sheet.tsx). */
+let cachedConversation: ChatPayload | null = null;
+let preloading: Promise<void> | null = null;
+
+export function preloadConversation() {
+  if (cachedConversation || preloading) return;
+  preloading = fetch('/api/finance/chat', { cache: 'no-store' })
+    .then(async (response) => {
+      if (!response.ok) return;
+      const payload = (await response
+        .json()
+        .catch(() => null)) as ChatPayload | null;
+      if (payload && !cachedConversation) cachedConversation = payload;
+    })
+    .catch(() => {})
+    .finally(() => {
+      preloading = null;
+    });
+}
+
 export function FinancialChat({ layout = 'inline' }: { layout?: ChatLayout }) {
   /** Layouts enquadrados: barra da conversa, padding menor, composer em barra. */
   const compact = layout !== 'inline';
   const sheet = layout === 'sheet';
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>(
+    () => cachedConversation?.messages ?? [],
+  );
+  const [conversations, setConversations] = useState<Conversation[]>(
+    () => cachedConversation?.conversations ?? [],
+  );
   const [activeConversation, setActiveConversation] =
-    useState<Conversation | null>(null);
+    useState<Conversation | null>(
+      () => cachedConversation?.activeConversation ?? null,
+    );
   const [historyOpen, setHistoryOpen] = useState(false);
   const [conversationToDelete, setConversationToDelete] =
     useState<Conversation | null>(null);
@@ -102,9 +138,14 @@ export function FinancialChat({ layout = 'inline' }: { layout?: ChatLayout }) {
     { id: string; text: string; parsed: SpokenExpense; open: boolean }[]
   >([]);
   const [busy, setBusy] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(true);
+  // Com a conversa em memória, nasce pronta e só confere em silêncio.
+  const [historyLoading, setHistoryLoading] = useState(
+    () => cachedConversation === null,
+  );
   const [thinkingStep, setThinkingStep] = useState(0);
-  const [dataPolicy, setDataPolicy] = useState<DataPolicy>('free-acknowledged');
+  const [dataPolicy, setDataPolicy] = useState<DataPolicy>(
+    () => cachedConversation?.dataPolicy ?? 'free-acknowledged',
+  );
   const [error, setError] = useState('');
   /** Pergunta sem resposta, oferecida de volta no balão de erro. */
   const [failedQuestion, setFailedQuestion] = useState('');
@@ -137,19 +178,16 @@ export function FinancialChat({ layout = 'inline' }: { layout?: ChatLayout }) {
         window.location.replace('/desbloquear');
         return;
       }
-      const payload = (await response.json().catch(() => null)) as {
-        conversations?: Conversation[];
-        activeConversation?: Conversation | null;
-        messages?: Message[];
-        dataPolicy?: DataPolicy;
-        error?: string;
-      } | null;
+      const payload = (await response
+        .json()
+        .catch(() => null)) as ChatPayload | null;
       if (!response.ok)
         throw new Error(
           payload?.error ?? 'Não foi possível abrir suas conversas.',
         );
       // Resposta velha: há leitura mais nova ou envio em curso.
       if (ticket !== loadTicket.current || sending.current) return;
+      if (payload) cachedConversation = payload;
       setConversations(payload?.conversations ?? []);
       setActiveConversation(payload?.activeConversation ?? null);
       setMessages(payload?.messages ?? []);
@@ -176,8 +214,20 @@ export function FinancialChat({ layout = 'inline' }: { layout?: ChatLayout }) {
     }
   }
 
+  // A memória acompanha a tela: reabrir mostra a conversa como ficou.
   useEffect(() => {
-    queueMicrotask(() => void loadConversation());
+    if (!cachedConversation) return;
+    cachedConversation = {
+      ...cachedConversation,
+      conversations,
+      activeConversation,
+      messages,
+    };
+  }, [conversations, activeConversation, messages]);
+
+  useEffect(() => {
+    const silent = cachedConversation !== null;
+    queueMicrotask(() => void loadConversation(undefined, { silent }));
   }, []);
 
   // `busy` é a tela; o status é o servidor. Olhar os dois mantém a checagem.

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
+import { usePathname } from 'next/navigation';
+import { AssistantScreen } from '@/components/assistant-screen';
 import { VetraMascot } from '@/components/vetra-mascot';
 import { VetraAiBubble } from '@/components/vetra-ai-bubble';
 import {
@@ -12,13 +14,40 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { FinancialChat } from '@/components/financial-chat';
+import {
+  FinancialChat,
+  preloadConversation,
+} from '@/components/financial-chat';
 import { CloseSymbol, GlassButton } from '@/components/ui/glass-button';
 
 export function FinancialChatSheet() {
   const [open, setOpen] = useState(false);
+  // Celular: a conversa abre por cima da tela atual, sem trocar de página.
+  const [screenOpen, setScreenOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const pathname = usePathname();
+
+  // A conversa já vem baixada: o toque no porquinho só mostra.
+  useEffect(() => {
+    const timer = window.setTimeout(preloadConversation, 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  // Trocou de tela (um link da resposta, a barra de abas): a conversa fecha.
+  const [shownPath, setShownPath] = useState(pathname);
+  if (shownPath !== pathname) {
+    setShownPath(pathname);
+    setScreenOpen(false);
+  }
+
+  useEffect(() => {
+    if (!screenOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setScreenOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [screenOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -77,14 +106,27 @@ export function FinancialChatSheet() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       {/* Bolha flutuante (portal no <body>, só após montar). No celular abre
-          /assistente em vez do sheet (ver assistant-screen.tsx). */}
+          a tela da conversa por cima, em vez do sheet (assistant-screen.tsx). */}
       <VetraAiBubble
         onOpen={() => {
+          preloadConversation();
           if (window.matchMedia('(max-width: 767px)').matches)
-            router.push('/assistente');
+            setScreenOpen(true);
           else setOpen(true);
         }}
       />
+      {screenOpen &&
+        createPortal(
+          <dialog
+            open
+            aria-modal="true"
+            aria-label="Vetra AI"
+            className="fixed inset-0 z-50 m-0 size-full max-h-none max-w-none border-0 bg-transparent p-0 text-foreground"
+          >
+            <AssistantScreen onClose={() => setScreenOpen(false)} />
+          </dialog>,
+          document.body,
+        )}
       <SheetContent
         ref={sheetRef}
         side="right"
