@@ -6,6 +6,7 @@ import './globals.css';
 import { LoadingActivity } from '@/components/loading-activity';
 import { AppLock } from '@/components/app-lock';
 import { BottomTabBar } from '@/components/bottom-tab-bar';
+import { FinancialChatSheet } from '@/components/financial-chat-sheet';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -86,6 +87,8 @@ export default async function RootLayout({
         <AppLock>
           {children}
           <BottomTabBar />
+          {/* Um porquinho só para o app todo (não um por barra do topo). */}
+          <FinancialChatSheet />
         </AppLock>
       </body>
     </html>

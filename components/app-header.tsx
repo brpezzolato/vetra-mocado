@@ -42,7 +42,6 @@ import { VetraMark } from '@/components/vetra-mark';
 import { updateApp } from '@/lib/app-update';
 import { useInstalledApp } from '@/lib/installed-app';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FinancialChatSheet } from '@/components/financial-chat-sheet';
 import { PrivacyModeToggle } from '@/components/privacy-mode-toggle';
 import { CloseSymbol, GlassButton } from '@/components/ui/glass-button';
 
@@ -310,8 +309,6 @@ export function AppHeader({
         </nav>
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-1">
-            {/* Guarda o painel do chat; a bolha flutuante abre por portal. */}
-            <FinancialChatSheet />
             {/* Registrar gasto: só o símbolo. */}
             {onAdd && (
               <Button

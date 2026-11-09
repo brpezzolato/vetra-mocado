@@ -103,11 +103,19 @@ export function FinancialChatSheet() {
     };
   }, [open]);
 
+  // Sem porquinho nas telas públicas e na própria conversa (/assistente).
+  if (
+    ['/auth', '/offline', '/desbloquear', '/assistente'].some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`),
+    )
+  )
+    return null;
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       {/* Bolha flutuante (portal no <body>, só após montar). No celular abre
           a tela da conversa por cima, em vez do sheet (assistant-screen.tsx). */}
       <VetraAiBubble
+        routeKey={pathname}
         onOpen={() => {
           preloadConversation();
           if (window.matchMedia('(max-width: 767px)').matches)

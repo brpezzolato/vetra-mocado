@@ -45,8 +45,12 @@ function bounds(probe: HTMLElement | null) {
   const style = probe ? getComputedStyle(probe) : null;
   const inset = (side: 'Top' | 'Right' | 'Bottom' | 'Left') =>
     style ? parseFloat(style[`padding${side}`]) || 0 : 0;
-  // Barra sticky: a borda de baixo não muda com a rolagem.
-  const nav = document.querySelector('.vetra-app-safe-header');
+  // Barra sticky: a borda de baixo não muda com a rolagem. A visível: as
+  // telas já vistas ficam montadas e escondidas (cacheComponents), cada uma
+  // com a sua barra.
+  const nav = [...document.querySelectorAll('.vetra-app-safe-header')].find(
+    (element) => element.getBoundingClientRect().height > 0,
+  );
   const navBottom = nav ? Math.max(0, nav.getBoundingClientRect().bottom) : 0;
   const minX = MARGIN + inset('Left');
   const minY = MARGIN + Math.max(inset('Top'), navBottom);
@@ -106,19 +110,35 @@ function springFrames(dx: number, dy: number, vx: number, vy: number) {
   };
 }
 
-export function VetraAiBubble({ onOpen }: { onOpen: () => void }) {
+export function VetraAiBubble({
+  onOpen,
+  routeKey,
+}: {
+  onOpen: () => void;
+  /** Trocou de tela: volta ao canto medindo a barra da tela nova. */
+  routeKey?: string;
+}) {
   const mounted = useSyncExternalStore(
     subscribeNothing,
     () => true,
     () => false,
   );
   if (!mounted) return null;
-  return createPortal(<FloatingBubble onOpen={onOpen} />, document.body);
+  return createPortal(
+    <FloatingBubble onOpen={onOpen} routeKey={routeKey} />,
+    document.body,
+  );
 }
 
 type Anchor = { x: number; y: number; corner: Corner };
 
-function FloatingBubble({ onOpen }: { onOpen: () => void }) {
+function FloatingBubble({
+  onOpen,
+  routeKey,
+}: {
+  onOpen: () => void;
+  routeKey?: string;
+}) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const probeRef = useRef<HTMLDivElement>(null);
   const corner = useRef<Corner>('bottom-right');
@@ -148,6 +168,7 @@ function FloatingBubble({ onOpen }: { onOpen: () => void }) {
   // Fala atual e posição parada; `anchor` null esconde o balão em movimento.
   const [speech, setSpeech] = useState<SyncProgress>(null);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
+  const snapRef = useRef<() => void>(() => {});
 
   const place = (x: number, y: number) => {
     position.current = { x, y };
@@ -165,6 +186,7 @@ function FloatingBubble({ onOpen }: { onOpen: () => void }) {
       place(point.x, point.y);
       setAnchor({ ...point, corner: corner.current });
     };
+    snapRef.current = snapToCorner;
     corner.current = readCorner();
     snapToCorner();
     wrapper.dataset.ready = 'true';
@@ -177,6 +199,12 @@ function FloatingBubble({ onOpen }: { onOpen: () => void }) {
       window.visualViewport?.removeEventListener('resize', snapToCorner);
     };
   }, []);
+
+  // Tela nova (ou esqueleto dela): no quadro seguinte, já com a barra dela.
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => snapRef.current());
+    return () => window.cancelAnimationFrame(id);
+  }, [routeKey]);
 
   /** `now` = timeStamp do ponteiro (mesma origem do clique seguinte). */
   const release = (now: number) => {
