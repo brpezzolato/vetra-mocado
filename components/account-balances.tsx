@@ -41,7 +41,7 @@ import { money } from '@/lib/money';
    ligada ou com a Pluggy fora, não aparece. */
 
 type Account = {
-  bank: 'nubank' | 'itau' | 'picpay' | 'mercado-pago';
+  bank: 'nubank' | 'itau' | 'picpay' | 'mercado-pago' | 'santander';
   balance: number;
 };
 
@@ -81,6 +81,7 @@ const BANKS: Record<Account['bank'], { name: string; logo: string }> = {
   itau: { name: 'Itaú', logo: '/logos/itau-app.webp' },
   picpay: { name: 'PicPay', logo: '/logos/picpay-ui.webp' },
   'mercado-pago': { name: 'Mercado Pago', logo: '/logos/mercado-pago-ui.webp' },
+  santander: { name: 'Santander', logo: '/logos/santander-ui.webp' },
 };
 
 async function fetchBalances(): Promise<Balances> {

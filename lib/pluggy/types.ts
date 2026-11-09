@@ -22,7 +22,7 @@ export type PluggyAccount = {
    * Chave do banco deduzida do nome da conta (o conector é sempre
    * "MeuPluggy"). O nome em si não sai do client.
    */
-  bank: 'nubank' | 'itau' | 'picpay' | 'mercado-pago' | null;
+  bank: 'nubank' | 'itau' | 'picpay' | 'mercado-pago' | 'santander' | null;
 };
 
 /** Só parcela e fatura de `creditCardMetadata`; nunca `cardNumber`. */

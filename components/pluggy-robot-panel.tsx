@@ -144,6 +144,7 @@ const BANK_INFO: Record<string, { name: string; logo: string }> = {
   itau: { name: 'Itaú', logo: '/logos/itau-app.webp' },
   picpay: { name: 'PicPay', logo: '/logos/picpay-ui.webp' },
   'mercado-pago': { name: 'Mercado Pago', logo: '/logos/mercado-pago-ui.webp' },
+  santander: { name: 'Santander', logo: '/logos/santander-ui.webp' },
 };
 
 const HEALTH_BADGE: Record<

@@ -125,6 +125,7 @@ const BANK_LOGO: Partial<Record<PaymentMethodId, string>> = {
   itau: '/logos/itau-app.webp',
   picpay: '/logos/picpay-ui.webp',
   'mercado-pago': '/logos/mercado-pago-ui.webp',
+  santander: '/logos/santander-ui.webp',
   pix: '/logos/pix-symbol-ui.webp',
 };
 

@@ -42,8 +42,8 @@ const CARDS = [
   { account: 'Nubank', bank: 'nubank', closing: 1, due: 8, limit: 4800 },
   { account: 'Itaú', bank: 'itau', closing: 25, due: 2, limit: 3200 },
   {
-    account: 'Mercado Pago',
-    bank: 'mercado-pago',
+    account: 'Santander',
+    bank: 'santander',
     closing: 3,
     due: 10,
     limit: 2500,
@@ -57,11 +57,11 @@ const MERCHANTS: [string, string, number, number, string][] = [
   ['Mercado Bom Preço', 'Alimentação', 45, 160, 'Itaú'],
   ['Café Central', 'Alimentação', 8, 19, 'Nubank'],
   ['Uber', 'Transporte', 14, 38, 'Nubank'],
-  ['99', 'Transporte', 11, 29, 'Mercado Pago'],
+  ['99', 'Transporte', 11, 29, 'Santander'],
   ['Posto Ipiranga', 'Transporte', 80, 150, 'Itaú'],
   ['Drogaria São Paulo', 'Saúde', 18, 75, 'Itaú'],
-  ['Amazon', 'Compras', 39, 140, 'Mercado Pago'],
-  ['Shopee', 'Compras', 22, 90, 'Mercado Pago'],
+  ['Amazon', 'Compras', 39, 140, 'Santander'],
+  ['Shopee', 'Compras', 22, 90, 'Santander'],
   ['Cinemark', 'Lazer', 32, 64, 'Nubank'],
   ['Barbearia do Zé', 'Serviços', 40, 55, 'Pix'],
 ];
@@ -200,7 +200,7 @@ export function demoTables(): Record<string, Row[]> {
   installments(
     'Tênis Nike',
     'Compras',
-    'Mercado Pago',
+    'Santander',
     459.9,
     3,
     addDays(today, -40),
@@ -303,7 +303,8 @@ export function demoTables(): Record<string, Row[]> {
       [40, 1200],
       [12, 900],
     ]),
-    piggy('Mercado Pago', 'Viagem', [
+    // Sem Mercado Pago na demonstração: a Viagem é outra caixinha do Nubank.
+    piggy('Nubank', 'Viagem', [
       [130, 800],
       [70, 600],
       [25, 500],
@@ -464,7 +465,7 @@ export function demoTables(): Record<string, Row[]> {
       4,
       '07:01',
       'integration',
-      'Fatura do Mercado Pago fechou',
+      'Fatura do Santander fechou',
       'R$ 419,00 com vencimento em breve.',
       '/conexoes',
       true,
@@ -521,7 +522,7 @@ export function demoTables(): Record<string, Row[]> {
       },
       {
         ...base,
-        account: 'Mercado Pago',
+        account: 'Santander',
         kind: 'credit',
         credit_limit: 2500,
         available_limit: 1912.75,
@@ -723,7 +724,7 @@ const CHATS: [string, string, [string, string][]][] = [
       ['user', 'E qual fatura vence primeiro?'],
       [
         'assistant',
-        'A do **Mercado Pago**, no dia 13 de outubro: **R$ 407,94**. Depois vem a do Itaú, no dia 3 de novembro, e a do Nubank, no dia 9.',
+        'A do **Santander**, no dia 13 de outubro: **R$ 407,94**. Depois vem a do Itaú, no dia 3 de novembro, e a do Nubank, no dia 9.',
       ],
     ],
   ],
@@ -789,7 +790,7 @@ function demoChats(base: Row, today: string) {
 export const DEMO_ACCOUNTS = [
   { bank: 'nubank', balance: 2340.15 },
   { bank: 'itau', balance: 812.4 },
-  { bank: 'mercado-pago', balance: 1120 },
+  { bank: 'santander', balance: 1120 },
   { bank: 'picpay', balance: 356.9 },
 ] as const;
 
@@ -843,9 +844,9 @@ const DEMO_FLOWS: Record<
       'external',
     ],
   ],
-  'mercado-pago': [
+  santander: [
     [
-      'Dinheiro reservado · Viagem',
+      'Aplicação · Santander Investimentos',
       null,
       'Investimentos',
       -40,
@@ -884,8 +885,7 @@ const DEMO_FLOWS: Record<
 };
 
 const DEMO_VAULTS: Record<string, { count: number; total: number }> = {
-  nubank: { count: 1, total: 8102.04 },
-  'mercado-pago': { count: 1, total: 1948.59 },
+  nubank: { count: 2, total: 10050.63 },
 };
 
 /** Página do banco no modo demonstração: extrato inventado e estável. */

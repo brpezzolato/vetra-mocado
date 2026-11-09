@@ -36,6 +36,7 @@ const BANK_NAMES: Record<string, string> = {
   itau: 'Itaú',
   picpay: 'PicPay',
   'mercado-pago': 'Mercado Pago',
+  santander: 'Santander',
 };
 
 /** O dinheiro parado nas contas correntes, como o banco informa agora. */

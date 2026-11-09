@@ -10,6 +10,7 @@ export const CARD_BANKS = [
     short: 'Mercado Pago',
     color: '#ffe600',
   },
+  { id: 'santander', name: 'Santander', short: 'Santander', color: '#ec0000' },
 ] as const;
 
 /** O nome curto do banco de um cartão; "Cartão" quando não é um dos
@@ -43,6 +44,7 @@ export function suggestedCardBank(account: string): CardBankId {
     ['nubank', /\bnubank\b|\bnu\b/],
     ['itau', /\bitau\b|\bitaucard\b/],
     ['mercado-pago', /\bmercado\s?pago\b/],
+    ['santander', /\bsantander\b/],
   ];
   return (
     matches.find(([, pattern]) => pattern.test(normalized))?.[0] ?? 'other'
@@ -126,6 +128,7 @@ export const PAYMENT_METHOD_COLOUR: Record<PaymentMethodId, string> = {
   picpay: '#21c25e',
   itau: '#ff6600',
   'mercado-pago': '#ffe600',
+  santander: '#ec0000',
   flash: '#ff2a91',
   pix: '#32bcad',
   other: 'var(--muted-foreground)',

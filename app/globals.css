@@ -339,6 +339,8 @@ body {
   --brand-picpay-text: #0f8a3d;
   /* Amarelo do Mercado Pago vira dourado escuro no claro (4,8:1). */
   --brand-mercadopago-text: #8a6d00;
+  /* Vermelho do Santander um tom abaixo no claro (5,9:1). */
+  --brand-santander-text: #cc0000;
 }
 
 .dark {
@@ -346,6 +348,8 @@ body {
   --brand-nubank-text: #c07bf5;
   --brand-picpay-text: #21c25e;
   --brand-mercadopago-text: #ffe600;
+  /* E um tom acima no escuro (o #ec0000 dá ~4:1). */
+  --brand-santander-text: #ff4d4d;
   --background: #030303;
   --foreground: #f7f7f7;
   --card: #090909;

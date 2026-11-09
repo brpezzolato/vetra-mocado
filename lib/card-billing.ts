@@ -39,6 +39,12 @@ export const BILLING_RULES: Record<
     label:
       'Informe o vencimento da fatura do Mercado Pago. O Vetra estima o fechamento 7 dias antes; com o banco conectado, usa as datas reais das faturas.',
   },
+  santander: {
+    days: 7,
+    accuracy: 'estimate',
+    label:
+      'Informe o vencimento da fatura do Santander. O Vetra estima o fechamento 7 dias antes; com o banco conectado, usa as datas reais das faturas.',
+  },
   flash: {
     days: null,
     accuracy: 'none',

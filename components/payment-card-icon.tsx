@@ -21,6 +21,9 @@ const WALLET_ART = {
   picpay: {
     src: '/cards/picpay-verde-wallet-ui.webp',
   },
+  santander: {
+    src: '/cards/santander-wallet-ui.webp',
+  },
 } satisfies Partial<Record<PaymentMethodId, { src: string }>>;
 
 /** Banco sem arte própria: cartão na cor da marca com o logo no canto. */

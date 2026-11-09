@@ -118,6 +118,8 @@ export function AppHeader({
       for (const src of [
         '/logos/nubank-ui.webp',
         '/logos/mercado-pago-ui.webp',
+        '/logos/santander-ui.webp',
+        '/cards/santander-wallet-ui.webp',
         '/cards/flash-wallet-ui.webp',
         '/cards/itau-wallet-ui.webp',
         '/cards/nubank-wallet-ui.webp',

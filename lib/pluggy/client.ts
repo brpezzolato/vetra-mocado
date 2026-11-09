@@ -100,6 +100,7 @@ function bankFromName(name: string): PluggyAccount['bank'] {
   if (/\bitau\b/.test(text)) return 'itau';
   if (/\bpicpay\b/.test(text)) return 'picpay';
   if (/\bmercado\s?pago\b/.test(text)) return 'mercado-pago';
+  if (/\bsantander\b/.test(text)) return 'santander';
   return null;
 }
 

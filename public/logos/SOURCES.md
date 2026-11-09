@@ -57,3 +57,34 @@ SOFTWARE
 A versão animada do mesmo porquinho (Microsoft Teams) **não** foi usada: o
 repositório que a distribui é "Personal Use Only", com direitos reservados à
 Microsoft.
+
+## `flash.png`, `flash-f.png` e `flash-f-pink-ui.webp`
+
+Logo oficial da Flash Benefícios (wordmark "flash" branco no quadrado rosa
+`#FE2B8F`), mandado pelo Bruno em 14/10/2026: `flash.png` (512×512).
+
+`flash-f.png` é o símbolo pedido por ele: só o "f" do próprio wordmark
+(recortado pelo contorno, sem redesenhar a letra), no rosa da marca, sobre
+fundo transparente. `flash-f-pink-ui.webp` é ele em 128×128, no filtro de
+cartões do extrato.
+
+## `pix-symbol-ui.webp`
+
+Só o losango do Pix, recortado de `pix.png` (sem o texto "pix powered by
+Banco Central"), com fundo transparente, 128×128. Pedido do Bruno em
+14/10/2026 para o filtro de cartões do extrato.
+
+## `santander-ui.webp` e `santander.png` (e `public/cards/santander-wallet*`)
+
+Baixados em 09/11/2026 a pedido do Bruno, para o Santander entrar no lugar do
+Mercado Pago na demonstração e nos vídeos. Origem: `Grupo_Santander_Logo.svg`
+no [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Grupo_Santander_Logo.svg),
+marcado como domínio público (marca registrada do Banco Santander).
+
+- `santander-ui.webp` (96×96) e `santander.png` (512×512): só a chama, no
+  vermelho da marca `#EC0000`, fundo transparente.
+- `promo/fonte/kit/santander-wordmark.png`: chama + "Santander" (o "Grupo"
+  do arquivo original foi tirado), em `#EC0000`.
+- `public/cards/santander-wallet-ui.webp` (384×241) e `santander-wallet.png`:
+  arte de cartão feita aqui (degradê vermelho, logo branco, "SX"), não é a
+  arte oficial do cartão.

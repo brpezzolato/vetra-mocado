@@ -7,6 +7,7 @@ export const BANK_COLOUR = {
   itau: '#ec7000',
   picpay: '#21c25e',
   'mercado-pago': '#ffe600',
+  santander: '#ec0000',
   /** O cartão de benefício: a cor da marca (PAYMENT_METHOD_COLOUR). */
   flash: '#ff2a91',
 } as const;

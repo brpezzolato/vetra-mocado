@@ -68,6 +68,7 @@ export const BRAND_TEXT: Partial<Record<PaymentCard['bank_id'], string>> = {
   picpay: 'var(--brand-picpay-text)',
   itau: '#ec7000',
   'mercado-pago': 'var(--brand-mercadopago-text)',
+  santander: 'var(--brand-santander-text)',
 };
 export const invoiceTextAccent = (bankId: PaymentCard['bank_id']) =>
   BRAND_TEXT[bankId] ?? 'var(--foreground)';

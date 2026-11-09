@@ -8,6 +8,7 @@ export type SpokenMethod =
   | 'picpay'
   | 'itau'
   | 'mercado-pago'
+  | 'santander'
   | 'pix';
 
 export type SpokenExpense = {
@@ -39,6 +40,7 @@ const METHODS: [RegExp, SpokenMethod][] = [
   [/^(nubank|roxinho|nu)$/, 'nubank'],
   [/^picpay$/, 'picpay'],
   [/^(itau|itaucard)$/, 'itau'],
+  [/^santander$/, 'santander'],
   [/^pix$/, 'pix'],
 ];
 

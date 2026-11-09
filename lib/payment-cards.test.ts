@@ -25,7 +25,8 @@ describe('payment card icon bindings', () => {
     ['Itaú Visa', 'itau'],
     ['Flash Benefícios', 'flash'],
     ['Inter 1000', 'other'],
-    ['Santander', 'other'],
+    ['Santander', 'santander'],
+    ['Bradesco', 'other'],
     ['Mastercard', 'other'],
     ['Internet', 'other'],
   ])(
@@ -92,6 +93,7 @@ describe('payment card icon bindings', () => {
       'nubank',
       'picpay',
       'mercado-pago',
+      'santander',
     ]);
     expect(new Set(CARD_BANKS.map((bank) => bank.id)).size).toBe(
       CARD_BANKS.length,

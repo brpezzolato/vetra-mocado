@@ -53,6 +53,11 @@ const BANKS: Record<BankKey, { name: string; logo: string; color: string }> = {
     logo: '/logos/mercado-pago-ui.webp',
     color: BANK_COLOUR['mercado-pago'],
   },
+  santander: {
+    name: 'Santander',
+    logo: '/logos/santander-ui.webp',
+    color: BANK_COLOUR.santander,
+  },
 };
 
 const PERIODS = [30, 60, 90] as const;

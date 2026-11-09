@@ -13,6 +13,7 @@ const BANK_NAME: Record<string, string> = {
   itau: 'Itaú',
   picpay: 'PicPay',
   'mercado-pago': 'Mercado Pago',
+  santander: 'Santander',
 };
 
 /** "PIC PAY MASTERCARD GOLD" → "Pic Pay Mastercard Gold". */

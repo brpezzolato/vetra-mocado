@@ -162,7 +162,7 @@ export async function loadConnectionHealth(
       };
     }),
   );
-  const order = ['nubank', 'itau', 'picpay', 'mercado-pago'];
+  const order = ['nubank', 'itau', 'picpay', 'mercado-pago', 'santander'];
   return health.sort(
     (a, b) => order.indexOf(a.bank ?? '') - order.indexOf(b.bank ?? ''),
   );
@@ -173,6 +173,7 @@ export const BANK_NAME: Record<string, string> = {
   itau: 'Itaú',
   picpay: 'PicPay',
   'mercado-pago': 'Mercado Pago',
+  santander: 'Santander',
 };
 
 /** Avisa das conexões e do robô; roda com as atualizações automáticas. */

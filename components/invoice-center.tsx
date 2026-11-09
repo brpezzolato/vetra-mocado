@@ -264,6 +264,7 @@ const BANK_ORDER: PaymentCard['bank_id'][] = [
   'itau',
   'picpay',
   'mercado-pago',
+  'santander',
 ];
 const bankRank = (bank: PaymentCard['bank_id']) => {
   const index = BANK_ORDER.indexOf(bank);

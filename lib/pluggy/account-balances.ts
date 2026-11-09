@@ -4,12 +4,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PluggyClient } from './client';
 
 export type AccountBalance = {
-  bank: 'nubank' | 'itau' | 'picpay' | 'mercado-pago';
+  bank: 'nubank' | 'itau' | 'picpay' | 'mercado-pago' | 'santander';
   balance: number;
 };
 
 // Empate (dois zerados, por exemplo) fica sempre na mesma ordem.
-const ORDER = ['nubank', 'itau', 'picpay', 'mercado-pago'];
+const ORDER = ['nubank', 'itau', 'picpay', 'mercado-pago', 'santander'];
 
 /** Limite que vale (`effectiveCreditLimit`) e quanto está livre. */
 export type CardLimitBalance = {

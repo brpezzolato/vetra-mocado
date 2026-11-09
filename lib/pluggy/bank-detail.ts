@@ -17,6 +17,7 @@ export const BANK_KEYS: readonly BankKey[] = [
   'itau',
   'picpay',
   'mercado-pago',
+  'santander',
 ];
 
 export type BankTransaction = {
