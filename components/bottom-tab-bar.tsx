@@ -14,7 +14,9 @@ import { cn } from '@/lib/utils';
    A pílula atrás da aba ativa desliza no toque e também se arrasta, como a
    das abas da home: segue o dedo e, ao soltar, vai com mola para a aba mais
    perto (contando o embalo) e abre a tela dela. Só transform, uma vez por
-   quadro; o React só sabe da aba sob o dedo quando ela muda. */
+   quadro; o React só sabe da aba sob o dedo quando ela muda. Sem
+   backdrop-filter na barra: o desfoque refeito a cada quadro travava o
+   arrasto no iPhone. */
 
 const HIDDEN = ['/auth', '/offline', '/desbloquear', '/assistente'];
 const LAST = TAB_SECTIONS.length - 1;
@@ -65,7 +67,7 @@ export function BottomTabBar() {
     const pill = pillRef.current;
     if (!pill) return;
     pill.style.transition = animate && !reducedMotion() ? SPRING : 'none';
-    pill.style.transform = `translateX(${position * 100}%)`;
+    pill.style.transform = `translate3d(${position * 100}%, 0, 0)`;
   };
   const lift = (raised: boolean) => {
     const pill = liftRef.current;
@@ -155,7 +157,10 @@ export function BottomTabBar() {
     setHover(null);
     const href = TAB_SECTIONS[target].href;
     setTapped(href);
-    if (!isActiveSection(pathname, href)) router.push(href);
+    // A tela nova monta depois da mola quase assentar: montar junto travava
+    // a animação.
+    if (!isActiveSection(pathname, href))
+      window.setTimeout(() => router.push(href), 220);
   };
 
   return (
@@ -164,7 +169,7 @@ export function BottomTabBar() {
       <div aria-hidden="true" className="vetra-tabbar-space lg:hidden" />
       <nav
         aria-label="Seções"
-        className="vetra-tabbar fixed inset-x-0 bottom-0 z-30 rounded-t-[1.75rem] border-t bg-card/95 px-2 pt-2.5 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.35)] backdrop-blur-xl lg:hidden"
+        className="vetra-tabbar fixed inset-x-0 bottom-0 z-30 rounded-t-[1.75rem] border-t bg-card px-2 pt-3.5 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.35)] lg:hidden"
       >
         <div
           className="relative grid touch-none grid-cols-5 select-none"
@@ -186,13 +191,13 @@ export function BottomTabBar() {
               aria-hidden="true"
               className="pointer-events-none absolute top-0 left-0 flex h-8 w-1/5 justify-center will-change-transform"
               style={{
-                transform: `translateX(${Math.max(index, 0) * 100}%)`,
+                transform: `translate3d(${Math.max(index, 0) * 100}%, 0, 0)`,
                 transition: SPRING,
               }}
             >
               <span
                 ref={liftRef}
-                className="h-full w-14 rounded-full bg-foreground/10"
+                className="h-full w-14 rounded-full bg-foreground/10 will-change-transform"
               />
             </span>
           )}
