@@ -15,6 +15,12 @@ import Link from '@/components/navigation-link';
 import { PaymentCardIcon } from '@/components/payment-card-icon';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select';
+import {
   invoiceStage,
   type CardInvoice,
   type CardLimitInfo,
@@ -529,27 +535,113 @@ export function CategoryBreakdown({
   );
 }
 
-/** As compras agrupadas por dia, com o total de cada dia. */
+/** Ordens da lista de compras da fatura. Por data agrupa por dia. */
+const EXPENSE_ORDERS = {
+  recentes: 'Mais recentes',
+  antigas: 'Mais antigas',
+  maior: 'Maior valor',
+  menor: 'Menor valor',
+  nome: 'Nome (A–Z)',
+} as const;
+type ExpenseOrder = keyof typeof EXPENSE_ORDERS;
+
+/** Ordem escolhida, mantida entre as faturas e os cartões abertos. */
+let lastExpenseOrder: ExpenseOrder = 'recentes';
+
+/** As compras da fatura, por dia (com o total do dia), valor ou nome. */
 export function ExpenseList({ invoice }: { invoice: CardInvoice }) {
+  const [order, setOrder] = useState<ExpenseOrder>(() => lastExpenseOrder);
+  const byDate = order === 'recentes' || order === 'antigas';
   const days = useMemo(() => {
     const groups = new Map<string, FinancialEntry[]>();
     for (const entry of invoice.entries) {
       const day = saoDate(entry.occurred_at);
       groups.set(day, [...(groups.get(day) ?? []), entry]);
     }
-    return [...groups].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [invoice]);
+    return [...groups].sort((a, b) =>
+      order === 'antigas' ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]),
+    );
+  }, [invoice, order]);
+  const flat = useMemo(
+    () =>
+      [...invoice.entries].sort((a, b) =>
+        order === 'nome'
+          ? a.description.localeCompare(b.description, 'pt-BR')
+          : order === 'menor'
+            ? new Decimal(a.amount).comparedTo(b.amount)
+            : new Decimal(b.amount).comparedTo(a.amount),
+      ),
+    [invoice, order],
+  );
+  const row = (entry: FinancialEntry, withDay: boolean) =>
+    isPendingSpend(entry) ? (
+      <PendingSpendRow key={entry.id} entry={entry} />
+    ) : (
+      <Link
+        key={entry.id}
+        href="/financeiro"
+        className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-muted-foreground"
+      >
+        <span className="min-w-0">
+          <span className="block truncate text-sm">{entry.description}</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+            {withDay ? `${dayHeading(saoDate(entry.occurred_at))} · ` : ''}
+            {entry.category}
+            {entry.installment_number && entry.installment_total
+              ? ` · parcela ${entry.installment_number}/${entry.installment_total}`
+              : ''}
+            {entry.projected
+              ? ' · prevista'
+              : entry.bank_status === 'PENDING'
+                ? ' · pendente'
+                : ''}
+            {entry.excluded_from_totals ? ' · fora das contas' : ''}
+          </span>
+        </span>
+        <span className="shrink-0 text-sm tabular-nums">
+          <Private>{money(entry.amount)}</Private>
+        </span>
+      </Link>
+    );
   return (
     <section>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-semibold">Compras</h2>
-        <span className="text-xs text-muted-foreground">
-          {invoice.entries.length === 1
-            ? '1 compra'
-            : `${invoice.entries.length} compras`}
-        </span>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="text-sm font-semibold">Compras</h2>
+          <span className="text-xs text-muted-foreground">
+            {invoice.entries.length === 1
+              ? '1 compra'
+              : `${invoice.entries.length} compras`}
+          </span>
+        </div>
+        {invoice.entries.length > 1 && (
+          <Select
+            value={order}
+            onValueChange={(value) => {
+              if (!value) return;
+              lastExpenseOrder = value as ExpenseOrder;
+              setOrder(value as ExpenseOrder);
+            }}
+          >
+            <SelectTrigger size="sm" aria-label="Ordenar compras">
+              <span>{EXPENSE_ORDERS[order]}</span>
+            </SelectTrigger>
+            {/* Largura do gatilho como piso, não teto: o rótulo era cortado. */}
+            <SelectContent className="w-auto min-w-(--anchor-width)">
+              {(Object.keys(EXPENSE_ORDERS) as ExpenseOrder[]).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {EXPENSE_ORDERS[key]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
-      {days.length ? (
+      {!invoice.entries.length ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          Nenhuma compra nesta fatura.
+        </p>
+      ) : byDate ? (
         <div className="grid gap-5">
           {days.map(([day, items]) => (
             <div key={day}>
@@ -569,48 +661,15 @@ export function ExpenseList({ invoice }: { invoice: CardInvoice }) {
                 )}
               </div>
               <div className="divide-y divide-border/40">
-                {items.map((entry) =>
-                  isPendingSpend(entry) ? (
-                    <PendingSpendRow key={entry.id} entry={entry} />
-                  ) : (
-                    <Link
-                      key={entry.id}
-                      href="/financeiro"
-                      className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-muted-foreground"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm">
-                          {entry.description}
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                          {entry.category}
-                          {entry.installment_number && entry.installment_total
-                            ? ` · parcela ${entry.installment_number}/${entry.installment_total}`
-                            : ''}
-                          {entry.projected
-                            ? ' · prevista'
-                            : entry.bank_status === 'PENDING'
-                              ? ' · pendente'
-                              : ''}
-                          {entry.excluded_from_totals
-                            ? ' · fora das contas'
-                            : ''}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-sm tabular-nums">
-                        <Private>{money(entry.amount)}</Private>
-                      </span>
-                    </Link>
-                  ),
-                )}
+                {items.map((entry) => row(entry, false))}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          Nenhuma compra nesta fatura.
-        </p>
+        <div className="divide-y divide-border/40 border-t border-border/70">
+          {flat.map((entry) => row(entry, true))}
+        </div>
       )}
     </section>
   );

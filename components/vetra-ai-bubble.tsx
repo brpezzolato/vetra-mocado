@@ -13,7 +13,7 @@ import { subscribeSyncProgress, type SyncProgress } from '@/lib/sync-progress';
    - fala o progresso da sincronização num balão (lib/sync-progress.ts).
    Parado usa left/top; em movimento só transform, fora do React. */
 
-const SIZE = 48;
+const SIZE = 52;
 const MARGIN = 14;
 const DRAG_THRESHOLD = 6;
 const STORAGE_KEY = 'vetra:ai-bubble-corner';
@@ -316,7 +316,7 @@ function FloatingBubble({ onOpen }: { onOpen: () => void }) {
             type="button"
             aria-label="Abrir Vetra AI"
             title="Vetra AI — arraste para outro canto"
-            className="vetra-ai-bubble grid size-12 touch-none place-items-center select-none"
+            className="vetra-ai-bubble grid size-13 touch-none place-items-center select-none"
             onPointerDown={(event) => {
               if (event.button !== 0) return;
               // Afunda ao toque (:active não dispara no iPhone).
@@ -415,7 +415,7 @@ function FloatingBubble({ onOpen }: { onOpen: () => void }) {
               onOpen();
             }}
           >
-            <VetraMascot className="pointer-events-none size-10" />
+            <VetraMascot className="pointer-events-none size-11" />
           </button>
         </div>
         {speech && bubble && (

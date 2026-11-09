@@ -764,7 +764,7 @@ body:has([role='dialog'], [role='alertdialog'], dialog[open])
   display: none;
 }
 
-/* Só o porquinho com sombra no contorno; área de toque de 48px. */
+/* Só o porquinho com sombra no contorno; área de toque de 52px. */
 .vetra-ai-bubble {
   position: relative;
   border-radius: 9999px;
