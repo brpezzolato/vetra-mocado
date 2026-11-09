@@ -70,6 +70,21 @@ body {
   padding-top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
 }
 
+/* Teste dos arranjos da home (components/home-arrangements.tsx): o seletor
+   flutuante e, no arranjo 6, a barra de abas e o "+" acima da borda de baixo. */
+.vetra-home-switcher {
+  bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem));
+}
+.vetra-home-switcher-raised {
+  bottom: max(6rem, calc(env(safe-area-inset-bottom) + 5.5rem));
+}
+.vetra-home-tabbar {
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.vetra-home-fab {
+  bottom: max(10.5rem, calc(env(safe-area-inset-bottom) + 10rem));
+}
+
 .vetra-sheet-safe-close {
   top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
 }

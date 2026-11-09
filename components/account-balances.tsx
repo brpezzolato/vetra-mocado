@@ -102,7 +102,43 @@ let lastBalances: Balances | null = null;
 const sameBalances = (a: Balances | null, b: Balances) =>
   a !== null && JSON.stringify(a) === JSON.stringify(b);
 
-export function AccountBalances() {
+/** Peças do cartão do mês, para os arranjos de teste da home
+ * (components/home-arrangements.tsx) montarem em outra ordem. */
+export type BalanceParts = {
+  /** O cartão inteiro, como na home atual. */
+  card: ReactNode;
+  room: ReactNode;
+  roomBar: ReactNode;
+  summary: ReactNode;
+  pills: ReactNode;
+  configButton: ReactNode;
+  /** "Hoje ainda dá": `big` é a versão de destaque. */
+  today: (big?: boolean) => ReactNode;
+  blueDays: ReactNode;
+  todayNumbers: {
+    left: Decimal;
+    allowance: Decimal;
+    percent: number;
+    over: boolean;
+  } | null;
+  banks: {
+    bank: Account['bank'];
+    name: string;
+    logo: string;
+    balance: number;
+    free: number;
+    limit: number;
+  }[];
+};
+
+/** `arrange` recebe 'loading', 'empty' ou as peças. */
+export type ArrangeBalances = (
+  parts: BalanceParts | 'loading' | 'empty',
+) => ReactNode;
+
+export function AccountBalances({
+  arrange,
+}: { arrange?: ArrangeBalances } = {}) {
   const [balances, setBalances] = useState<Balances | null>(() => lastBalances);
   const accounts = balances?.accounts ?? null;
   const supabase = useMemo(() => createClient(), []);
@@ -230,6 +266,7 @@ export function AccountBalances() {
     }
   }
 
+  if (accounts === null && arrange) return arrange('loading');
   if (accounts === null)
     return (
       // Esqueleto com o mesmo desenho do cartão, para a home não pular.
@@ -269,7 +306,7 @@ export function AccountBalances() {
         </div>
       </div>
     );
-  if (!accounts.length) return null;
+  if (!accounts.length) return arrange ? arrange('empty') : null;
 
   // Pílulas dos bancos no ScrollArea, sem scroll-snap (fazia a home arrastar
   // de lado no iPhone).
@@ -322,6 +359,7 @@ export function AccountBalances() {
         onFreeze={(day, allowance) => void freezeAllowance(day, allowance)}
         onAdjust={(changed) => void saveAdjusted(changed)}
         pills={pills}
+        arrange={arrange}
       />
     </section>
   );
@@ -343,6 +381,7 @@ function SpendingRoom({
   onFreeze,
   onAdjust,
   pills,
+  arrange,
 }: {
   accounts: Account[];
   cards: CardLimit[];
@@ -354,6 +393,7 @@ function SpendingRoom({
   onAdjust: (changed: AllowanceDay[]) => void;
   /** Fileira de bancos, dentro do cartão. */
   pills: ReactNode;
+  arrange?: ArrangeBalances;
 }) {
   const [configuring, setConfiguring] = useState(false);
   const out = (kind: Exclusion['kind'], key: string) =>
@@ -568,113 +608,156 @@ function SpendingRoom({
   );
   const roomValue = <Private>{money(room.toNumber())}</Private>;
   /** "Hoje ainda dá para gastar": número, fogo, termômetro e notas. */
-  const todayBlock = today && (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {/* Número grande = o que ainda dá hoje; o valor do dia vai abaixo do
-              termômetro. Passou: o excesso em vermelho. */}
-          <p className="text-xs text-muted-foreground">
-            {today.over ? 'Hoje você passou' : 'Hoje ainda dá para gastar'}
-          </p>
-          <p
-            className={cn(
-              'mt-1 text-xl font-semibold tracking-tight tabular-nums',
-              today.over && 'text-destructive',
-            )}
-          >
-            <Private>
-              {money((today.over ? today.overBy : today.left).toNumber())}
-            </Private>
-          </p>
-        </div>
-        {/* Fogo e o total de dias no azul; "provisório" no title. */}
-        {blueDays.total > 0 && (
-          <BlueDaysCounter
-            total={blueDays.total}
-            provisional={blueDays.provisional}
-          />
-        )}
-      </div>
-      {/* Termômetro: verde até o valor do dia, vermelho além. */}
-      <div
-        aria-hidden="true"
-        className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10"
-      >
-        <span
-          className={`block h-full rounded-full transition-[width] duration-500 ${today.over ? 'bg-destructive' : 'bg-emerald-500'}`}
-          style={{ width: `${today.percent}%` }}
-        />
-      </div>
-      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>
-          de <Private>{money(today.allowance.toNumber())}</Private> do dia
-        </span>
-        <span>
-          até {shortDay(today.until)} ·{' '}
-          {today.days === 1 ? 'último dia' : `faltam ${today.days} dias`}
-        </span>
-      </div>
-      {/* Asterisco: o limite já caiu, a compra ainda não chegou pela Pluggy. */}
-      {pendingToday.length > 0 && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          * Inclui{' '}
-          {pendingToday.map((item, index) => (
-            <span key={item.account}>
-              {index > 0 && ' e '}
-              <Private>{money(Number(item.amount))}</Private> no{' '}
-              {cardBankName(suggestedCardBank(item.account))}
-            </span>
-          ))}{' '}
-          que o limite já mostra, mas a compra ainda não chegou.
-        </p>
-      )}
-      {today.short.gt(0) && (
-        <p className="mt-2 text-xs text-destructive">
-          Faltam <Private>{money(today.short.toNumber())}</Private> para cobrir
-          as assinaturas do mês.
-        </p>
-      )}
-    </>
+  const blueDaysNode = blueDays.total > 0 && (
+    <BlueDaysCounter
+      total={blueDays.total}
+      provisional={blueDays.provisional}
+    />
   );
+  const todayView = (big = false) =>
+    today && (
+      <>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {/* Número grande = o que ainda dá hoje; o valor do dia vai abaixo do
+              termômetro. Passou: o excesso em vermelho. */}
+            <p
+              className={cn(
+                'text-muted-foreground',
+                big ? 'text-sm' : 'text-xs',
+              )}
+            >
+              {today.over ? 'Hoje você passou' : 'Hoje ainda dá para gastar'}
+            </p>
+            <p
+              className={cn(
+                'mt-1 font-semibold tracking-tight tabular-nums',
+                big ? 'text-5xl' : 'text-xl',
+                today.over && 'text-destructive',
+              )}
+            >
+              <Private>
+                {money((today.over ? today.overBy : today.left).toNumber())}
+              </Private>
+            </p>
+          </div>
+          {/* Fogo e o total de dias no azul; "provisório" no title. */}
+          {blueDaysNode}
+        </div>
+        {/* Termômetro: verde até o valor do dia, vermelho além. */}
+        <div
+          aria-hidden="true"
+          className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10"
+        >
+          <span
+            className={`block h-full rounded-full transition-[width] duration-500 ${today.over ? 'bg-destructive' : 'bg-emerald-500'}`}
+            style={{ width: `${today.percent}%` }}
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            de <Private>{money(today.allowance.toNumber())}</Private> do dia
+          </span>
+          <span>
+            até {shortDay(today.until)} ·{' '}
+            {today.days === 1 ? 'último dia' : `faltam ${today.days} dias`}
+          </span>
+        </div>
+        {/* Asterisco: o limite já caiu, a compra ainda não chegou pela Pluggy. */}
+        {pendingToday.length > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            * Inclui{' '}
+            {pendingToday.map((item, index) => (
+              <span key={item.account}>
+                {index > 0 && ' e '}
+                <Private>{money(Number(item.amount))}</Private> no{' '}
+                {cardBankName(suggestedCardBank(item.account))}
+              </span>
+            ))}{' '}
+            que o limite já mostra, mas a compra ainda não chegou.
+          </p>
+        )}
+        {today.short.gt(0) && (
+          <p className="mt-2 text-xs text-destructive">
+            Faltam <Private>{money(today.short.toNumber())}</Private> para
+            cobrir as assinaturas do mês.
+          </p>
+        )}
+      </>
+    );
+  const todayBlock = todayView();
+  const summaryNode = nothing ? (
+    <p className="mt-3 text-xs text-muted-foreground">
+      Nenhum saldo nem limite escolhido.
+    </p>
+  ) : (
+    /* Origem do número, discreta embaixo da barra. */
+    <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
+      {summary.map((item) => (
+        <div key={item.label} className="flex items-baseline gap-1">
+          <dt>{item.label}</dt>
+          <dd className="font-medium tabular-nums text-foreground/75">
+            <Private>{money(item.value.toNumber())}</Private>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+  const card = (
+    /* Mês, bancos e dia num cartão só. */
+    <div className="rounded-3xl border bg-card px-5 py-4 shadow-xs">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          Ainda dá para gastar no mês
+        </p>
+        {configButton}
+      </div>
+      <p className="text-3xl font-semibold tracking-tight tabular-nums">
+        {roomValue}
+      </p>
+      <div className="mt-3">{roomBar}</div>
+      {summaryNode}
+      <div className="mt-4">{pills}</div>
+      {todayBlock && !nothing && (
+        <div className="mt-4 border-t border-border/70 pt-4">{todayBlock}</div>
+      )}
+    </div>
+  );
+  const parts: BalanceParts = {
+    card,
+    room: roomValue,
+    roomBar,
+    summary: summaryNode,
+    pills,
+    configButton,
+    today: (big) => (nothing ? null : todayView(big)),
+    blueDays: blueDaysNode,
+    todayNumbers:
+      today && !nothing
+        ? {
+            left: today.left,
+            allowance: today.allowance,
+            percent: today.percent,
+            over: today.over,
+          }
+        : null,
+    banks: accounts.map((account) => {
+      const own = cards.filter(
+        (item) => suggestedCardBank(item.key) === account.bank,
+      );
+      return {
+        bank: account.bank,
+        name: BANKS[account.bank].name,
+        logo: BANKS[account.bank].logo,
+        balance: account.balance,
+        free: own.reduce((sum, item) => sum + item.available, 0),
+        limit: own.reduce((sum, item) => sum + item.limit, 0),
+      };
+    }),
+  };
   return (
     <>
-      {/* Mês, bancos e dia num cartão só. */}
-      <div className="rounded-3xl border bg-card px-5 py-4 shadow-xs">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            Ainda dá para gastar no mês
-          </p>
-          {configButton}
-        </div>
-        <p className="text-3xl font-semibold tracking-tight tabular-nums">
-          {roomValue}
-        </p>
-        <div className="mt-3">{roomBar}</div>
-        {nothing ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Nenhum saldo nem limite escolhido.
-          </p>
-        ) : (
-          /* Origem do número, discreta embaixo da barra. */
-          <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
-            {summary.map((item) => (
-              <div key={item.label} className="flex items-baseline gap-1">
-                <dt>{item.label}</dt>
-                <dd className="font-medium tabular-nums text-foreground/75">
-                  <Private>{money(item.value.toNumber())}</Private>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        <div className="mt-4">{pills}</div>
-        {todayBlock && !nothing && (
-          <div className="mt-4 border-t border-border/70 pt-4">
-            {todayBlock}
-          </div>
-        )}
-      </div>
+      {arrange ? arrange(parts) : card}
       <Dialog open={configuring} onOpenChange={setConfiguring}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
