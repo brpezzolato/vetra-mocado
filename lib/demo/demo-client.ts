@@ -371,7 +371,7 @@ const DEMO_USER = {
   aud: 'authenticated',
   role: 'authenticated',
   app_metadata: {},
-  user_metadata: {},
+  user_metadata: { full_name: 'Bruno' },
   created_at: '2026-01-01T00:00:00Z',
 };
 const DEMO_SESSION = {
