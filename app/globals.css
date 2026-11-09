@@ -70,19 +70,16 @@ body {
   padding-top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
 }
 
-/* Teste dos arranjos da home (components/home-arrangements.tsx): o seletor
-   flutuante e, no arranjo 6, a barra de abas e o "+" acima da borda de baixo. */
-.vetra-home-switcher {
-  bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem));
-}
-.vetra-home-switcher-raised {
-  bottom: max(6rem, calc(env(safe-area-inset-bottom) + 5.5rem));
-}
-.vetra-home-tabbar {
+/* Barra de abas do celular (bottom-tab-bar.tsx) e o "+" da home logo acima. */
+.vetra-tabbar {
   bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
-.vetra-home-fab {
-  bottom: max(10.5rem, calc(env(safe-area-inset-bottom) + 10rem));
+.vetra-fab {
+  bottom: max(6.5rem, calc(env(safe-area-inset-bottom) + 5.75rem));
+}
+[data-keyboard='true'] .vetra-tabbar,
+[data-keyboard='true'] .vetra-fab {
+  display: none;
 }
 
 .vetra-sheet-safe-close {

@@ -6,6 +6,7 @@ import './globals.css';
 import { LoadingActivity } from '@/components/loading-activity';
 import { LoadingRouteGate } from '@/components/loading-route-gate';
 import { AppLock } from '@/components/app-lock';
+import { BottomTabBar } from '@/components/bottom-tab-bar';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -80,7 +81,10 @@ export default async function RootLayout({
       >
         <LoadingActivity />
         <LoadingRouteGate />
-        <AppLock>{children}</AppLock>
+        <AppLock>
+          {children}
+          <BottomTabBar />
+        </AppLock>
       </body>
     </html>
   );

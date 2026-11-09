@@ -9,7 +9,9 @@ import { ExpenseEntryDialog } from '@/components/expense-entry-dialog';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from '@/components/navigation-link';
-import { Sparkles } from 'lucide-react';
+import Decimal from 'decimal.js';
+import { ArrowDownLeft, ArrowUpRight, Plus, Sparkles } from 'lucide-react';
+import { HomeSidebar } from '@/components/home-sidebar';
 import type { DailyRate, PiggyBank } from '@/lib/domain';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import { calculatePortfolio, portfolioEarnings } from '@/lib/portfolio';
@@ -38,9 +40,7 @@ import { FinanceOverviewDataSkeleton } from '@/components/data-skeletons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { ArrowRightSymbol } from '@/components/ui/glass-button';
-import { HomeArrangement, MonthTotals } from '@/components/home-arrangements';
-import { HomeLayoutSwitcher } from '@/components/home-layout-switcher';
-import { useHomeLayout } from '@/lib/home-layout';
+import { money } from '@/lib/money';
 
 /* Dados da home só em memória: volta sem esqueleto e só redesenha quando
    a `signature` muda. */
@@ -330,6 +330,7 @@ export function FinanceOverview({
 
   /* Conteúdo das abas montado uma vez enquanto os dados não mudam. */
   const tabPages = useMemo(() => {
+    const shown = (amount: Decimal) => (available ? money(amount) : '—');
     return [
       <RecentExpenses
         key="gastos"
@@ -351,11 +352,42 @@ export function FinanceOverview({
             framed={false}
           />
         )}
-        <MonthTotals
-          summary={summary}
-          available={available}
-          className="border-t p-4 md:p-5"
-        />
+        <section
+          aria-label="Resumo do mês"
+          className="grid min-w-0 grid-cols-2 gap-3 border-t p-4 md:p-5"
+        >
+          {[
+            {
+              label: 'Gastos do mês',
+              amount: shown(summary.expenses),
+              icon: ArrowUpRight,
+              href: '/financeiro',
+              note: 'Lançamentos registrados',
+            },
+            {
+              label: 'Entrou no mês',
+              amount: shown(summary.income),
+              icon: ArrowDownLeft,
+              href: '/resumo',
+              note: 'Salário, Flash e entradas escolhidas',
+            },
+          ].map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              className="min-w-0 rounded-2xl border bg-background/40 p-4 transition-colors hover:bg-muted/50"
+            >
+              <item.icon className="mb-5 size-4" />
+              <p className="text-xs text-muted-foreground">{item.label}</p>
+              <p className="mt-2 break-words text-xl font-semibold tracking-tight tabular-nums">
+                {item.amount}
+              </p>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {item.note}
+              </p>
+            </Link>
+          ))}
+        </section>
       </div>,
       <div key="cofrinhos" className="p-5 md:p-6">
         {/* Cofrinhos e lista de desejos: total em destaque, um cofrinho por linha e
@@ -446,8 +478,6 @@ export function FinanceOverview({
     </>
   );
   const desktop = useMediaQuery('(min-width: 1024px)');
-  // Teste dos arranjos da home (lib/home-layout.ts); 0 é a home atual.
-  const layout = useHomeLayout();
   /* Convite para a retrospectiva nos 3 primeiros dias do mês. */
   const recapInvite = available && recapIsFresh() && (
     <section className="flex items-center gap-3 rounded-3xl border bg-card px-5 py-4 shadow-sm md:px-6">
@@ -471,146 +501,13 @@ export function FinanceOverview({
       </Link>
     </section>
   );
-  /* Abas em pílula da home atual: tocar ou arrastar troca, com as páginas
-     seguindo o dedo. Os arranjos de teste também as usam. */
-  const pillTabs = (
-    <div className="min-w-0">
-      <Tabs value={tab} onValueChange={(value) => setTab(value as HomeTab)}>
-        {/* Prefixo do grupo: o TabsList do shadcn força 32px na horizontal.
-            As abas por baixo ficam sempre cinza e sem transição: o destaque
-            é só a pílula (senão o branco da aba antiga some com atraso). */}
-        <TabsList
-          className="relative h-12 w-full touch-pan-y gap-0 rounded-full bg-muted/70 p-1 select-none group-data-horizontal/tabs:h-12"
-          onPointerDown={pillDown}
-          onPointerMove={pillMove}
-          onPointerUp={pillUp}
-          onPointerCancel={pillUp}
-          onClickCapture={(event) => {
-            // O arrasto termina num "clique": não troca de aba de novo.
-            if (!pillDragged.current) return;
-            pillDragged.current = false;
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          {HOME_TABS.map((value) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              className="relative h-full min-w-0 basis-0 rounded-full border-0 text-base font-normal text-muted-foreground shadow-none transition-none after:hidden hover:text-muted-foreground data-active:bg-transparent data-active:text-muted-foreground data-active:shadow-none dark:text-muted-foreground dark:hover:text-muted-foreground dark:data-active:border-transparent dark:data-active:bg-transparent dark:data-active:text-muted-foreground"
-            >
-              {TAB_LABELS[value]}
-            </TabsTrigger>
-          ))}
-          {/* A pílula: um terço do trilho. Dentro, os rótulos em negrito
-              andando ao contrário, então só o trecho sob ela fica destacado.
-              Tudo por transform (`placeTabs`). */}
-          <span className="pointer-events-none absolute inset-1">
-            <span
-              ref={indicatorRef}
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 z-10 w-1/3 will-change-transform"
-            >
-              {/* Só o fundo branco cresce ao segurar; o texto fica numa camada à
-                  parte, do tamanho normal. */}
-              <span
-                ref={pillLiftRef}
-                className="absolute inset-0 rounded-full bg-foreground shadow-sm will-change-transform"
-              />
-              <span className="absolute inset-0 overflow-hidden rounded-full">
-                <span
-                  ref={boldLabelsRef}
-                  className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3 will-change-transform"
-                >
-                  {HOME_TABS.map((value) => (
-                    <span
-                      key={value}
-                      className="grid place-items-center text-base font-semibold text-background"
-                    >
-                      {TAB_LABELS[value]}
-                    </span>
-                  ))}
-                </span>
-              </span>
-            </span>
-          </span>
-        </TabsList>
-      </Tabs>
-      <div className="mt-3 rounded-3xl border bg-card">
-        <SwipePager
-          index={HOME_TABS.indexOf(tab)}
-          onChange={(index) => setTab(HOME_TABS[index])}
-          onPlace={placeTabs}
-          ref={pager}
-          pages={tabPages}
-        />
-      </div>
-    </div>
-  );
-  const switcher = (
-    <HomeLayoutSwitcher layout={layout} raised={layout === 6 && !desktop} />
-  );
-  if (layout > 0)
-    return (
-      <div>
-        {dialogs}
-        {error && (
-          <div
-            role="alert"
-            className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm"
-          >
-            <span>Não foi possível atualizar seus gastos.</span>
-            <Button variant="outline" onClick={() => void reload()}>
-              Tentar novamente
-            </Button>
-          </div>
-        )}
-        {!ready && !error ? (
-          <FinanceOverviewDataSkeleton />
-        ) : (
-          <AccountBalances
-            arrange={(balance) => (
-              <HomeArrangement
-                layout={layout}
-                desktop={desktop}
-                balance={balance}
-                entries={entries}
-                recentEntries={recentEntries}
-                recorded={recorded}
-                cards={sortedCards}
-                available={available}
-                onOpen={setSelectedEntry}
-                onAdd={() => setEntryOpen(true)}
-                banks={banks}
-                rates={rates}
-                banksLoading={banksLoading}
-                reserves={reserves}
-                week={week}
-                summary={summary}
-                tabs={pillTabs}
-                recap={recapInvite}
-              />
-            )}
-          />
-        )}
-        {switcher}
-      </div>
-    );
+  /* Abas da home: tocar ou arrastar troca, com as páginas seguindo o dedo. */
   return (
     <div className="space-y-7 md:space-y-9">
       {dialogs}
-      {/* Registrar gasto é o "+" da barra do topo (`onEntryOpenChange`). */}
-      <section>
-        <p className="mb-2 text-xs uppercase tracking-[.18em] text-muted-foreground">
-          Seu dinheiro, por inteiro
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-          Visão geral
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Seus gastos sob controle. Seus cofrinhos acompanhados.
-        </p>
-      </section>
+      {/* Sem título visível: o cartão do mês abre a tela. Registrar gasto é o
+          "+" da barra do topo e, no celular, também o botão flutuante. */}
+      <h1 className="sr-only">Visão geral</h1>
       {error && (
         <div
           role="alert"
@@ -623,8 +520,9 @@ export function FinanceOverview({
         </div>
       )}
       {desktop ? (
-        // Desktop: as três abas viram cartões lado a lado, sem deslizar.
-        <div className="grid grid-cols-2 items-start gap-6">
+        // Desktop: seções na lateral e as três abas em cartões lado a lado.
+        <div className="grid grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)] items-start gap-6">
+          <HomeSidebar onAdd={() => setEntryOpen(true)} />
           <div className="grid min-w-0 gap-6">
             {balancesBlock}
             {ready ? (
@@ -659,6 +557,14 @@ export function FinanceOverview({
         </div>
       ) : (
         <>
+          <button
+            type="button"
+            aria-label="Novo lançamento"
+            onClick={() => setEntryOpen(true)}
+            className="vetra-glass vetra-glass-primary vetra-fab fixed right-5 z-30 grid size-14 place-items-center"
+          >
+            <Plus className="size-6" />
+          </button>
           {/* Mês, bancos e dia (account-balances.tsx), fora do esqueleto: tem memória própria. */}
           {balancesBlock}
           {!ready && !error ? (
@@ -669,12 +575,85 @@ export function FinanceOverview({
               <ReviewTeaser entries={recorded} />
               {/* Abas em pílula: a pílula clara desliza com o dedo, junto com as
                   páginas (swipe-pager.tsx). Sem vidro. */}
-              {pillTabs}
+              <div className="min-w-0">
+                <Tabs
+                  value={tab}
+                  onValueChange={(value) => setTab(value as HomeTab)}
+                >
+                  {/* Prefixo do grupo: o TabsList do shadcn força 32px na horizontal.
+                      As abas por baixo ficam sempre cinza e sem transição: o destaque
+                      é só a pílula (senão o branco da aba antiga some com atraso). */}
+                  <TabsList
+                    className="relative h-12 w-full touch-pan-y gap-0 rounded-full bg-muted/70 p-1 select-none group-data-horizontal/tabs:h-12"
+                    onPointerDown={pillDown}
+                    onPointerMove={pillMove}
+                    onPointerUp={pillUp}
+                    onPointerCancel={pillUp}
+                    onClickCapture={(event) => {
+                      // O arrasto termina num "clique": não troca de aba de novo.
+                      if (!pillDragged.current) return;
+                      pillDragged.current = false;
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                  >
+                    {HOME_TABS.map((value) => (
+                      <TabsTrigger
+                        key={value}
+                        value={value}
+                        className="relative h-full min-w-0 basis-0 rounded-full border-0 text-base font-normal text-muted-foreground shadow-none transition-none after:hidden hover:text-muted-foreground data-active:bg-transparent data-active:text-muted-foreground data-active:shadow-none dark:text-muted-foreground dark:hover:text-muted-foreground dark:data-active:border-transparent dark:data-active:bg-transparent dark:data-active:text-muted-foreground"
+                      >
+                        {TAB_LABELS[value]}
+                      </TabsTrigger>
+                    ))}
+                    {/* A pílula: um terço do trilho. Dentro, os rótulos em negrito
+                        andando ao contrário, então só o trecho sob ela fica destacado.
+                        Tudo por transform (`placeTabs`). */}
+                    <span className="pointer-events-none absolute inset-1">
+                      <span
+                        ref={indicatorRef}
+                        aria-hidden="true"
+                        className="absolute inset-y-0 left-0 z-10 w-1/3 will-change-transform"
+                      >
+                        {/* Só o fundo branco cresce ao segurar; o texto fica numa camada à
+                            parte, do tamanho normal. */}
+                        <span
+                          ref={pillLiftRef}
+                          className="absolute inset-0 rounded-full bg-foreground shadow-sm will-change-transform"
+                        />
+                        <span className="absolute inset-0 overflow-hidden rounded-full">
+                          <span
+                            ref={boldLabelsRef}
+                            className="absolute inset-y-0 left-0 grid w-[300%] grid-cols-3 will-change-transform"
+                          >
+                            {HOME_TABS.map((value) => (
+                              <span
+                                key={value}
+                                className="grid place-items-center text-base font-semibold text-background"
+                              >
+                                {TAB_LABELS[value]}
+                              </span>
+                            ))}
+                          </span>
+                        </span>
+                      </span>
+                    </span>
+                  </TabsList>
+                </Tabs>
+                <div className="mt-3 rounded-3xl border bg-card">
+                  <SwipePager
+                    index={HOME_TABS.indexOf(tab)}
+                    onChange={(index) => setTab(HOME_TABS[index])}
+                    onPlace={placeTabs}
+                    ref={pager}
+                    pages={tabPages}
+                  />
+                </div>
+              </div>
             </>
           )}
         </>
       )}
-      {switcher}
     </div>
   );
 }
