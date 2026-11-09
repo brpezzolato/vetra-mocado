@@ -70,9 +70,13 @@ body {
   padding-top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
 }
 
-/* Barra de abas do celular (bottom-tab-bar.tsx). */
+/* Barra de abas do celular (bottom-tab-bar.tsx): colada na borda de baixo,
+   com a faixa da barra de gestos por dentro. O espaçador tem a mesma altura. */
 .vetra-tabbar {
-  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.vetra-tabbar-space {
+  height: calc(4.75rem + env(safe-area-inset-bottom));
 }
 [data-keyboard='true'] .vetra-tabbar {
   display: none;

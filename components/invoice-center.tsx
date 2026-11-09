@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
 import { ChevronRight, CreditCard } from 'lucide-react';
@@ -9,12 +9,6 @@ import { NavigationBackButton } from '@/components/navigation-back-button';
 import Link from '@/components/navigation-link';
 import { PaymentCardIcon } from '@/components/payment-card-icon';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select';
 import {
   buildCreditCardInvoices,
   type CardBill,
@@ -94,39 +88,6 @@ export function PendingCardPanel({
  * da terceira rodada, escolhida pelo Bruno em 26/10/2026) e a barra do
  * limite em uso embaixo.
  */
-/** Ordens da lista de cartões; a escolha fica no aparelho. */
-const CARD_ORDERS = {
-  banco: 'Banco',
-  vencimento: 'Vencimento mais próximo',
-  maior: 'Maior fatura',
-  menor: 'Menor fatura',
-  limite: 'Mais limite livre',
-} as const;
-type CardOrder = keyof typeof CARD_ORDERS;
-const CARD_ORDER_KEY = 'vetra:invoice-card-order';
-const CARD_ORDER_EVENT = 'vetra:invoice-card-order';
-
-function readCardOrder(): CardOrder {
-  try {
-    const value = localStorage.getItem(CARD_ORDER_KEY);
-    return value && value in CARD_ORDERS ? (value as CardOrder) : 'banco';
-  } catch {
-    return 'banco';
-  }
-}
-
-function subscribeCardOrder(callback: () => void) {
-  window.addEventListener(CARD_ORDER_EVENT, callback);
-  return () => window.removeEventListener(CARD_ORDER_EVENT, callback);
-}
-
-function saveCardOrder(order: CardOrder) {
-  try {
-    localStorage.setItem(CARD_ORDER_KEY, order);
-  } catch {}
-  window.dispatchEvent(new Event(CARD_ORDER_EVENT));
-}
-
 function ConsolidatedInvoices({
   cards,
   pending,
@@ -138,151 +99,103 @@ function ConsolidatedInvoices({
   limits: CardLimit[];
   onOpen: (account: string) => void;
 }) {
-  const order = useSyncExternalStore(
-    subscribeCardOrder,
-    readCardOrder,
-    () => 'banco' as const,
+  // Sempre da maior fatura atual para a menor (pedido do Bruno, 09/11/2026).
+  const sorted = [...cards].sort((a, b) =>
+    new Decimal(b.current.balance).comparedTo(a.current.balance),
   );
-  const freeLimit = (account: string) =>
-    new Decimal(
-      limits.find((item) => item.account === account)?.available_limit ?? 0,
-    );
-  // "Banco" é a ordem que já chega (banco e uso); as outras reordenam.
-  const sorted =
-    order === 'banco'
-      ? cards
-      : [...cards].sort((a, b) =>
-          order === 'vencimento'
-            ? a.current.due.localeCompare(b.current.due)
-            : order === 'limite'
-              ? freeLimit(b.card.account).comparedTo(freeLimit(a.card.account))
-              : order === 'menor'
-                ? new Decimal(a.current.balance).comparedTo(b.current.balance)
-                : new Decimal(b.current.balance).comparedTo(a.current.balance),
-        );
   return (
-    <>
-      {cards.length > 1 && (
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Cartões</h2>
-          <Select
-            value={order}
-            onValueChange={(value) =>
-              value && saveCardOrder(value as CardOrder)
-            }
+    <div className="grid gap-3 md:grid-cols-2">
+      {sorted.map(({ card, current, invoices }) => {
+        const next = byDue(invoices).find((item) => item.due > current.due);
+        const limit = limits.find((item) => item.account === card.account);
+        const total =
+          limit?.credit_limit != null ? new Decimal(limit.credit_limit) : null;
+        const available = new Decimal(limit?.available_limit ?? 0);
+        const used =
+          total && total.gt(0)
+            ? Decimal.max(
+                0,
+                Decimal.min(100, total.minus(available).div(total).times(100)),
+              ).toNumber()
+            : null;
+        return (
+          <button
+            key={card.account}
+            type="button"
+            onClick={() => onOpen(card.account)}
+            className="grid gap-4 rounded-3xl border bg-card p-4 text-left transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-foreground"
           >
-            <SelectTrigger size="sm" aria-label="Ordenar cartões">
-              <span>{CARD_ORDERS[order]}</span>
-            </SelectTrigger>
-            {/* Largura do gatilho como piso, não teto: o rótulo era cortado. */}
-            <SelectContent className="w-auto min-w-(--anchor-width)">
-              {(Object.keys(CARD_ORDERS) as CardOrder[]).map((key) => (
-                <SelectItem key={key} value={key}>
-                  {CARD_ORDERS[key]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <div className="grid gap-3 md:grid-cols-2">
-        {sorted.map(({ card, current, invoices }) => {
-          const next = byDue(invoices).find((item) => item.due > current.due);
-          const limit = limits.find((item) => item.account === card.account);
-          const total =
-            limit?.credit_limit != null
-              ? new Decimal(limit.credit_limit)
-              : null;
-          const available = new Decimal(limit?.available_limit ?? 0);
-          const used =
-            total && total.gt(0)
-              ? Decimal.max(
-                  0,
-                  Decimal.min(
-                    100,
-                    total.minus(available).div(total).times(100),
-                  ),
-                ).toNumber()
-              : null;
-          return (
-            <button
-              key={card.account}
-              type="button"
-              onClick={() => onOpen(card.account)}
-              className="grid gap-4 rounded-3xl border bg-card p-4 text-left transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-foreground"
-            >
-              <span className="flex items-center gap-3">
-                <PaymentCardIcon bankId={card.bank_id} />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {card.account}
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            <span className="flex items-center gap-3">
+              <PaymentCardIcon bankId={card.bank_id} />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                {card.account}
               </span>
-              <span className="grid grid-cols-2 gap-3">
-                <span className="min-w-0 rounded-2xl bg-muted/60 p-3">
-                  <span className="block text-[11px] text-muted-foreground">
-                    Fatura · vence {dayMonth(current.due)}
-                  </span>
-                  <span
-                    className="mt-1 block truncate text-xl font-semibold tracking-tight tabular-nums"
-                    style={{ color: invoiceTextAccent(card.bank_id) }}
-                  >
-                    <Private>{money(current.balance)}</Private>
-                  </span>
-                  <span className="mt-0.5 block truncate text-[11px] text-muted-foreground tabular-nums">
-                    {next ? (
-                      <>
-                        Próxima <Private>{money(shownAmount(next))}</Private>
-                      </>
-                    ) : (
-                      'Sem próxima'
-                    )}
-                  </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </span>
+            <span className="grid grid-cols-2 gap-3">
+              <span className="min-w-0 rounded-2xl bg-muted/60 p-3">
+                <span className="block text-[11px] text-muted-foreground">
+                  Fatura · vence {dayMonth(current.due)}
                 </span>
-                <span className="min-w-0 rounded-2xl bg-muted/60 p-3">
-                  <span className="block text-[11px] text-muted-foreground">
-                    Limite disponível
-                  </span>
-                  {used !== null && total ? (
+                <span
+                  className="mt-1 block truncate text-xl font-semibold tracking-tight tabular-nums"
+                  style={{ color: invoiceTextAccent(card.bank_id) }}
+                >
+                  <Private>{money(current.balance)}</Private>
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground tabular-nums">
+                  {next ? (
                     <>
-                      <span className="mt-1 block truncate text-xl font-semibold tracking-tight tabular-nums">
-                        <Private>{money(available)}</Private>
-                      </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground tabular-nums">
-                        de <Private>{money(total)}</Private>
-                      </span>
+                      Próxima <Private>{money(shownAmount(next))}</Private>
                     </>
                   ) : (
-                    <span className="mt-1 block text-sm text-muted-foreground">
-                      Sem informação
-                    </span>
+                    'Sem próxima'
                   )}
                 </span>
               </span>
-              {used !== null && (
-                <span className="block h-1.5 overflow-hidden rounded-full bg-foreground/10">
-                  <span
-                    className="block h-full rounded-full"
-                    style={{
-                      width: `${used}%`,
-                      background: invoiceAccent(card.bank_id),
-                    }}
-                  />
+              <span className="min-w-0 rounded-2xl bg-muted/60 p-3">
+                <span className="block text-[11px] text-muted-foreground">
+                  Limite disponível
                 </span>
-              )}
-            </button>
-          );
-        })}
-        {pending.map((card) => (
-          <PendingCardPanel
-            key={card.account}
-            card={card}
-            limit={limits.find((item) => item.account === card.account)}
-            onOpen={onOpen}
-          />
-        ))}
-      </div>
-    </>
+                {used !== null && total ? (
+                  <>
+                    <span className="mt-1 block truncate text-xl font-semibold tracking-tight tabular-nums">
+                      <Private>{money(available)}</Private>
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] text-muted-foreground tabular-nums">
+                      de <Private>{money(total)}</Private>
+                    </span>
+                  </>
+                ) : (
+                  <span className="mt-1 block text-sm text-muted-foreground">
+                    Sem informação
+                  </span>
+                )}
+              </span>
+            </span>
+            {used !== null && (
+              <span className="block h-1.5 overflow-hidden rounded-full bg-foreground/10">
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${used}%`,
+                    background: invoiceAccent(card.bank_id),
+                  }}
+                />
+              </span>
+            )}
+          </button>
+        );
+      })}
+      {pending.map((card) => (
+        <PendingCardPanel
+          key={card.account}
+          card={card}
+          limit={limits.find((item) => item.account === card.account)}
+          onOpen={onOpen}
+        />
+      ))}
+    </div>
   );
 }
 

@@ -5,7 +5,7 @@ import Link from '@/components/navigation-link';
 import { TAB_SECTIONS, isActiveSection } from '@/lib/app-sections';
 import { cn } from '@/lib/utils';
 
-/* Barra de abas flutuante do celular, em todas as telas do app. Some no
+/* Barra de abas do celular, presa na borda de baixo, em todas as telas do app. Some no
    computador (lá a navegação é a barra do topo), nas páginas públicas e no
    Vetra AI, onde o campo da conversa ocupa a borda de baixo. O porquinho do
    Vetra AI (vetra-ai-bubble.tsx) não desce abaixo dela. */
@@ -18,10 +18,10 @@ export function BottomTabBar() {
   return (
     <>
       {/* Espaço para o fim da página não ficar escondido atrás da barra. */}
-      <div aria-hidden="true" className="h-24 lg:hidden" />
+      <div aria-hidden="true" className="vetra-tabbar-space lg:hidden" />
       <nav
         aria-label="Seções"
-        className="vetra-tabbar fixed inset-x-3 z-30 flex items-center justify-around rounded-[2rem] border bg-card/85 px-2 py-2 shadow-lg backdrop-blur-xl lg:hidden"
+        className="vetra-tabbar fixed inset-x-0 bottom-0 z-30 flex items-start justify-around rounded-t-[1.75rem] border-t bg-card/95 px-2 pt-2.5 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.35)] backdrop-blur-xl lg:hidden"
       >
         {TAB_SECTIONS.map((item) => {
           const active = isActiveSection(pathname, item.href);
