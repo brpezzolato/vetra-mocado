@@ -285,14 +285,11 @@ export function PeriodSummaryView({
       <AppHeader onRefresh={() => window.location.reload()} />
       {/* Coluna mais estreita: tela de leitura. */}
       <div className="app-container mx-auto max-w-5xl py-6 md:py-9">
-        <NavigationBackButton fallback="/financeiro" className="mb-5" />
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">Resumo</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              O mês dia a dia: o que saiu, o que vence e o que entrou.
-            </p>
-          </div>
+        {/* Sem título visível: o cartão do dia abre a tela. Voltar e "Hoje"
+            dividem a mesma linha. */}
+        <h1 className="sr-only">Resumo</h1>
+        <div className="flex items-center justify-between gap-3">
+          <NavigationBackButton fallback="/financeiro" />
           <Button
             variant="glass-quiet"
             className="h-10 shrink-0"
