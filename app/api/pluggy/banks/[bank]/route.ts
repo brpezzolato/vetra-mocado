@@ -15,7 +15,6 @@ import { demoBankDetail } from '@/lib/demo/demo-data';
 // cofrinhos daquela conexão, lidos na hora da Pluggy (lib/pluggy/
 // bank-detail.ts). `?days=` escolhe o período do extrato (até 90).
 
-export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 const noStore = { 'Cache-Control': 'no-store' };

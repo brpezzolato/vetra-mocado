@@ -70,16 +70,48 @@ body {
   padding-top: max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem));
 }
 
-/* Barra de abas do celular (bottom-tab-bar.tsx) e o "+" da home logo acima. */
+/* Barra de abas do celular (bottom-tab-bar.tsx). */
 .vetra-tabbar {
   bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
-.vetra-fab {
-  bottom: max(6.5rem, calc(env(safe-area-inset-bottom) + 5.75rem));
-}
-[data-keyboard='true'] .vetra-tabbar,
-[data-keyboard='true'] .vetra-fab {
+[data-keyboard='true'] .vetra-tabbar {
   display: none;
+}
+
+/* Troca de tela demorando: uma linha fina correndo no topo, sem cobrir a
+   tela (navigation-link.tsx). */
+.vetra-route-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 60;
+  height: 2px;
+  margin-top: env(safe-area-inset-top);
+  overflow: hidden;
+  pointer-events: none;
+}
+.vetra-route-progress::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 9999px;
+  background: var(--foreground);
+  animation: vetra-route-progress 900ms ease-in-out infinite;
+}
+@keyframes vetra-route-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vetra-route-progress::before {
+    width: 100%;
+    animation: none;
+    opacity: 0.5;
+  }
 }
 
 .vetra-sheet-safe-close {
@@ -731,7 +763,7 @@ body:has([role='dialog'], [role='alertdialog']) .vetra-ai-bubble-layer {
   display: none;
 }
 
-/* Só o porquinho com sombra no contorno; área de toque de 56px. */
+/* Só o porquinho com sombra no contorno; área de toque de 44px. */
 .vetra-ai-bubble {
   position: relative;
   border-radius: 9999px;

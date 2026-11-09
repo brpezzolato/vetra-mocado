@@ -232,21 +232,3 @@ export function playLoadingExit(
   };
   reveal();
 }
-
-/**
- * Navegação sem carregamento (tela já em cache) que chega com esqueleto:
- * cobre com o logo antes da pintura e revela quando a tela montar.
- */
-export function coverUntilReady() {
-  if (typeof window === 'undefined') return;
-  if (activeStage || mountedLoadings > 0 || !pendingOnScreen()) return;
-  // O mesmo lugar e tamanho do logo do carregamento (centro, 112 px).
-  const size = 112;
-  const rect = new DOMRect(
-    (window.innerWidth - size) / 2,
-    (window.innerHeight - size) / 2,
-    size,
-    size,
-  );
-  playLoadingExit(rect);
-}

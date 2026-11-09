@@ -1,6 +1,10 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Telas visitadas ficam montadas (Activity): voltar a elas é instantâneo,
+  // com estado e rolagem. Ver docs/01-app/02-guides/preserving-ui-state.md.
+  cacheComponents: true,
+  partialPrefetching: true,
   async headers() {
     return [
       {

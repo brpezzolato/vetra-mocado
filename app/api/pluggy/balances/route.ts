@@ -12,7 +12,6 @@ import { DEMO_ACCOUNTS, DEMO_CARD_LIMITS } from '@/lib/demo/demo-data';
 // Saldos das contas correntes do usuário, direto da Pluggy. Lido na hora e
 // não guardado.
 
-export const runtime = 'nodejs';
 export const maxDuration = 30;
 
 export async function GET() {

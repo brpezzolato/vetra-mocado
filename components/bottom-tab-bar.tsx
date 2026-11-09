@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 
 /* Barra de abas flutuante do celular, em todas as telas do app. Some no
    computador (lá a navegação é a barra do topo), nas páginas públicas e no
-   Vetra AI, onde o campo da conversa ocupa a borda de baixo. */
+   Vetra AI, onde o campo da conversa ocupa a borda de baixo. O porquinho do
+   Vetra AI (vetra-ai-bubble.tsx) não desce abaixo dela. */
 
 const HIDDEN = ['/auth', '/offline', '/desbloquear', '/assistente'];
 

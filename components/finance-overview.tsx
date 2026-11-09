@@ -10,7 +10,7 @@ import { ExpenseEntryDialog } from '@/components/expense-entry-dialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from '@/components/navigation-link';
 import Decimal from 'decimal.js';
-import { ArrowDownLeft, ArrowUpRight, Plus, Sparkles } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Sparkles } from 'lucide-react';
 import { HomeSidebar } from '@/components/home-sidebar';
 import type { DailyRate, PiggyBank } from '@/lib/domain';
 import type { FinancialEntry } from '@/lib/financial-tracker';
@@ -41,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { ArrowRightSymbol } from '@/components/ui/glass-button';
 import { money } from '@/lib/money';
+import { firstName } from '@/lib/first-name';
 
 /* Dados da home só em memória: volta sem esqueleto e só redesenha quando
    a `signature` muda. */
@@ -49,6 +50,9 @@ let overviewMemory: {
   cards: PaymentCard[];
   signature: string;
 } | null = null;
+
+/** Primeiro nome da saudação, guardado entre visitas à home. */
+let greetingName = '';
 
 const HOME_TABS = ['gastos', 'semana', 'cofrinhos'] as const;
 
@@ -74,6 +78,19 @@ export function FinanceOverview({
   onEntryOpenChange?: (open: boolean) => void;
 }) {
   const client = useMemo(() => createClient(), []);
+  // Primeiro nome da saudação; em memória para não piscar ao voltar.
+  const [name, setName] = useState(() => greetingName);
+  useEffect(() => {
+    let alive = true;
+    void client.auth.getSession().then(({ data }) => {
+      if (!alive || !data.session) return;
+      greetingName = firstName(data.session.user);
+      setName(greetingName);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [client]);
   const [entries, setEntries] = useState<FinancialEntry[]>(
     () => overviewMemory?.entries ?? [],
   );
@@ -505,9 +522,11 @@ export function FinanceOverview({
   return (
     <div className="space-y-7 md:space-y-9">
       {dialogs}
-      {/* Sem título visível: o cartão do mês abre a tela. Registrar gasto é o
-          "+" da barra do topo e, no celular, também o botão flutuante. */}
-      <h1 className="sr-only">Visão geral</h1>
+      {/* Saudação acima do cartão do mês. Registrar gasto é o "+" da barra do
+          topo. */}
+      <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+        {name ? `Bem-vindo, ${name}` : 'Bem-vindo'}
+      </h1>
       {error && (
         <div
           role="alert"
@@ -557,14 +576,6 @@ export function FinanceOverview({
         </div>
       ) : (
         <>
-          <button
-            type="button"
-            aria-label="Novo lançamento"
-            onClick={() => setEntryOpen(true)}
-            className="vetra-glass vetra-glass-primary vetra-fab fixed right-5 z-30 grid size-14 place-items-center"
-          >
-            <Plus className="size-6" />
-          </button>
           {/* Mês, bancos e dia (account-balances.tsx), fora do esqueleto: tem memória própria. */}
           {balancesBlock}
           {!ready && !error ? (

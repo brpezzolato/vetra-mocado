@@ -15,7 +15,6 @@ import {
   errorResponse,
 } from '@/lib/http-security';
 
-export const runtime = 'nodejs';
 const UNLOCK_DURATION_MS = 4 * 60_000;
 type Context = { params: Promise<{ action: string }> };
 const json = (data: unknown) =>

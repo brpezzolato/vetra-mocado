@@ -4,7 +4,6 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { LoadingActivity } from '@/components/loading-activity';
-import { LoadingRouteGate } from '@/components/loading-route-gate';
 import { AppLock } from '@/components/app-lock';
 import { BottomTabBar } from '@/components/bottom-tab-bar';
 
@@ -68,6 +67,10 @@ export const metadata: Metadata = {
   },
 };
 
+/* O nonce da CSP (proxy.ts) exige renderizar a cada pedido: o layout
+   bloqueia de propósito, em vez de servir uma casca pré-renderizada. */
+export const instant = false;
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -80,7 +83,6 @@ export default async function RootLayout({
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
       >
         <LoadingActivity />
-        <LoadingRouteGate />
         <AppLock>
           {children}
           <BottomTabBar />
