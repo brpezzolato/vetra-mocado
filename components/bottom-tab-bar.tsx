@@ -32,7 +32,7 @@ export function BottomTabBar() {
       <div aria-hidden="true" className="vetra-tabbar-space lg:hidden" />
       <nav
         aria-label="Seções"
-        className="vetra-tabbar fixed inset-x-0 bottom-0 z-30 rounded-t-[1.75rem] border-t bg-card/95 px-2 pt-1 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.35)] backdrop-blur-xl lg:hidden"
+        className="vetra-tabbar fixed inset-x-0 bottom-0 z-30 rounded-t-[1.75rem] border-t bg-card/95 px-2 pt-2.5 shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.35)] backdrop-blur-xl lg:hidden"
       >
         <div className="relative grid grid-cols-5">
           {/* A pílula atrás do ícone da aba ativa: desliza de uma aba para a
@@ -57,7 +57,7 @@ export function BottomTabBar() {
                 }
                 onClick={() => setTapped(item.href)}
                 className={cn(
-                  'relative flex flex-col items-center gap-1 pb-1.5 text-[10.5px] text-muted-foreground transition-colors duration-200',
+                  'relative flex flex-col items-center gap-1 pb-1 text-[10.5px] text-muted-foreground transition-colors duration-200',
                   active && 'font-semibold text-foreground',
                 )}
               >

@@ -76,7 +76,7 @@ body {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 .vetra-tabbar-space {
-  height: calc(4.75rem + env(safe-area-inset-bottom));
+  height: calc(5rem + env(safe-area-inset-bottom));
 }
 [data-keyboard='true'] .vetra-tabbar {
   display: none;

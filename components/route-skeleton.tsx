@@ -39,6 +39,93 @@ function Back() {
   return <Skeleton className="h-9 w-24 rounded-full" />;
 }
 
+/** Gastos (expense-ledger.tsx), bloco a bloco: voltar, título e "Novo", o
+ * cartão do mês, busca, situação, cartões e a lista por dia. */
+function LedgerSkeleton() {
+  const row = (key: number) => (
+    <div key={key} className="flex items-center gap-3.5 px-2 py-3">
+      <Skeleton className="aspect-[1071/672] w-14 shrink-0 rounded-[4px]" />
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-3.5 w-36 max-w-full" />
+        <Skeleton className="mt-1.5 h-3 w-24 max-w-full" />
+      </div>
+      <Skeleton className="h-3.5 w-16 shrink-0" />
+    </div>
+  );
+  return (
+    <>
+      <div className="app-container pt-3">
+        <Back />
+      </div>
+      <div
+        aria-busy="true"
+        aria-label="Carregando"
+        className="app-container py-6 md:py-9"
+      >
+        <div className="mx-auto max-w-3xl lg:max-w-none">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <Skeleton className="h-2.5 w-14" />
+              <Skeleton className="mt-2 h-7 w-36 md:h-8" />
+            </div>
+            <Skeleton className="h-9 w-20 rounded-full" />
+          </div>
+          <div className="lg:mt-6 lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-x-8 lg:gap-y-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
+            <div className="lg:col-start-1">
+              <section className="mt-6 rounded-3xl border bg-card p-5 md:p-6 lg:mt-0">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="mt-2 h-9 w-44" />
+                <Skeleton className="mt-5 h-2 w-full rounded-full" />
+                <div className="mt-5 grid grid-cols-3 gap-3 border-t pt-4">
+                  {[0, 1, 2].map((index) => (
+                    <div key={index}>
+                      <Skeleton className="h-2.5 w-12" />
+                      <Skeleton className="mt-1.5 h-4 w-16" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <div className="mt-6 flex flex-col gap-4">
+                <Skeleton className="h-11 rounded-2xl" />
+                <div className="grid grid-cols-5 rounded-full bg-muted/70 p-1">
+                  <Skeleton className="h-9 rounded-full bg-foreground/15" />
+                </div>
+                <div className="rounded-3xl border bg-card p-1">
+                  {[0, 1, 2, 3].map((index) => (
+                    <div
+                      key={index}
+                      className="flex h-11 items-center gap-3 px-3"
+                    >
+                      <Skeleton className="size-6 rounded-full" />
+                      <Skeleton className="h-3.5 w-32" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-0">
+              <div className="flex items-baseline justify-between gap-3 px-1">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <div className="mt-2 rounded-3xl border bg-card px-3 pb-2 md:px-4">
+                <Skeleton className="mx-2 mt-4 mb-1 h-2.5 w-12" />
+                <div className="divide-y divide-border/50">
+                  {[0, 1, 2].map(row)}
+                </div>
+                <Skeleton className="mx-2 mt-4 mb-1 h-2.5 w-14" />
+                <div className="divide-y divide-border/50">
+                  {[3, 4, 5].map(row)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function Body({ pathname }: { pathname: string }) {
   const is = (href: string) => isActiveSection(pathname, href);
   if (pathname === '/')
@@ -93,18 +180,6 @@ function Body({ pathname }: { pathname: string }) {
         <Rows count={4} />
       </>
     );
-  if (is('/financeiro'))
-    return (
-      <>
-        <Skeleton className="h-8 w-40" />
-        <div className="flex gap-2 overflow-x-clip">
-          {[0, 1, 2, 3].map((index) => (
-            <Skeleton key={index} className="h-9 w-24 shrink-0 rounded-full" />
-          ))}
-        </div>
-        <Rows count={7} />
-      </>
-    );
   return (
     <>
       <Back />
@@ -120,13 +195,17 @@ export function RouteSkeleton() {
   return (
     <main className="min-h-dvh overflow-x-clip bg-background text-foreground">
       <AppHeader onRefresh={() => window.location.reload()} />
-      <div
-        aria-busy="true"
-        aria-label="Carregando"
-        className={`app-container grid min-w-0 gap-6 py-6 md:py-9 ${pathname === '/' ? '' : 'max-w-3xl'}`}
-      >
-        <Body pathname={pathname} />
-      </div>
+      {isActiveSection(pathname, '/financeiro') ? (
+        <LedgerSkeleton />
+      ) : (
+        <div
+          aria-busy="true"
+          aria-label="Carregando"
+          className={`app-container grid min-w-0 gap-6 py-6 md:py-9 ${pathname === '/' ? '' : 'max-w-3xl'}`}
+        >
+          <Body pathname={pathname} />
+        </div>
+      )}
     </main>
   );
 }
