@@ -524,9 +524,14 @@ export function FinanceOverview({
       {dialogs}
       {/* Saudação acima do cartão do mês. Registrar gasto é o "+" da barra do
           topo. */}
-      <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-        {name ? `Bem-vindo, ${name}` : 'Bem-vindo'}
-      </h1>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+          {name ? `Bem-vindo, ${name}` : 'Bem-vindo'}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Seus gastos sob controle. Seus cofrinhos acompanhados.
+        </p>
+      </div>
       {error && (
         <div
           role="alert"
