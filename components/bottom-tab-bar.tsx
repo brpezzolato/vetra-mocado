@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from '@/components/navigation-link';
 import { TAB_SECTIONS, isActiveSection } from '@/lib/app-sections';
@@ -16,7 +16,16 @@ import { cn } from '@/lib/utils';
    perto (contando o embalo) e abre a tela dela. Só transform, uma vez por
    quadro; o React só sabe da aba sob o dedo quando ela muda. Sem
    backdrop-filter na barra: o desfoque refeito a cada quadro travava o
-   arrasto no iPhone. */
+   arrasto no iPhone.
+
+   Arrastar o dedo de lado na tela também troca de aba, na ordem da barra
+   (Início → Gastos → Faturas → …): a tela segue o dedo e, solta além de
+   ~28% da largura ou com embalo, sai de lado e a aba vizinha abre. Não
+   disputa com quem já arrasta de lado: campos, sliders, pílulas
+   (`data-no-page-swipe`), listas que rolam de lado e diálogos abertos ficam
+   com o gesto; o carrossel da home (`data-swipe-pager`) só passa o arrasto
+   adiante quando está na primeira ou na última página. As bordas da tela
+   (24 px) ficam para o voltar do iPhone. */
 
 const HIDDEN = ['/auth', '/offline', '/desbloquear', '/assistente'];
 const LAST = TAB_SECTIONS.length - 1;
@@ -39,6 +48,45 @@ type Drag = {
 const reducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+const SWIPE_SKIP =
+  'input, textarea, select, [contenteditable="true"], [role="slider"], [data-no-page-swipe], .vetra-tabbar, .vetra-ai-bubble, dialog, [role="dialog"]';
+
+/** Algo sob o dedo já usa o arrasto de lado nessa direção? */
+function claimsSwipe(target: Element, dx: number) {
+  for (
+    let node: Element | null = target;
+    node && node !== document.body;
+    node = node.parentElement
+  ) {
+    if (node.matches(SWIPE_SKIP)) return true;
+    const pager = node.getAttribute('data-swipe-pager');
+    if (pager) {
+      const page = Number((node as HTMLElement).dataset.page ?? 0);
+      const outward =
+        (page === 0 && dx > 0) || (page === Number(pager) - 1 && dx < 0);
+      if (!outward) return true;
+      continue;
+    }
+    if (node.scrollWidth > node.clientWidth + 1) {
+      const overflow = getComputedStyle(node).overflowX;
+      if (overflow === 'auto' || overflow === 'scroll') return true;
+    }
+  }
+  return false;
+}
+
+type Swipe = {
+  x: number;
+  y: number;
+  target: Element;
+  page: HTMLElement | null;
+  dx: number;
+  lastX: number;
+  lastAt: number;
+  /** px por ms, suavizada. */
+  velocity: number;
+};
+
 export function BottomTabBar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -56,6 +104,153 @@ export function BottomTabBar() {
   const drag = useRef<Drag | null>(null);
   const dragged = useRef(false);
   const frame = useRef(0);
+
+  // Deslize entre telas: troca de aba com a pílula indo junto.
+  const swipeTo = useEffectEvent((target: number) => {
+    const href = TAB_SECTIONS[target].href;
+    const pill = pillRef.current;
+    if (pill) {
+      pill.style.transition = reducedMotion() ? 'none' : SPRING;
+      pill.style.transform = `translate3d(${target * 100}%, 0, 0)`;
+    }
+    setTapped(href);
+    window.setTimeout(() => router.push(href), 160);
+  });
+  useEffect(() => {
+    const at = TAB_SECTIONS.findIndex((item) =>
+      isActiveSection(pathname, item.href),
+    );
+    if (at < 0) return;
+    const wide = window.matchMedia('(min-width: 64rem)');
+    let swipe: Swipe | null = null;
+    let raf = 0;
+    let gone: HTMLElement | null = null;
+    let restore = 0;
+    const clear = (page: HTMLElement) => {
+      page.style.transition = '';
+      page.style.transform = '';
+      page.style.opacity = '';
+    };
+    const start = (event: TouchEvent) => {
+      swipe = null;
+      if (event.touches.length !== 1 || wide.matches) return;
+      if (document.querySelector('dialog[open], [role="dialog"]')) return;
+      const touch = event.touches[0];
+      if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
+      swipe = {
+        x: touch.clientX,
+        y: touch.clientY,
+        target: event.target as Element,
+        page: null,
+        dx: 0,
+        lastX: touch.clientX,
+        lastAt: event.timeStamp,
+        velocity: 0,
+      };
+    };
+    const move = (event: TouchEvent) => {
+      const state = swipe;
+      if (!state) return;
+      if (event.touches.length !== 1) {
+        swipe = null;
+        if (state.page) clear(state.page);
+        return;
+      }
+      const touch = event.touches[0];
+      const dx = touch.clientX - state.x;
+      const dy = touch.clientY - state.y;
+      if (!state.page) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        // Rolagem é vertical; só um arrasto claramente de lado é nosso.
+        if (
+          Math.abs(dy) * 1.2 >= Math.abs(dx) ||
+          claimsSwipe(state.target, dx)
+        ) {
+          swipe = null;
+          return;
+        }
+        state.page = state.target.closest('main');
+        if (!state.page) {
+          swipe = null;
+          return;
+        }
+      }
+      const step = touch.clientX - state.lastX;
+      state.velocity =
+        state.velocity * 0.6 +
+        (step / Math.max(1, event.timeStamp - state.lastAt)) * 0.4;
+      state.lastX = touch.clientX;
+      state.lastAt = event.timeStamp;
+      // Sem aba para aquele lado, pesa.
+      const edge = (at === 0 && dx > 0) || (at === LAST && dx < 0);
+      state.dx = edge ? dx * 0.25 : dx;
+      if (reducedMotion()) return;
+      const page = state.page;
+      const offset = state.dx;
+      window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(() => {
+        page.style.transition = 'none';
+        page.style.transform = `translate3d(${offset}px, 0, 0)`;
+      });
+    };
+    const end = () => {
+      const state = swipe;
+      swipe = null;
+      if (!state?.page) return;
+      window.cancelAnimationFrame(raf);
+      const page = state.page;
+      const width = window.innerWidth;
+      const target = at + (state.dx < 0 ? 1 : -1);
+      const far =
+        Math.abs(state.dx) > width * 0.28 ||
+        (Math.abs(state.velocity) > 0.5 &&
+          Math.abs(state.dx) > 40 &&
+          Math.sign(state.velocity) === Math.sign(state.dx));
+      if (far && target >= 0 && target <= LAST) {
+        if (!reducedMotion()) {
+          page.style.transition =
+            'transform 200ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease-out';
+          page.style.transform = `translate3d(${state.dx < 0 ? -width * 0.4 : width * 0.4}px, 0, 0)`;
+          page.style.opacity = '0';
+        }
+        gone = page;
+        // Se a tela nova não vier, a antiga volta.
+        restore = window.setTimeout(() => clear(page), 4000);
+        swipeTo(target);
+        return;
+      }
+      if (reducedMotion()) {
+        clear(page);
+        return;
+      }
+      page.style.transition =
+        'transform 320ms cubic-bezier(0.34, 1.2, 0.64, 1)';
+      page.style.transform = 'translate3d(0, 0, 0)';
+      window.setTimeout(() => {
+        if (swipe?.page !== page) clear(page);
+      }, 340);
+    };
+    const cancel = () => {
+      const state = swipe;
+      swipe = null;
+      if (state?.page) clear(state.page);
+    };
+    document.addEventListener('touchstart', start, { passive: true });
+    document.addEventListener('touchmove', move, { passive: true });
+    document.addEventListener('touchend', end, { passive: true });
+    document.addEventListener('touchcancel', cancel, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', start);
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', end);
+      document.removeEventListener('touchcancel', cancel);
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(restore);
+      // A tela que saiu de lado fica escondida (Activity); ao voltar a
+      // ela, aparece no lugar.
+      if (gone) clear(gone);
+    };
+  }, [pathname]);
 
   if (HIDDEN.some((path) => isActiveSection(pathname, path))) return null;
   const index = TAB_SECTIONS.findIndex((item) =>

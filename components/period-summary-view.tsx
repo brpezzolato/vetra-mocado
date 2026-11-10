@@ -302,6 +302,7 @@ export function PeriodSummaryView({
 
         {/* Gasto do dia ou do mês num cartão só, com setas e arrasto. */}
         <section
+          data-no-page-swipe
           className="mt-5 touch-pan-y rounded-3xl border bg-card p-5 select-none md:p-7"
           onPointerDown={(event) => {
             swipe.current = { x: event.clientX, y: event.clientY };

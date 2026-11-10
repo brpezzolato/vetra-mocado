@@ -599,6 +599,7 @@ export function FinanceOverview({
                       As abas por baixo ficam sempre cinza e sem transição: o destaque
                       é só a pílula (senão o branco da aba antiga some com atraso). */}
                   <TabsList
+                    data-no-page-swipe
                     className="relative h-12 w-full touch-pan-y gap-0 rounded-full bg-muted/70 p-1 select-none group-data-horizontal/tabs:h-12"
                     onPointerDown={pillDown}
                     onPointerMove={pillMove}

@@ -91,6 +91,9 @@ export function SwipePager({
       track.style.transform = `translate3d(${-page * width() + dx}px, 0, 0)`;
     }
     if (viewport) {
+      // Lido pelo deslize entre telas (bottom-tab-bar.tsx): na ponta, o
+      // arrasto para fora troca de tela em vez de esticar a fileira.
+      viewport.dataset.page = String(page);
       const neighbour = Math.min(
         count - 1,
         Math.max(0, page + (dx < 0 ? 1 : -1)),
@@ -202,6 +205,7 @@ export function SwipePager({
   return (
     <div
       ref={viewportRef}
+      data-swipe-pager={count}
       className={cn('touch-pan-y overflow-clip', className)}
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -225,6 +229,13 @@ export function SwipePager({
           // Decide a direção no primeiro movimento real; vertical não é nosso.
           if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
           if (Math.abs(dy) >= Math.abs(dx)) {
+            drag.current = null;
+            return;
+          }
+          // Na primeira ou na última página, puxar para fora é o deslize
+          // entre telas, não daqui.
+          const page = shown.current;
+          if ((page === 0 && dx > 0) || (page === count - 1 && dx < 0)) {
             drag.current = null;
             return;
           }

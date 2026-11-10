@@ -101,6 +101,7 @@ export function PillSwitch<T extends string>({
 
   return (
     <fieldset
+      data-no-page-swipe
       className="relative m-0 grid min-w-0 touch-pan-y rounded-full border-0 bg-muted/70 p-1 select-none"
       style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
       onPointerDown={(event) => {
