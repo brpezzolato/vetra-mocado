@@ -5,6 +5,7 @@ import type { RecurringExpense } from '@/lib/expense-insights';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import type { PaymentCard } from '@/lib/payment-cards';
 import { createClient } from '@/lib/supabase/server';
+import { syncSubscriptionCharges } from '@/lib/subscription-sync';
 
 export default async function SubscriptionsPage() {
   const supabase = await createClient();
@@ -12,6 +13,8 @@ export default async function SubscriptionsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/auth');
+  // Liga as cobranças que chegaram e vira o mês antes de mostrar.
+  await syncSubscriptionCharges(supabase, user.id).catch(() => null);
 
   const [subscriptions, cards, entries] = await Promise.all([
     supabase.from('recurring_expenses').select('*').order('next_date'),

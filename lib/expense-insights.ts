@@ -23,6 +23,8 @@ export type RecurringExpense = {
   category?: string;
   notes?: string | null;
   updated_at?: string;
+  /** Nome como a cobrança vem do banco (lib/subscription-charges.ts). */
+  bank_label?: string | null;
 };
 export const merchantKey = (s: string) => s.trim().toLowerCase();
 export const saoDate = (d: string | Date) =>

@@ -34,6 +34,10 @@ export type FinancialEntry = {
   date_edited?: boolean;
   /** Nome como veio do banco; o exibido pode ter sido limpo ou renomeado. */
   bank_description?: string | null;
+  /** Cobrança desta assinatura (lib/subscription-charges.ts). */
+  recurring_expense_id?: string | null;
+  /** O usuário desfez o vínculo automático: não volta a ligar. */
+  recurring_dismissed?: boolean;
   /** Compra dividida: a parte do usuário (`amount` é o valor cheio). Ver lib/entry-share.ts. */
   split_share?: number | string | null;
   /** Dividida por igual entre tantas pessoas, ele incluído. */

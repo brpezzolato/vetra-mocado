@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 import Decimal from 'decimal.js';
 import {
   CalendarDays,
+  CircleAlert,
+  CircleCheck,
   CircleDollarSign,
+  Link2,
+  Unlink,
   Pause,
   Pencil,
   Play,
@@ -39,13 +43,20 @@ import {
 } from '@/components/ui/select';
 import { OTHER_PAYER_ACCOUNT } from '@/lib/financial-visualizations';
 import type { RecurringExpense } from '@/lib/expense-insights';
-import { chargeAfter, saoDate, upcomingCharge } from '@/lib/expense-insights';
+import { saoDate } from '@/lib/expense-insights';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import {
   resolveCardBank,
   sortPaymentCardsByUsage,
   type PaymentCard,
 } from '@/lib/payment-cards';
+import {
+  matchSubscriptions,
+  nameMatches,
+  subscriptionPatch,
+  subscriptionTerms,
+  type SubscriptionMatch,
+} from '@/lib/subscription-charges';
 import { createClient } from '@/lib/supabase/client';
 import { money } from '@/lib/money';
 
@@ -54,6 +65,8 @@ type Frequency = 'monthly' | 'yearly';
 // A mesma conta que os gráficos separam do que saiu do bolso.
 const OTHER_ACCOUNT = OTHER_PAYER_ACCOUNT;
 const displayDate = (value: string) => value.split('-').reverse().join('/');
+const shortDate = (value: string) =>
+  value.slice(5).split('-').reverse().join('/');
 const emptyForm = () => ({
   id: '',
   merchant: '',
@@ -87,6 +100,10 @@ export function SubscriptionsCenter({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
+  // Lançamentos com o vínculo de assinatura atualizado na hora.
+  const [entryList, setEntryList] = useState(entries);
+  // Assinatura com o diálogo de cobranças aberto.
+  const [linking, setLinking] = useState<RecurringExpense | null>(null);
   const sortedCards = useMemo(
     () =>
       sortPaymentCardsByUsage(
@@ -96,6 +113,12 @@ export function SubscriptionsCenter({
     [cards, entries],
   );
   const today = saoDate(new Date());
+  // Cobrança do banco de cada assinatura: dia pago de fato e a próxima.
+  const matches = matchSubscriptions(
+    subscriptions.filter((item) => item.active),
+    entryList,
+    today,
+  );
   const visible = subscriptions
     .filter((item) =>
       filter === 'all'
@@ -104,7 +127,10 @@ export function SubscriptionsCenter({
           ? item.paid_by_me !== false
           : item.paid_by_me === false,
     )
-    .map((item) => ({ ...item, next_date: upcomingCharge(item, today) }))
+    .map((item) => ({
+      ...item,
+      next_date: matches.get(item.id)?.nextDate ?? item.next_date,
+    }))
     .sort((a, b) => a.next_date.localeCompare(b.next_date));
   const activeVisible = visible.filter((item) => item.active);
   const monthlyTotal = activeVisible.reduce(
@@ -212,6 +238,48 @@ export function SubscriptionsCenter({
       await reload();
     } catch {
       setError('Não foi possível atualizar a assinatura.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Grava o vínculo (ou o desfaz) e acerta a data da assinatura. */
+  const setLink = async (
+    item: RecurringExpense,
+    entry: FinancialEntry,
+    linked: boolean,
+  ) => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const values = linked
+        ? { recurring_expense_id: item.id, recurring_dismissed: false }
+        : { recurring_expense_id: null, recurring_dismissed: true };
+      const db = createClient();
+      const result = await db
+        .from('financial_entries')
+        .update(values)
+        .eq('id', entry.id)
+        .eq('user_id', userId);
+      if (result.error) throw result.error;
+      const nextEntries = entryList.map((current) =>
+        current.id === entry.id ? { ...current, ...values } : current,
+      );
+      setEntryList(nextEntries);
+      const match = matchSubscriptions([item], nextEntries, today).get(item.id);
+      const patch = match ? subscriptionPatch(item, match) : {};
+      if (Object.keys(patch).length) {
+        const saved = await db
+          .from('recurring_expenses')
+          .update(patch)
+          .eq('id', item.id)
+          .eq('user_id', userId);
+        if (saved.error) throw saved.error;
+      }
+      await reload();
+    } catch {
+      setError('Não foi possível atualizar a cobrança.');
     } finally {
       setBusy(false);
     }
@@ -351,10 +419,10 @@ export function SubscriptionsCenter({
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center gap-2 rounded-xl bg-muted/45 p-3 text-xs text-muted-foreground">
-                  <CalendarDays className="size-4" /> Próxima cobrança em{' '}
-                  {displayDate(item.next_date)}
-                </div>
+                <ChargeStatus
+                  match={item.active ? matches.get(item.id) : undefined}
+                  nextDate={item.next_date}
+                />
                 {item.notes && (
                   <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                     {item.notes}
@@ -376,14 +444,10 @@ export function SubscriptionsCenter({
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={busy || !item.active}
-                    onClick={() =>
-                      void update(item, {
-                        next_date: chargeAfter(item, item.next_date),
-                      })
-                    }
+                    disabled={busy || !item.active || item.paid_by_me === false}
+                    onClick={() => setLinking(item)}
                   >
-                    <CalendarDays /> Avançar
+                    <Link2 /> Cobranças
                   </Button>
                   <Button
                     size="icon-sm"
@@ -426,6 +490,18 @@ export function SubscriptionsCenter({
           </div>
         </section>
       </div>
+
+      <ChargesDialog
+        item={linking}
+        match={linking ? matches.get(linking.id) : undefined}
+        entries={entryList}
+        today={today}
+        busy={busy}
+        onLink={(entry, linked) =>
+          linking && void setLink(linking, entry, linked)
+        }
+        onClose={() => setLinking(null)}
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[min(46rem,calc(100dvh-2rem))] overflow-y-auto sm:max-w-lg">
@@ -624,5 +700,175 @@ function Metric({
         {value}
       </p>
     </div>
+  );
+}
+
+/** Paga, a vencer ou atrasada, pela cobrança do banco. */
+function ChargeStatus({
+  match,
+  nextDate,
+}: {
+  match?: SubscriptionMatch;
+  nextDate: string;
+}) {
+  const history = match?.charges.slice(0, 4) ?? [];
+  return (
+    <div className="mt-4 rounded-xl bg-muted/45 p-3 text-xs">
+      {match?.status === 'paid' && match.last ? (
+        <>
+          <p className="flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
+            <CircleCheck className="size-4 shrink-0" />
+            <span className="min-w-0 truncate">
+              Paga em {displayDate(match.lastDay ?? '')} · {match.last.account}
+            </span>
+          </p>
+          <p className="mt-1.5 pl-6 text-muted-foreground">
+            Próxima em {displayDate(match.nextDate)}
+          </p>
+        </>
+      ) : match?.status === 'late' ? (
+        <>
+          <p className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
+            <CircleAlert className="size-4 shrink-0" />
+            <span className="min-w-0">
+              A cobrança de {displayDate(match.nextDate)} ainda não apareceu
+            </span>
+          </p>
+          <p className="mt-1.5 pl-6 text-muted-foreground">
+            Se ela veio com outro nome, vincule em Cobranças.
+          </p>
+        </>
+      ) : (
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <CalendarDays className="size-4 shrink-0" /> Próxima cobrança em{' '}
+          {displayDate(nextDate)}
+        </p>
+      )}
+      {history.length > 1 && (
+        <p className="mt-2 pl-6 text-muted-foreground tabular-nums">
+          Cobranças:{' '}
+          {history
+            .map((charge) => shortDate(saoDate(charge.occurred_at)))
+            .join(' · ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * As cobranças vinculadas (desfazer) e as compras parecidas dos últimos
+ * meses (vincular), para quando o nome do banco não lembra a assinatura.
+ */
+function ChargesDialog({
+  item,
+  match,
+  entries,
+  today,
+  busy,
+  onLink,
+  onClose,
+}: {
+  item: RecurringExpense | null;
+  match?: SubscriptionMatch;
+  entries: FinancialEntry[];
+  today: string;
+  busy: boolean;
+  onLink: (entry: FinancialEntry, linked: boolean) => void;
+  onClose: () => void;
+}) {
+  const linkedIds = new Set(match?.charges.map((charge) => charge.id));
+  const linked = entries.filter((entry) => linkedIds.has(entry.id));
+  const since = new Date(Date.parse(`${today}T12:00:00Z`) - 120 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const terms = item ? subscriptionTerms(item) : [];
+  const expected = item ? new Decimal(item.amount) : new Decimal(0);
+  const candidates = item
+    ? entries
+        .filter(
+          (entry) =>
+            entry.entry_type === 'expense' &&
+            !linkedIds.has(entry.id) &&
+            !entry.recurring_expense_id &&
+            !entry.installment_group_id &&
+            saoDate(entry.occurred_at) >= since,
+        )
+        .map((entry) => ({
+          entry,
+          named: nameMatches(terms, entry),
+          gap: new Decimal(entry.amount).minus(expected).abs().toNumber(),
+        }))
+        .filter(
+          ({ named, gap }) => named || gap <= expected.times(0.3).toNumber(),
+        )
+        .sort((a, b) => Number(b.named) - Number(a.named) || a.gap - b.gap)
+        .slice(0, 12)
+        .map(({ entry }) => entry)
+    : [];
+  const row = (entry: FinancialEntry, isLinked: boolean) => (
+    <li
+      key={entry.id}
+      className="flex items-center gap-3 border-b border-border/50 py-2.5 last:border-0"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{entry.description}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {displayDate(saoDate(entry.occurred_at))} · {entry.account}
+        </p>
+      </div>
+      <span className="shrink-0 text-sm tabular-nums">
+        {money(entry.amount)}
+      </span>
+      <Button
+        size="sm"
+        variant={isLinked ? 'ghost' : 'outline'}
+        disabled={busy}
+        aria-label={`${isLinked ? 'Desvincular' : 'Vincular'} ${entry.description}`}
+        onClick={() => onLink(entry, !isLinked)}
+      >
+        {isLinked ? <Unlink /> : <Link2 />}
+        <span className="hidden sm:inline">
+          {isLinked ? 'Desvincular' : 'Vincular'}
+        </span>
+      </Button>
+    </li>
+  );
+  return (
+    <Dialog open={item !== null} onOpenChange={(value) => !value && onClose()}>
+      <DialogContent className="max-h-[min(46rem,calc(100dvh-2rem))] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Cobranças de {item?.merchant}</DialogTitle>
+          <DialogDescription>
+            As compras do banco que pagaram esta assinatura. O Vetra liga
+            sozinho as que reconhece; aqui você corrige.
+          </DialogDescription>
+        </DialogHeader>
+        <section>
+          <h3 className="text-sm font-semibold">Vinculadas</h3>
+          {linked.length ? (
+            <ul className="mt-1">{linked.map((entry) => row(entry, true))}</ul>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Nenhuma cobrança vinculada ainda.
+            </p>
+          )}
+        </section>
+        <section>
+          <h3 className="text-sm font-semibold">
+            Parecidas nos últimos 4 meses
+          </h3>
+          {candidates.length ? (
+            <ul className="mt-1">
+              {candidates.map((entry) => row(entry, false))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Nenhuma compra com nome ou valor parecido.
+            </p>
+          )}
+        </section>
+      </DialogContent>
+    </Dialog>
   );
 }
