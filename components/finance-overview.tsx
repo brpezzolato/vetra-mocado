@@ -11,7 +11,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from '@/components/navigation-link';
 import Decimal from 'decimal.js';
 import { ArrowDownLeft, ArrowUpRight, Sparkles } from 'lucide-react';
-import { HomeSidebar } from '@/components/home-sidebar';
 import type { DailyRate, PiggyBank } from '@/lib/domain';
 import type { FinancialEntry } from '@/lib/financial-tracker';
 import { calculatePortfolio, portfolioEarnings } from '@/lib/portfolio';
@@ -544,9 +543,9 @@ export function FinanceOverview({
         </div>
       )}
       {desktop ? (
-        // Desktop: seções na lateral e as três abas em cartões lado a lado.
-        <div className="grid grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)] items-start gap-6">
-          <HomeSidebar onAdd={() => setEntryOpen(true)} />
+        // Desktop: as três abas em cartões, em duas colunas. As seções ficam
+        // na barra do topo; repetir na lateral era redundante.
+        <div className="grid grid-cols-2 items-start gap-6">
           <div className="grid min-w-0 gap-6">
             {balancesBlock}
             {ready ? (

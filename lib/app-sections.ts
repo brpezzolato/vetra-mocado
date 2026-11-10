@@ -1,5 +1,4 @@
 import {
-  Bot,
   CalendarDays,
   CreditCard,
   Home,
@@ -8,7 +7,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-/** As seções da barra de abas do celular e da lateral da home no desktop. */
+/** As seções da barra de abas do celular. */
 export type AppSection = { href: string; label: string; icon: LucideIcon };
 
 export const TAB_SECTIONS: AppSection[] = [
@@ -17,11 +16,6 @@ export const TAB_SECTIONS: AppSection[] = [
   { href: '/faturas', label: 'Faturas', icon: CreditCard },
   { href: '/cofrinhos', label: 'Cofrinhos', icon: PiggyBank },
   { href: '/resumo', label: 'Resumo', icon: CalendarDays },
-];
-
-export const SIDEBAR_SECTIONS: AppSection[] = [
-  ...TAB_SECTIONS,
-  { href: '/assistente', label: 'Vetra AI', icon: Bot },
 ];
 
 /** A seção da página atual: a home só no "/", as outras pelo prefixo. */
