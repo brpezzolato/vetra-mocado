@@ -126,6 +126,174 @@ function LedgerSkeleton() {
   );
 }
 
+/** Resumo/calendário (period-summary-view.tsx), bloco a bloco: voltar e
+ * "Hoje", o cartão do dia, o calendário com a grade e a legenda, a coluna do
+ * dia e dos próximos, e o cartão das listas do mês. */
+function SummarySkeleton() {
+  // Um mês com pontos em alguns dias, como num calendário de verdade.
+  const dots = [2, 6, 9, 13, 17, 20, 24, 27, 30];
+  const pair = (label: string, value: string) => (
+    <div>
+      <Skeleton className={`h-3 ${label}`} />
+      <Skeleton className={`mt-1.5 h-4 ${value}`} />
+    </div>
+  );
+  const line = (key: number) => (
+    <div key={key} className="flex items-center gap-3 px-1 py-1.5">
+      <Skeleton className="h-3 w-9 shrink-0" />
+      <Skeleton className="size-2 shrink-0 rounded-full" />
+      <Skeleton className="h-3.5 flex-1" />
+      <Skeleton className="h-3.5 w-14 shrink-0" />
+    </div>
+  );
+  return (
+    <div
+      aria-busy="true"
+      aria-label="Carregando"
+      className="app-container mx-auto max-w-5xl py-6 md:py-9"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <Back />
+        <Skeleton className="h-10 w-20 rounded-full" />
+      </div>
+
+      {/* Cartão do dia: título, pílula, setas, valor e os dois números. */}
+      <section className="mt-5 rounded-3xl border bg-card p-5 md:p-7">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Skeleton className="h-6 w-36" />
+            <Skeleton className="mt-2 h-8 w-28 rounded-full" />
+          </div>
+          <div className="flex gap-1">
+            <Skeleton className="size-9 rounded-full" />
+            <Skeleton className="size-9 rounded-full" />
+          </div>
+        </div>
+        <Skeleton className="mt-4 h-3 w-24" />
+        <Skeleton className="mt-2 h-10 w-44 md:h-12" />
+        <div className="mt-6 grid gap-4 border-t pt-5 sm:grid-cols-2 sm:gap-6">
+          {[0, 1].map((key) => (
+            <div key={key}>
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="mt-2 h-5 w-24" />
+              <Skeleton className="mt-1.5 h-3 w-40 max-w-full" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        {/* Calendário: mês e setas, dias da semana, a grade e a legenda. */}
+        <section className="min-w-0 rounded-3xl border bg-card p-3 sm:p-4 lg:col-start-1 lg:row-start-1">
+          <div className="mb-3 flex items-center gap-2 px-1 pt-1">
+            <Skeleton className="h-6 w-36" />
+            <div className="ml-auto flex gap-1">
+              <Skeleton className="size-9 rounded-full" />
+              <Skeleton className="size-9 rounded-full" />
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: 7 }, (_, index) => (
+              <div key={index} className="grid place-items-center py-1.5">
+                <Skeleton className="h-2.5 w-6" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            <span aria-hidden="true" />
+            <span aria-hidden="true" />
+            {Array.from({ length: 30 }, (_, index) => (
+              <div
+                key={index}
+                className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl bg-muted/30"
+              >
+                <Skeleton className="h-3 w-4" />
+                <span className="flex h-2 gap-0.5">
+                  {dots.includes(index) && (
+                    <Skeleton className="size-2 rounded-full" />
+                  )}
+                  {index % 9 === 6 && (
+                    <Skeleton className="size-2 rounded-full" />
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2 px-1">
+            <Skeleton className="h-7 w-24 rounded-full" />
+            <Skeleton className="h-7 w-20 rounded-full" />
+            <Skeleton className="h-7 w-28 rounded-full" />
+            <Skeleton className="ml-auto h-7 w-28 rounded-full" />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t px-1 pt-4 sm:grid-cols-3">
+            {pair('w-28', 'w-20')}
+            {pair('w-20', 'w-24')}
+            <div className="col-span-2 sm:col-span-1">
+              {pair('w-36', 'w-20')}
+            </div>
+          </div>
+        </section>
+
+        {/* Coluna do dia: o valor do dia, os lançamentos e os próximos. */}
+        <div className="min-w-0 space-y-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          <section className="rounded-3xl border bg-card p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="mt-2 h-6 w-24" />
+              </div>
+              <Skeleton className="h-3 w-16" />
+            </div>
+            <Skeleton className="mt-3 h-2 w-full rounded-full" />
+            <Skeleton className="mt-2 h-3 w-40" />
+          </section>
+          <section className="rounded-3xl border bg-card px-3 py-1 md:px-4">
+            {[0, 1, 2].map((key) => (
+              <div
+                key={key}
+                className="flex items-center gap-3.5 border-b border-border/50 py-3 last:border-0"
+              >
+                <Skeleton className="aspect-[1071/672] w-14 shrink-0 rounded-[4px]" />
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-3.5 w-32 max-w-full" />
+                  <Skeleton className="mt-1.5 h-3 w-24 max-w-full" />
+                </div>
+                <Skeleton className="h-4 w-16 shrink-0" />
+              </div>
+            ))}
+          </section>
+          <section className="rounded-3xl border bg-card p-5">
+            <Skeleton className="h-4 w-36" />
+            <div className="mt-3 space-y-2">{[0, 1, 2, 3].map(line)}</div>
+          </section>
+        </div>
+
+        {/* Listas do mês: os quatro chips e as barras por categoria. */}
+        <section className="min-w-0 rounded-3xl border bg-card p-4 lg:col-start-1 lg:row-start-2">
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-8 w-24 rounded-full" />
+            <Skeleton className="h-8 w-20 rounded-full" />
+            <Skeleton className="h-8 w-32 rounded-full" />
+            <Skeleton className="h-8 w-20 rounded-full" />
+          </div>
+          <Skeleton className="mt-4 h-4 w-40" />
+          <div className="mt-4 space-y-4">
+            {['w-full', 'w-3/4', 'w-1/2', 'w-1/3'].map((width) => (
+              <div key={width}>
+                <div className="flex justify-between gap-3">
+                  <Skeleton className="h-3.5 w-28" />
+                  <Skeleton className="h-3.5 w-16" />
+                </div>
+                <Skeleton className={`mt-2 h-1.5 rounded-full ${width}`} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function Body({ pathname }: { pathname: string }) {
   const is = (href: string) => isActiveSection(pathname, href);
   if (pathname === '/')
@@ -153,17 +321,6 @@ function Body({ pathname }: { pathname: string }) {
           <Card />
           <Card />
         </div>
-      </>
-    );
-  if (is('/resumo') || is('/calendario'))
-    return (
-      <>
-        <div className="flex items-center justify-between">
-          <Back />
-          <Skeleton className="h-10 w-20 rounded-full" />
-        </div>
-        <Card className="h-56" />
-        <Card className="h-80" />
       </>
     );
   if (is('/cofrinhos'))
@@ -197,6 +354,9 @@ export function RouteSkeleton() {
       <AppHeader onRefresh={() => window.location.reload()} />
       {isActiveSection(pathname, '/financeiro') ? (
         <LedgerSkeleton />
+      ) : isActiveSection(pathname, '/resumo') ||
+        isActiveSection(pathname, '/calendario') ? (
+        <SummarySkeleton />
       ) : (
         <div
           aria-busy="true"
