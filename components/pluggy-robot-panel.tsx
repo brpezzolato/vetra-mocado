@@ -79,6 +79,7 @@ const ROBOT: Record<string, string> = {
   'failed:no_connections': 'Robô: o Meu Pluggy não mostrou conexões',
   'failed:no_button': 'Robô: não achou o botão de atualizar',
   'failed:refused': 'Robô: o Meu Pluggy não aceitou o pedido em nenhum banco',
+  'failed:challenged': 'Robô: a Pluggy pediu verificação anti-robô',
   'skipped:too_soon': 'Robô: pedido recente, pulou',
   'skipped:daily_cap': 'Robô: limite do dia atingido, só leu o que já havia',
   'skipped:manual_cap':
