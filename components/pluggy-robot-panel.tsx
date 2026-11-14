@@ -5,12 +5,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  ExternalLink,
   RefreshCw,
   XCircle,
 } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
 import { NavigationBackButton } from '@/components/navigation-back-button';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -85,6 +86,9 @@ const ROBOT: Record<string, string> = {
   'skipped:manual_cap':
     'Robô: suas 2 atualizações de hoje já foram (as outras 3 são do automático), só leu o que já havia',
 };
+
+/** A lista de conexões do Meu Pluggy, onde cada banco tem o seu Atualizar. */
+const MEU_PLUGGY_CONNECTIONS = 'https://meu.pluggy.ai/connections';
 
 function duration(ms: number) {
   if (ms < 1000) return `${(ms / 1000).toFixed(1).replace('.', ',')} s`;
@@ -288,6 +292,28 @@ export function PluggyRobotPanel() {
           Como o Vetra busca os dados dos seus bancos e o que cada atualização
           trouxe.
         </p>
+
+        {/* Atualizar à mão (13/11/2026): a Pluggy passou a barrar o robô com
+            verificação anti-robô, e a API recusa atualizar itens do Meu
+            Pluggy. Os links de cada conexão lá não batem com os ids da API,
+            então o botão abre a lista; os dados voltam pelo webhook. */}
+        <section className="mt-6 rounded-3xl border bg-card p-5">
+          <h2 className="font-semibold">Atualizar os bancos</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Abra o Meu Pluggy e toque em Atualizar em cada banco. Os dados
+            chegam aqui sozinhos em poucos minutos. A Pluggy também atualiza uma
+            vez por dia sem você pedir.
+          </p>
+          <a
+            href={MEU_PLUGGY_CONNECTIONS}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(buttonVariants({ variant: 'glass' }), 'mt-4 w-full')}
+          >
+            <ExternalLink className="size-4" />
+            Abrir o Meu Pluggy
+          </a>
+        </section>
 
         <section className="mt-6 rounded-3xl border bg-card p-5">
           <div className="flex items-start gap-3">
