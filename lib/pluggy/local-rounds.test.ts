@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { roundVerdict, usedToday, type LocalRound } from './local-rounds';
+import {
+  currentSlot,
+  roundVerdict,
+  usedToday,
+  type LocalRound,
+} from './local-rounds';
 
 // 16/11/2026 15h em São Paulo.
 const now = new Date('2026-11-16T18:00:00Z');
@@ -72,5 +77,32 @@ describe('limites da atualização pelo notebook', () => {
       requested_at: '2026-11-16T17:59:00Z',
     });
     expect(roundVerdict([mine], 'button', now, 'eu')).toBe('ok');
+  });
+});
+
+describe('horário da rodada automática', () => {
+  const at = (iso: string) => currentSlot(new Date(iso))?.toISOString() ?? null;
+
+  it('acha o horário mais recente dentro da janela de 3 h', () => {
+    // 14h20 em São Paulo.
+    expect(at('2026-11-16T17:20:00Z')).toBe('2026-11-16T17:00:00.000Z');
+    // 16h59: ainda o das 14h; 17h01: janela fechada.
+    expect(at('2026-11-16T19:59:00Z')).toBe('2026-11-16T17:00:00.000Z');
+    expect(at('2026-11-16T20:01:00Z')).toBeNull();
+  });
+
+  it('o das 23h vale depois da meia-noite', () => {
+    // 00h30 de 17/11 em São Paulo.
+    expect(at('2026-11-17T03:30:00Z')).toBe('2026-11-17T02:00:00.000Z');
+  });
+
+  it('o das 18h passa a valer no lugar do das 14h', () => {
+    // 18h10 em São Paulo.
+    expect(at('2026-11-16T21:10:00Z')).toBe('2026-11-16T21:00:00.000Z');
+  });
+
+  it('de madrugada, nenhum', () => {
+    // 4h em São Paulo.
+    expect(at('2026-11-16T07:00:00Z')).toBeNull();
   });
 });

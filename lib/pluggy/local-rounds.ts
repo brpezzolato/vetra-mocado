@@ -77,3 +77,33 @@ export function roundVerdict(
   if (now.getTime() - lastOk < LOCAL_EVERY_MS) return 'too_soon';
   return 'ok';
 }
+
+/** Horários das rodadas automáticas (São Paulo), os mesmos do cron da Vercel. */
+export const SCHEDULE_HOURS = [7, 14, 18, 23] as const;
+/** Cada rodada cai num minuto aleatório até 45 min depois do horário. */
+export const SCHEDULE_JITTER_MS = 45 * 60_000;
+/** Notebook dormindo no horário: a rodada ainda vale até 3 h depois. */
+export const SCHEDULE_WINDOW_MS = 3 * 3_600_000;
+
+/**
+ * Início do horário automático mais recente cuja janela ainda está aberta
+ * (inclui o das 23h de ontem depois da meia-noite); `null` fora de todas.
+ * São Paulo não tem horário de verão desde 2019: -03:00 fixo.
+ */
+export function currentSlot(now: Date): Date | null {
+  const days = [
+    saoPauloDay(new Date(now.getTime() - 86_400_000)),
+    saoPauloDay(now),
+  ];
+  let best: Date | null = null;
+  for (const day of days)
+    for (const hour of SCHEDULE_HOURS) {
+      const start = new Date(
+        `${day}T${String(hour).padStart(2, '0')}:00:00-03:00`,
+      );
+      const since = now.getTime() - start.getTime();
+      if (since >= 0 && since < SCHEDULE_WINDOW_MS && (!best || start > best))
+        best = start;
+    }
+  return best;
+}
