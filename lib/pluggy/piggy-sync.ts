@@ -19,6 +19,7 @@ import {
   lotMovements,
   planMovementWrites,
   explainBalance,
+  inferredWithdrawal,
   reserveMovements,
   reserveSnapshot,
   saoPauloDay,
@@ -206,7 +207,11 @@ class Sync {
         continue;
       }
 
-      await this.saveSnapshot(bank, piggySnapshotFromLots(ofRate));
+      const snapshot = piggySnapshotFromLots(ofRate);
+      const previous = snapshot
+        ? await this.previousSnapshot(bank, snapshot.snapshotDate)
+        : null;
+      await this.saveSnapshot(bank, snapshot);
 
       const importFrom = bank.pluggy_import_from;
       const relevant = ofRate.filter((lot) => {
@@ -219,11 +224,53 @@ class Sync {
           lot.id,
           await this.pluggy.listInvestmentMovements(lot.id),
         );
+      const movements = lotMovements(relevant, movementsByLot, importFrom);
+      const inferred = snapshot
+        ? inferredWithdrawal({
+            piggyId: bank.id,
+            previous,
+            today: { date: snapshot.snapshotDate, gross: snapshot.gross },
+            movements,
+          })
+        : null;
       await this.applyMovements(
         bank,
-        lotMovements(relevant, movementsByLot, importFrom),
+        inferred && !(await this.withdrawalOn(bank, snapshot!.snapshotDate))
+          ? [...movements, inferred]
+          : movements,
       );
     }
+  }
+
+  /** Último saldo da Pluggy antes de `day`, para calcular retirada. */
+  private async previousSnapshot(bank: LinkedBank, day: string) {
+    const { data, error } = await this.admin
+      .from('balance_snapshots')
+      .select('snapshot_date, gross_balance')
+      .eq('piggy_bank_id', bank.id)
+      .eq('source', PLUGGY_SNAPSHOT_SOURCE)
+      .lt('snapshot_date', day)
+      .order('snapshot_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data
+      ? {
+          date: data.snapshot_date as string,
+          gross: String(data.gross_balance),
+        }
+      : null;
+  }
+
+  /** Retirada já lançada no dia (à mão ou calculada): não calcula outra. */
+  private async withdrawalOn(bank: LinkedBank, day: string) {
+    const { data, error } = await this.admin
+      .from('transactions')
+      .select('occurred_at')
+      .eq('piggy_bank_id', bank.id)
+      .eq('kind', 'withdrawal');
+    if (error) throw error;
+    return (data ?? []).some((row) => saoPauloDay(row.occurred_at) === day);
   }
 
   /** Mercado Pago: um cofrinho por saldo reservado da conta. */
@@ -496,7 +543,9 @@ class Sync {
             kind: movement.kind,
             amount: movement.amount,
             occurred_at: movement.occurredAt,
-            note: 'Veio do banco',
+            note: movement.externalId.startsWith('vetra:')
+              ? 'Calculado pelo Vetra'
+              : 'Veio do banco',
             external_id: movement.externalId,
           })),
         );

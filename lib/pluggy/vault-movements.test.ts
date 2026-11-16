@@ -6,12 +6,14 @@ import type {
 } from './types';
 import {
   archiveStillCovers,
+  inferredWithdrawal,
   lotMovements,
   planMovementWrites,
   explainBalance,
   reserveMovements,
   reserveSnapshot,
   saoPauloDay,
+  type BankMovement,
 } from './vault-movements';
 
 // Tudo inventado, no formato real da Pluggy visto em 2026-09-30.
@@ -365,5 +367,95 @@ describe('cofrinho arquivado com o banco atrasado', () => {
     expect(
       archiveStillCovers('2026-09-30T14:00:00Z', ['2026-09-30', '2026-10-02']),
     ).toBe(false);
+  });
+});
+
+describe('retirada calculada pela queda do saldo', () => {
+  const deposit = (day: string, amount: string): BankMovement => ({
+    externalId: `pluggy:${day}`,
+    kind: 'deposit',
+    amount,
+    occurredAt: `${day}T12:00:00-03:00`,
+  });
+
+  it('calcula o resgate que o banco não mandou (Itaú, 10/11)', () => {
+    expect(
+      inferredWithdrawal({
+        piggyId: 'p',
+        previous: { date: '2026-11-09', gross: '1102.83' },
+        today: { date: '2026-11-10', gross: '940.73' },
+        movements: [deposit('2026-10-30', '1080.00')],
+      }),
+    ).toEqual({
+      externalId: 'vetra:withdrawal:p:2026-11-10',
+      kind: 'withdrawal',
+      amount: '162.10',
+      occurredAt: '2026-11-10T12:00:00-03:00',
+    });
+  });
+
+  it('desconta os aportes do intervalo antes de comparar', () => {
+    expect(
+      inferredWithdrawal({
+        piggyId: 'p',
+        previous: { date: '2026-11-13', gross: '942.16' },
+        today: { date: '2026-11-16', gross: '1237.78' },
+        movements: [
+          deposit('2026-11-14', '225.00'),
+          deposit('2026-11-16', '70.00'),
+        ],
+      }),
+    ).toBeNull();
+    expect(
+      inferredWithdrawal({
+        piggyId: 'p',
+        previous: { date: '2026-11-13', gross: '942.16' },
+        today: { date: '2026-11-16', gross: '1000.00' },
+        movements: [deposit('2026-11-14', '225.00')],
+      })?.amount,
+    ).toBe('167.16');
+  });
+
+  it('não inventa retirada sem queda, sem saldo anterior ou com a do banco', () => {
+    const today = { date: '2026-11-11', gross: '941.20' };
+    expect(
+      inferredWithdrawal({
+        piggyId: 'p',
+        previous: { date: '2026-11-10', gross: '940.73' },
+        today,
+        movements: [],
+      }),
+    ).toBeNull();
+    expect(
+      inferredWithdrawal({
+        piggyId: 'p',
+        previous: { date: '2026-11-10', gross: '941.90' },
+        today,
+        movements: [],
+      }),
+    ).toBeNull();
+    expect(
+      inferredWithdrawal({
+        piggyId: 'p',
+        previous: null,
+        today,
+        movements: [],
+      }),
+    ).toBeNull();
+    expect(
+      inferredWithdrawal({
+        piggyId: 'p',
+        previous: { date: '2026-11-10', gross: '1100.00' },
+        today,
+        movements: [
+          {
+            externalId: 'pluggy:s',
+            kind: 'withdrawal',
+            amount: '150.00',
+            occurredAt: '2026-11-11T12:00:00-03:00',
+          },
+        ],
+      }),
+    ).toBeNull();
   });
 });

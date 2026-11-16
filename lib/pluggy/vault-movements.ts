@@ -229,3 +229,40 @@ export function archiveStillCovers(
   const newest = [...openedDays].sort().at(-1);
   return !!newest && newest <= saoPauloDay(archivedAt);
 }
+
+/** Queda abaixo disso é arredondamento, não retirada. */
+const INFER_FLOOR = new Decimal(1);
+
+/**
+ * Retirada que o banco não manda (Itaú: o lote resgatado só zera ou encolhe,
+ * sem `SELL`): saldo bruto anterior + aportes desde então − saldo bruto de
+ * hoje. Sem o rendimento do intervalo, fica alguns centavos abaixo do real
+ * (resgate de 10/11/2026: R$ 162,10 calculado, R$ 162,30 no app do Itaú).
+ * `null` sem saldo anterior, com retirada do banco no intervalo ou sem queda.
+ */
+export function inferredWithdrawal(input: {
+  piggyId: string;
+  previous: { date: string; gross: string } | null;
+  today: { date: string; gross: string };
+  movements: BankMovement[];
+}): BankMovement | null {
+  const { previous, today } = input;
+  if (!previous || previous.date >= today.date) return null;
+  const between = input.movements.filter((movement) => {
+    const day = saoPauloDay(movement.occurredAt);
+    return day > previous.date && day <= today.date;
+  });
+  if (between.some((movement) => movement.kind === 'withdrawal')) return null;
+  const expected = between.reduce(
+    (sum, movement) => sum.plus(movement.amount),
+    new Decimal(previous.gross),
+  );
+  const missing = expected.minus(today.gross);
+  if (missing.lt(INFER_FLOOR)) return null;
+  return {
+    externalId: `vetra:withdrawal:${input.piggyId}:${today.date}`,
+    kind: 'withdrawal',
+    amount: missing.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+    occurredAt: noon(today.date),
+  };
+}
