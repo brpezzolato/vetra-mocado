@@ -210,7 +210,7 @@ export function vaultFacts(
   });
   const total = calculatePortfolio(active.map(normalizedBank), rates, now);
   return [
-    'COFRINHOS (saldo, impostos e rendimentos são só os informados pelo banco, os mesmos números da tela; o motor do Vetra entra apenas na previsão dos próximos dias):',
+    'COFRINHOS (saldo, impostos e rendimentos são só os informados pelo banco, os mesmos números da tela; a previsão dos próximos dias é a média do que cada cofrinho rendeu de fato nos últimos 30 dias):',
     ...lines,
     `Total dos cofrinhos: ${money(total.netBalance)} líquido.`,
   ].join('\n');

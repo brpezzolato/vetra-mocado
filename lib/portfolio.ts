@@ -1,7 +1,11 @@
 import Decimal from 'decimal.js';
 import type { DailyRate, PiggyBank } from './domain';
 import { calculate, isoDate, makeCalendar, parseDate } from './finance';
-import { learnForecast } from './forecast-learning';
+import {
+  averageDailyRate,
+  averageProjectedBalance,
+  flowsBetween,
+} from './vault-average';
 
 /**
  * Só rendimento, nunca negativo: dia negativo é dinheiro que saiu sem
@@ -160,71 +164,69 @@ export function buildPortfolioSeries(
     ({ result }) =>
       new Map(result.dailyBalances.map((balance) => [balance.date, balance])),
   );
-  // A previsão é corrigida por um fator aprendido com o erro do motor nos
-  // últimos saldos (lib/forecast-learning.ts).
-  const learning = projection.results.map(({ bank, result }) =>
-    learnForecast(result.snapshotAudits, bank.snapshots, bank.transactions),
+  // Depois do último saldo de cada cofrinho, a previsão é a média do que ele
+  // rendeu de fato (lib/vault-average.ts), sem regra do banco. Sem histórico
+  // para medir (cofrinho novo), fica o motor.
+  const averages = projection.results.map(({ bank }) =>
+    averageDailyRate(bank, now),
   );
-  const correction = (from: string, to: string, gross: boolean) =>
-    projection.results.reduce((sum, { bank, result }, index) => {
-      const factor = learning[index].factor;
-      if (factor.eq(1)) return sum;
-      const known = lastBankDate(bank) ?? '';
-      const projected = result.earnings.reduce((total, entry) => {
-        if (entry.date <= known || entry.date < from || entry.date > to)
-          return total;
-        const amount = new Decimal(
-          gross ? (entry.grossAmount ?? entry.netAmount) : entry.netAmount,
-        );
-        return amount.gt(0) ? total.plus(amount) : total;
-      }, new Decimal(0));
-      return sum.plus(projected.mul(factor.minus(1)));
-    }, new Decimal(0));
-  const learnedSamples = learning.reduce((sum, item) => sum + item.samples, 0);
-  // Precisão da carteira: média das precisões, pesada pelas amostras.
-  const accuracyWeight = learning.reduce(
-    (sum, item) => (item.accuracy ? sum + item.samples : sum),
-    0,
-  );
-  const accuracy = accuracyWeight
-    ? learning
-        .reduce(
-          (sum, item) =>
-            item.accuracy ? sum.plus(item.accuracy.mul(item.samples)) : sum,
-          new Decimal(0),
-        )
-        .div(accuracyWeight)
-    : null;
+  const averaged = (index: number, date: string) =>
+    averageProjectedBalance(
+      projection.results[index].bank,
+      averages[index],
+      date,
+    );
+  const netOf = (index: number, date: string) =>
+    averaged(index, date) ??
+    new Decimal(ledgers[index].get(date)?.netBalance ?? 0);
+  /** O imposto do último saldo do banco segue igual na previsão pela média. */
+  const grossOf = (index: number, date: string) => {
+    const projected = averaged(index, date);
+    if (!projected)
+      return new Decimal(ledgers[index].get(date)?.grossBalance ?? 0);
+    const last = [...projection.results[index].bank.snapshots]
+      .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+      .at(-1)!;
+    return projected.plus(
+      new Decimal(last.gross_balance).minus(last.net_balance),
+    );
+  };
   const points = skeleton.map((point, index) => {
+    const date = isoDate(point.date);
     const intervalStart =
       point.projected && index > 0
         ? new Date(skeleton[index - 1].date.getTime() + 86400000)
         : point.date;
+    const previous = index > 0 ? isoDate(skeleton[index - 1].date) : null;
+    // Cash flows never enter yield; future dates include weekend/holiday days.
+    const dailyNetGain = projection.results.reduce(
+      (sum, { bank, result }, bankIndex) => {
+        if (previous && averaged(bankIndex, date)) {
+          const gain = netOf(bankIndex, date)
+            .minus(netOf(bankIndex, previous))
+            .minus(flowsBetween(bank, previous, date));
+          return gain.gt(0) ? sum.plus(gain) : sum;
+        }
+        return sum.plus(
+          yieldOnly(result.earnings, isoDate(intervalStart), date),
+        );
+      },
+      new Decimal(0),
+    );
     return {
       ...point,
       taxDetailsIncomplete: ledgers.some(
-        (ledger) => ledger.get(isoDate(point.date))?.taxDetailsIncomplete,
+        (ledger) => ledger.get(date)?.taxDetailsIncomplete,
       ),
-      value: ledgers
-        .reduce(
-          (sum, ledger) =>
-            sum.plus(ledger.get(isoDate(point.date))?.netBalance ?? 0),
-          new Decimal(0),
-        )
-        .plus(correction('', isoDate(point.date), false)),
-      grossValue: ledgers
-        .reduce(
-          (sum, ledger) =>
-            sum.plus(ledger.get(isoDate(point.date))?.grossBalance ?? 0),
-          new Decimal(0),
-        )
-        .plus(correction('', isoDate(point.date), true)),
-      // Cash flows never enter yield; future dates include weekend/holiday tax release.
-      dailyNetGain: portfolioEarnings(
-        projection,
-        isoDate(intervalStart),
-        isoDate(point.date),
-      ).plus(correction(isoDate(intervalStart), isoDate(point.date), false)),
+      value: projection.results.reduce(
+        (sum, _, bankIndex) => sum.plus(netOf(bankIndex, date)),
+        new Decimal(0),
+      ),
+      grossValue: projection.results.reduce(
+        (sum, _, bankIndex) => sum.plus(grossOf(bankIndex, date)),
+        new Decimal(0),
+      ),
+      dailyNetGain,
     };
   });
   return {
@@ -236,7 +238,5 @@ export function buildPortfolioSeries(
       .slice(7)
       .reduce((sum, point) => sum.plus(point.dailyNetGain), new Decimal(0)),
     dailyGain: points[7].dailyNetGain,
-    /** Saldos usados para corrigir a previsão e a precisão (0 a 1). */
-    learning: { samples: learnedSamples, accuracy },
   };
 }
