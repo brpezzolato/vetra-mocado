@@ -66,7 +66,9 @@ export function NotificationsPage() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<Notice | 'archived' | null>(null);
+  const [confirm, setConfirm] = useState<Notice | 'archived' | 'all' | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     let query = db
@@ -119,10 +121,18 @@ export function NotificationsPage() {
 
   const remove = async () => {
     if (!confirm || busy) return;
-    const ids =
-      confirm === 'archived' ? items.map((notice) => notice.id) : [confirm.id];
     setBusy(true);
-    const result = await db.from('app_notifications').delete().in('id', ids);
+    const query = db.from('app_notifications').delete();
+    // "Todas" apaga também as que passam do limite da lista; arquivada fica.
+    const result =
+      confirm === 'all'
+        ? await query.is('archived_at', null)
+        : await query.in(
+            'id',
+            confirm === 'archived'
+              ? items.map((notice) => notice.id)
+              : [confirm.id],
+          );
     if (result.error) setError('Não foi possível excluir. Tente de novo.');
     setConfirm(null);
     await load();
@@ -168,6 +178,17 @@ export function NotificationsPage() {
             >
               <CheckCheck className="size-4" />
               Marcar todas como lidas
+            </Button>
+          )}
+          {filter === 'all' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy || !items.length}
+              onClick={() => setConfirm('all')}
+            >
+              <Trash2 className="size-4" />
+              Excluir todas
             </Button>
           )}
           {filter === 'archived' && (
@@ -332,14 +353,18 @@ export function NotificationsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirm === 'archived'
-                ? 'Esvaziar arquivadas?'
-                : 'Excluir notificação?'}
+              {confirm === 'all'
+                ? 'Excluir todas as notificações?'
+                : confirm === 'archived'
+                  ? 'Esvaziar arquivadas?'
+                  : 'Excluir notificação?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirm === 'archived'
-                ? `As ${items.length} notificações arquivadas serão excluídas de vez.`
-                : 'Ela será excluída de vez. Para só tirar da frente, use Arquivar.'}
+              {confirm === 'all'
+                ? 'Todas as notificações serão excluídas de vez. As arquivadas ficam.'
+                : confirm === 'archived'
+                  ? `As ${items.length} notificações arquivadas serão excluídas de vez.`
+                  : 'Ela será excluída de vez. Para só tirar da frente, use Arquivar.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
