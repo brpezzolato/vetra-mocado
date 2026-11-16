@@ -4,6 +4,8 @@
 //   pagamento de fatura e "Pix devolvido";
 // - Pix que volta anula: saída e entrada de mesmo valor e mesma pessoa em até
 //   60 dias somem os dois (cancelamentos, empréstimos devolvidos).
+// - exceção: o IPTU do Bruno é pago por QR Code via Open Finance e vem como
+//   transferência própria; esse valor entra como "IPTU", categoria Conta.
 // A descrição vira o nome de quem recebeu (motor de nomes do cartão).
 import Decimal from 'decimal.js';
 import { bankText, cleanDescription, type CardEntry } from './card-entries';
@@ -41,6 +43,16 @@ const key = (description: string) =>
 const cents = (value: number) =>
   new Decimal(Math.abs(value)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 
+/** Parcela do IPTU (pedido do Bruno, 16/11/2026). Mudou o valor, mude aqui. */
+const IPTU_AMOUNT = '169.93';
+
+/** Pagamento por QR Code que o banco marca como transferência própria. */
+const isIptu = (transaction: PluggyTransaction) =>
+  transaction.type === 'DEBIT' &&
+  transaction.category === 'Same person transfer' &&
+  /^pagamento de pix qr code\s/i.test(transaction.description.trim()) &&
+  cents(transaction.amount).eq(IPTU_AMOUNT);
+
 export function mapPixTransactions(
   transactions: PluggyTransaction[],
 ): CardEntry[] {
@@ -58,9 +70,10 @@ export function mapPixTransactions(
   const used = new Set<string>();
   const outgoing = pix.filter(
     (transaction) =>
-      transaction.type === 'DEBIT' &&
-      !OWN_OR_BILL.has(transaction.category ?? '') &&
-      !/^pix devolvido\b/i.test(transaction.description.trim()),
+      isIptu(transaction) ||
+      (transaction.type === 'DEBIT' &&
+        !OWN_OR_BILL.has(transaction.category ?? '') &&
+        !/^pix devolvido\b/i.test(transaction.description.trim())),
   );
   const returns = (transaction: PluggyTransaction, other: PluggyTransaction) =>
     !used.has(other.id) &&
@@ -89,11 +102,14 @@ export function mapPixTransactions(
       externalId: transaction.id,
       entryType: 'expense',
       amount: cents(transaction.amount).toFixed(2),
-      description: cleanDescription(counterpart(transaction.description)),
+      description: isIptu(transaction)
+        ? 'IPTU'
+        : cleanDescription(counterpart(transaction.description)),
       bankDescription: bankText(counterpart(transaction.description)),
       occurredAt: transaction.date,
       bankStatus: transaction.status === 'POSTED' ? 'POSTED' : 'PENDING',
       invoiceDue: null,
       installment: null,
+      ...(isIptu(transaction) ? { category: 'Conta' } : {}),
     }));
 }

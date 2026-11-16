@@ -8,6 +8,7 @@ export const EXPENSE_CATEGORIES = [
   'Compras',
   'Assinaturas',
   'Serviços',
+  'Conta',
   // Outros fica por último: é o genérico, e `isGenericCategory` trata só ele.
   'Outros',
 ] as const;

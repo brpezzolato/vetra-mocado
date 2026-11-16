@@ -35,7 +35,7 @@ export type CardEntry = {
     total: number;
     purchaseTotal: string;
   } | null;
-  /** Só nas entradas de renda (income-entries.ts): a categoria da fonte. */
+  /** Renda: a categoria da fonte. Despesa: categoria fixa do mapeamento (IPTU). */
   category?: string;
   /** Só renda: chega fora do "Entrou". Vale só na chegada; depois o usuário decide. */
   excluded?: boolean;

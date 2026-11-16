@@ -227,6 +227,7 @@ export async function syncCardsFromPluggy(
           entry.entryType === 'income'
             ? (entry.category ?? REFUND_CATEGORY)
             : (alias?.category ??
+              entry.category ??
               learned.get(entry.description.toLocaleLowerCase('pt-BR')) ??
               options.inherit?.(target.account, entry) ??
               null);

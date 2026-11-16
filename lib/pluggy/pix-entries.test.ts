@@ -129,3 +129,37 @@ describe('Pix que sai', () => {
     expect(entries.map((entry) => entry.externalId)).toEqual(['nubank']);
   });
 });
+
+describe('IPTU pago por QR Code via Open Finance', () => {
+  const qr = (extra: Partial<PluggyTransaction>) =>
+    tx({
+      description: 'Pagamento de Pix QR Code Fulano de Tal',
+      category: 'Same person transfer',
+      amount: -169.93,
+      ...extra,
+    });
+
+  it('entra como IPTU na categoria Conta', () => {
+    expect(mapPixTransactions([qr({ id: 'iptu' })])).toMatchObject([
+      {
+        externalId: 'iptu',
+        amount: '169.93',
+        description: 'IPTU',
+        category: 'Conta',
+      },
+    ]);
+  });
+
+  it('outro valor para si mesmo segue fora', () => {
+    expect(
+      mapPixTransactions([
+        qr({ id: 'outro', amount: -96 }),
+        qr({ id: 'teste', amount: -0.01 }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('Pix comum não ganha categoria fixa', () => {
+    expect(mapPixTransactions([tx({ id: 'a' })])[0].category).toBeUndefined();
+  });
+});
