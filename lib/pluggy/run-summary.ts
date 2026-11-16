@@ -80,7 +80,6 @@ export type SyncRun = {
   status: RunStatus;
   started_at: string;
   duration_ms: number;
-  robot: string | null;
   summary: Partial<RunSummary>;
   error: string | null;
 };
@@ -188,7 +187,6 @@ export function groupRounds(runs: SyncRun[]): SyncRun[] {
       merged.trigger = run.trigger;
     if (STATUS_RANK[run.status] > STATUS_RANK[merged.status])
       merged.status = run.status;
-    merged.robot = merged.robot ?? run.robot;
     merged.error = merged.error ?? run.error;
     const a = merged.summary;
     const b = run.summary;

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
   ExternalLink,
   RefreshCw,
   XCircle,
@@ -12,9 +11,6 @@ import {
 import { AppHeader } from '@/components/app-header';
 import { NavigationBackButton } from '@/components/navigation-back-button';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   describeFailures,
   describeSummary,
@@ -26,23 +22,11 @@ import { CARD_BANKS, cardBankName, type CardBankId } from '@/lib/payment-cards';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import type { ConnectionHealth } from '@/lib/pluggy/connection-health';
+import { LOCAL_PER_DAY, type LocalRound } from '@/lib/pluggy/local-rounds';
 
-/* Conexões com os bancos: situação do robô, histórico de sincronizações
-   (origem, resultado, duração, o que trouxe) e o login do robô, escondido
-   enquanto conectado. Login sem senha: cola-se o link do e-mail sem abri-lo. */
-
-type Robot = {
-  status: 'awaiting_link' | 'active' | 'expired' | 'error';
-  last_error: string | null;
-  last_refresh_at: string | null;
-} | null;
-
-const STATUS: Record<NonNullable<Robot>['status'], string> = {
-  awaiting_link: 'Esperando o link do e-mail',
-  active: 'Conectado',
-  expired: 'Sessão expirada',
-  error: 'Com erro',
-};
+/* Conexões com os bancos: atualização pelo notebook (o Chrome do PC clica em
+   "Atualizar" no Meu Pluggy; scripts/pluggy-local-agent.ts), a saúde de cada
+   banco e o histórico de sincronizações. */
 
 const TRIGGER: Record<SyncTrigger, string> = {
   cron: 'Automática',
@@ -71,21 +55,6 @@ const failureWhere = (where: string) =>
   (CARD_BANKS.some((bank) => bank.id === where)
     ? cardBankName(where as CardBankId)
     : where);
-
-const ROBOT: Record<string, string> = {
-  done: 'Robô pediu atualização aos bancos',
-  'failed:expired': 'Robô: sessão expirada',
-  'failed:captcha': 'Robô: o Meu Pluggy pediu verificação',
-  'failed:error': 'Robô: não conseguiu entrar',
-  'failed:no_connections': 'Robô: o Meu Pluggy não mostrou conexões',
-  'failed:no_button': 'Robô: não achou o botão de atualizar',
-  'failed:refused': 'Robô: o Meu Pluggy não aceitou o pedido em nenhum banco',
-  'failed:challenged': 'Robô: a Pluggy pediu verificação anti-robô',
-  'skipped:too_soon': 'Robô: pedido recente, pulou',
-  'skipped:daily_cap': 'Robô: limite do dia atingido, só leu o que já havia',
-  'skipped:manual_cap':
-    'Robô: suas 2 atualizações de hoje já foram (as outras 3 são do automático), só leu o que já havia',
-};
 
 /** A lista de conexões do Meu Pluggy, onde cada banco tem o seu Atualizar. */
 const MEU_PLUGGY_CONNECTIONS = 'https://meu.pluggy.ai/connections';
@@ -117,33 +86,55 @@ function dayLabel(iso: string) {
   return dayFormat.format(date);
 }
 
-async function call(body: Record<string, string>) {
-  const response = await fetch('/api/pluggy/robot', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await response.json().catch(() => ({}))) as Record<
-    string,
-    unknown
-  >;
-  if (!response.ok)
-    throw new Error(
-      typeof data.error === 'string'
-        ? data.error
-        : 'Não foi possível concluir.',
-    );
-  return data;
-}
-
-type State = { robot: Robot; runs: SyncRun[]; banks: ConnectionHealth[] };
+type State = { runs: SyncRun[]; banks: ConnectionHealth[] };
 
 async function fetchState(): Promise<State> {
-  const response = await fetch('/api/pluggy/robot', { cache: 'no-store' });
-  if (!response.ok) return { robot: null, runs: [], banks: [] };
-  const body = (await response.json()) as Partial<State> & { robot: Robot };
-  return { robot: body.robot, runs: body.runs ?? [], banks: body.banks ?? [] };
+  const response = await fetch('/api/pluggy/connections', {
+    cache: 'no-store',
+  });
+  if (!response.ok) return { runs: [], banks: [] };
+  const body = (await response.json()) as Partial<State>;
+  return { runs: body.runs ?? [], banks: body.banks ?? [] };
 }
+
+/** Atualização pelo notebook (app/api/pluggy/local). */
+type LocalState = {
+  agentOnline: boolean;
+  lastSeenAt: string | null;
+  buttonLeft: number;
+  verdict: 'ok' | 'busy' | 'daily_cap' | 'too_soon';
+  latest: LocalRound | null;
+};
+
+async function fetchLocal(): Promise<LocalState | null> {
+  const response = await fetch('/api/pluggy/local', { cache: 'no-store' });
+  return response.ok ? ((await response.json()) as LocalState) : null;
+}
+
+const LOCAL_FAILED: Record<string, string> = {
+  expired:
+    'A sessão do Meu Pluggy no notebook expirou. Peça ao Claude um novo login.',
+  challenged:
+    'A Pluggy pediu verificação anti-robô. Nada foi contornado; atualize pelo Meu Pluggy.',
+  captcha:
+    'O Meu Pluggy pediu verificação. Nada foi contornado; atualize pelo Meu Pluggy.',
+  late: 'O notebook não pegou o pedido a tempo: estava desligado ou dormindo.',
+  busy: 'Há uma janela do Meu Pluggy aberta no notebook. Feche-a e peça de novo.',
+  refused: 'O Meu Pluggy não aceitou o pedido em nenhum banco.',
+};
+
+const LOCAL_SKIPPED: Record<string, string> = {
+  daily_cap: 'O limite do dia já tinha sido usado.',
+  too_soon: 'A última atualização tinha sido há menos de 10 minutos.',
+  busy: 'Já havia outra atualização rodando.',
+};
+
+const LOCAL_BLOCKED: Record<LocalState['verdict'], string | null> = {
+  ok: null,
+  busy: null,
+  daily_cap: `Seus ${LOCAL_PER_DAY.button} pedidos de hoje já foram usados. As automáticas seguem.`,
+  too_soon: 'A última atualização foi há menos de 10 minutos.',
+};
 
 const BANK_INFO: Record<string, { name: string; logo: string }> = {
   nubank: { name: 'Nubank', logo: '/logos/nubank-ui.webp' },
@@ -197,18 +188,32 @@ function updatedLabel(iso: string) {
   return `em ${day.slice(8, 10)}/${day.slice(5, 7)}`;
 }
 
-export function PluggyRobotPanel() {
-  const [robot, setRobot] = useState<Robot>(null);
+/** O que dizer da última rodada pelo notebook. */
+function localMessage(state: LocalState) {
+  const round = state.latest;
+  if (!round) return null;
+  if (round.status === 'pending')
+    return state.agentOnline
+      ? 'Na fila: o notebook começa em instantes.'
+      : 'Esperando o notebook ligar. O pedido vale por 30 minutos.';
+  if (round.status === 'running') return 'Atualizando os bancos pelo notebook…';
+  const when = updatedLabel(round.finished_at ?? round.requested_at);
+  const origin = round.trigger === 'schedule' ? 'Rodada automática' : 'Pedido';
+  if (round.status === 'ok')
+    return `${origin} ${when}: a Pluggy aceitou ${round.detail ?? 'os'} bancos.`;
+  if (round.status === 'skipped')
+    return `${origin} ${when} não rodou. ${LOCAL_SKIPPED[round.result ?? ''] ?? ''}`.trim();
+  return `${origin} ${when} falhou. ${LOCAL_FAILED[round.result ?? ''] ?? 'Tente de novo mais tarde.'}`;
+}
+
+export function ConnectionsPanel() {
   const [runs, setRuns] = useState<SyncRun[] | null>(null);
   const [banks, setBanks] = useState<ConnectionHealth[] | null>(null);
-  const [email, setEmail] = useState('');
-  const [link, setLink] = useState('');
-  const [busy, setBusy] = useState<'' | 'login' | 'sync'>('');
-  const [message, setMessage] = useState('');
-  const [showLogin, setShowLogin] = useState(false);
+  const [local, setLocal] = useState<LocalState | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState('');
 
   const apply = useCallback((state: State) => {
-    setRobot(state.robot);
     setRuns(state.runs);
     setBanks(state.banks);
   }, []);
@@ -216,58 +221,41 @@ export function PluggyRobotPanel() {
   useEffect(() => {
     let alive = true;
     void fetchState().then((state) => alive && apply(state));
+    void fetchLocal().then((state) => alive && setLocal(state));
     return () => {
       alive = false;
     };
   }, [apply]);
 
-  const connected = robot?.status === 'active';
-  // Conectado: o login some e só volta quando pedido.
-  const loginVisible = !connected || showLogin;
+  const active =
+    local?.latest?.status === 'pending' || local?.latest?.status === 'running';
+  // Na fila ou rodando: acompanha até terminar e recarrega o histórico.
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => {
+      void fetchLocal().then((state) => {
+        setLocal(state);
+        const status = state?.latest?.status;
+        if (status !== 'pending' && status !== 'running') void load();
+      });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [active, load]);
 
-  const run = async (body: Record<string, string>, done: string) => {
-    setBusy('login');
-    setMessage('');
+  const ask = async () => {
+    setAsking(true);
+    setError('');
     try {
-      const result = await call(body);
-      if (result.ok === false)
-        setMessage(
-          result.reason === 'captcha'
-            ? 'O Meu Pluggy pediu verificação de robô. Paramos aqui.'
-            : result.reason === 'expired'
-              ? 'A sessão expirou. Conecte o robô de novo.'
-              : result.reason === 'not_sent'
-                ? 'O Meu Pluggy não aceitou o pedido do link. Tente de novo em alguns minutos.'
-                : 'Não deu certo. Tente de novo.',
-        );
-      else if (body.action === 'start' && typeof result.screen === 'string')
-        setMessage(`${done} O Meu Pluggy respondeu: “${result.screen}”`);
-      else setMessage(done);
-      if (body.action === 'finish') {
-        setLink('');
-        if (result.ok !== false) setShowLogin(false);
-      }
-      await load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Erro.');
-    } finally {
-      setBusy('');
-    }
-  };
-
-  /** Robô pede aos bancos e o app busca a Pluggy; vira "Você pediu" no histórico. */
-  const syncNow = async () => {
-    setBusy('sync');
-    setMessage('');
-    try {
-      if (connected) await call({ action: 'refresh' }).catch(() => null);
-      const response = await fetch('/api/pluggy/sync', { method: 'POST' });
-      if (!response.ok) setMessage('A sincronização falhou. Veja abaixo.');
-      await load();
+      const response = await fetch('/api/pluggy/local', { method: 'POST' });
+      const body = (await response.json().catch(() => ({}))) as LocalState & {
+        error?: string;
+      };
+      if (!response.ok) setError(body.error ?? 'Não foi possível pedir agora.');
+      else setLocal(body);
     } catch {
-      setMessage('Sem conexão agora. Tente de novo daqui a pouco.');
+      setError('Sem conexão agora. Tente de novo daqui a pouco.');
     } finally {
-      setBusy('');
+      setAsking(false);
     }
   };
 
@@ -282,6 +270,9 @@ export function PluggyRobotPanel() {
     return groups;
   }, []);
 
+  const blocked = local ? LOCAL_BLOCKED[local.verdict] : null;
+  const status = local ? localMessage(local) : null;
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <AppHeader onRefresh={() => window.location.reload()} />
@@ -293,190 +284,65 @@ export function PluggyRobotPanel() {
           trouxe.
         </p>
 
-        {/* Atualizar à mão (13/11/2026): a Pluggy passou a barrar o robô com
-            verificação anti-robô, e a API recusa atualizar itens do Meu
-            Pluggy. Os links de cada conexão lá não batem com os ids da API,
-            então o botão abre a lista; os dados voltam pelo webhook. */}
         <section className="mt-6 rounded-3xl border bg-card p-5">
           <h2 className="font-semibold">Atualizar os bancos</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Abra o Meu Pluggy e toque em Atualizar em cada banco. Os dados
-            chegam aqui sozinhos em poucos minutos. A Pluggy também atualiza uma
-            vez por dia sem você pedir.
+            O notebook abre o Meu Pluggy e toca em Atualizar em cada banco; os
+            dados chegam aqui em poucos minutos. Sozinho às 7h, 14h, 18h e 23h,
+            com alguns minutos de variação.
           </p>
+          <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <span
+              aria-hidden
+              className={cn(
+                'size-2 shrink-0 rounded-full',
+                local?.agentOnline
+                  ? 'bg-emerald-500'
+                  : 'bg-muted-foreground/40',
+              )}
+            />
+            {local === null
+              ? 'Verificando o notebook…'
+              : `${local.agentOnline ? 'Notebook ligado' : 'Notebook desligado ou dormindo'} · ${local.buttonLeft} de ${LOCAL_PER_DAY.button} pedidos seus hoje`}
+          </p>
+          <Button
+            variant="glass"
+            className="mt-4 w-full"
+            disabled={asking || active || !local || local.verdict !== 'ok'}
+            onClick={() => void ask()}
+          >
+            <RefreshCw
+              className={cn('size-4', (asking || active) && 'animate-spin')}
+            />
+            Atualizar pelo notebook
+          </Button>
+          {(error || status || blocked) && (
+            <output
+              aria-live="polite"
+              className={cn(
+                'mt-3 block text-sm',
+                error ? 'text-destructive' : 'text-muted-foreground',
+              )}
+            >
+              {error || status}
+              {!error && !active && blocked && (
+                <span className="mt-1 block">{blocked}</span>
+              )}
+            </output>
+          )}
           <a
             href={MEU_PLUGGY_CONNECTIONS}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(buttonVariants({ variant: 'glass' }), 'mt-4 w-full')}
+            className={cn(
+              buttonVariants({ variant: 'glass-quiet', size: 'sm' }),
+              'mt-3 w-full',
+            )}
           >
             <ExternalLink className="size-4" />
-            Abrir o Meu Pluggy
+            Notebook desligado? Abrir o Meu Pluggy
           </a>
         </section>
-
-        <section className="mt-6 rounded-3xl border bg-card p-5">
-          <div className="flex items-start gap-3">
-            <span
-              aria-hidden
-              className={cn(
-                'mt-1.5 size-2.5 shrink-0 rounded-full',
-                connected
-                  ? 'bg-emerald-500'
-                  : robot
-                    ? 'bg-amber-500'
-                    : 'bg-muted-foreground/40',
-              )}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">
-                Robô do Meu Pluggy
-              </p>
-              <p className="font-semibold">
-                {robot ? STATUS[robot.status] : 'Desconectado'}
-              </p>
-              {robot?.last_refresh_at && (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Último pedido aos bancos:{' '}
-                  {dayLabel(robot.last_refresh_at).toLowerCase()} às{' '}
-                  {timeFormat.format(new Date(robot.last_refresh_at))}
-                </p>
-              )}
-              {robot?.last_error && (
-                <p className="mt-1 text-xs text-destructive">
-                  {robot.last_error}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button
-              variant="glass"
-              disabled={busy !== ''}
-              onClick={() => void syncNow()}
-            >
-              <RefreshCw
-                className={cn('size-4', busy === 'sync' && 'animate-spin')}
-              />
-              Atualizar agora
-            </Button>
-            {connected ? (
-              <Button
-                variant="glass-quiet"
-                aria-expanded={showLogin}
-                aria-controls="robot-login"
-                onClick={() => setShowLogin((value) => !value)}
-              >
-                {showLogin ? 'Esconder login' : 'Conectar de novo'}
-                <ChevronDown
-                  className={cn(
-                    'size-4 transition-transform',
-                    showLogin && 'rotate-180',
-                  )}
-                />
-              </Button>
-            ) : (
-              <Button
-                variant="glass-quiet"
-                disabled={busy !== '' || !robot}
-                onClick={() =>
-                  void run(
-                    { action: 'disconnect' },
-                    'Robô desconectado e sessão apagada.',
-                  )
-                }
-              >
-                Apagar sessão
-              </Button>
-            )}
-          </div>
-          {(busy || message) && (
-            <output className="mt-3 block text-sm text-muted-foreground">
-              {busy === 'sync'
-                ? 'Atualizando… pode levar até 1 minuto.'
-                : busy === 'login'
-                  ? 'Trabalhando… pode levar até 1 minuto.'
-                  : message}
-            </output>
-          )}
-        </section>
-
-        {loginVisible && (
-          <div id="robot-login" className="mt-4 space-y-4">
-            <p className="px-1 text-sm text-muted-foreground">
-              Sem senha: o robô entra no Meu Pluggy pelo link que chega no seu
-              e-mail.
-            </p>
-            <section className="space-y-3 rounded-3xl border bg-card p-5">
-              <h2 className="font-semibold">1. Pedir o link</h2>
-              <div className="space-y-1.5">
-                <Label htmlFor="robot-email">E-mail do Meu Pluggy</Label>
-                <Input
-                  id="robot-email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="voce@exemplo.com"
-                />
-              </div>
-              <Button
-                variant="glass"
-                disabled={busy !== '' || !email}
-                onClick={() =>
-                  void run(
-                    { action: 'start', email },
-                    'Pronto. Chegou um e-mail do Meu Pluggy: copie o link dele (não abra) e cole abaixo.',
-                  )
-                }
-              >
-                Enviar link para o meu e-mail
-              </Button>
-            </section>
-
-            <section className="space-y-3 rounded-3xl border bg-card p-5">
-              <h2 className="font-semibold">2. Colar o link do e-mail</h2>
-              <p className="text-xs text-muted-foreground">
-                No e-mail, segure o botão de entrar e escolha “Copiar link”. Se
-                você abrir o link, quem entra é o seu navegador, não o robô.
-              </p>
-              <div className="space-y-1.5">
-                <Label htmlFor="robot-link">Link do e-mail</Label>
-                <Textarea
-                  id="robot-link"
-                  value={link}
-                  onChange={(event) => setLink(event.target.value)}
-                  rows={3}
-                />
-              </div>
-              <Button
-                variant="glass"
-                disabled={busy !== '' || !link}
-                onClick={() =>
-                  void run({ action: 'finish', link }, 'Robô conectado.')
-                }
-              >
-                Concluir login do robô
-              </Button>
-            </section>
-
-            {connected && (
-              <Button
-                variant="glass-quiet"
-                disabled={busy !== ''}
-                onClick={() =>
-                  void run(
-                    { action: 'disconnect' },
-                    'Robô desconectado e sessão apagada.',
-                  )
-                }
-              >
-                Desconectar e apagar sessão
-              </Button>
-            )}
-          </div>
-        )}
 
         {/* Selo quando o banco passa de 2 dias sem atualizar ou dá erro
             (lib/pluggy/connection-health.ts). */}
@@ -566,7 +432,6 @@ export function PluggyRobotPanel() {
                     {group.runs.map((item) => {
                       const status = RUN_STATUS[item.status];
                       const Icon = status.icon;
-                      const robotNote = item.robot ? ROBOT[item.robot] : null;
                       return (
                         <li key={item.id} className="flex gap-3 p-4">
                           <Icon
@@ -604,11 +469,6 @@ export function PluggyRobotPanel() {
                                 {line}
                               </p>
                             ))}
-                            {robotNote && (
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {robotNote}
-                              </p>
-                            )}
                           </div>
                         </li>
                       );

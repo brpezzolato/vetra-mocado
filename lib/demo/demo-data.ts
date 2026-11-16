@@ -688,7 +688,8 @@ export function demoTables(): Record<string, Row[]> {
     income_sources: [],
     spending_room_exclusions: [],
     shortcut_tokens: [],
-    pluggy_robot: [],
+    pluggy_local_rounds: [],
+    pluggy_local_agent: [],
     pluggy_sync_runs: [],
     ...demoChats(base, today),
   };

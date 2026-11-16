@@ -174,7 +174,7 @@ export function FinancialTracker({
               <div className="min-w-0 flex-1">
                 <h2 className="font-semibold">Conexão com os bancos</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Robô do Meu Pluggy: conectar, testar e desconectar.
+                  Atualização pelo notebook, saúde de cada banco e histórico.
                 </p>
               </div>
               <Link

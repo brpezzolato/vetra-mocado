@@ -23,17 +23,18 @@ export type ConnectionHealth = {
 /** Aviso do sininho; `key` dá um por situação (o dia entra quando repete). */
 export type ConnectionNotice = { key: string; title: string; body: string };
 
-export type RobotState = { status: string; last_error: string | null } | null;
+/** Resultado da última rodada do notebook (`pluggy_local_rounds.result`). */
+export type LocalResult = string | null;
 
 const DAY_MS = 86_400_000;
 
 /**
- * O que avisar sobre as conexões e o robô do Meu Pluggy. Pura, para os testes.
+ * O que avisar sobre as conexões e a atualização pelo notebook. Pura.
  * Consentimento: aos 15, 7 e 1 dia do fim (uma vez em cada).
  */
 export function connectionNotices(
   connections: ConnectionHealth[],
-  robot: RobotState,
+  local: LocalResult,
   day: string,
   now = Date.now(),
 ): ConnectionNotice[] {
@@ -87,14 +88,17 @@ export function connectionNotices(
         });
     }
   }
-  if (robot && robot.status !== 'active')
+  if (local === 'expired')
     notices.push({
-      key: `pluggy-robot:${robot.status}:${day}`,
-      title:
-        robot.status === 'expired'
-          ? 'Sessão do robô do Meu Pluggy expirou'
-          : 'Robô do Meu Pluggy parado',
-      body: `${robot.last_error ?? 'O robô não está pedindo atualização aos bancos.'} Sem ele, os dados chegam só quando a Pluggy atualiza sozinha.`,
+      key: `pluggy-local:expired:${day}`,
+      title: 'Sessão do Meu Pluggy no notebook expirou',
+      body: 'O notebook não consegue pedir atualização aos bancos até você entrar de novo. Até lá, os dados chegam só quando a Pluggy atualiza sozinha.',
+    });
+  else if (local === 'challenged' || local === 'captcha')
+    notices.push({
+      key: `pluggy-local:check:${day}`,
+      title: 'A Pluggy pediu verificação anti-robô',
+      body: 'O notebook parou sem contornar nada. Atualize pelo Meu Pluggy enquanto isso.',
     });
   return notices;
 }
@@ -176,22 +180,30 @@ export const BANK_NAME: Record<string, string> = {
   santander: 'Santander',
 };
 
-/** Avisa das conexões e do robô; roda com as atualizações automáticas. */
+/** Avisa das conexões e do notebook; roda com as atualizações automáticas. */
 export async function notifyUnhealthyConnections(
   admin: SupabaseClient,
   pluggy: PluggyClient,
   userId: string,
   day: string,
 ) {
-  const [connections, { data: robot }] = await Promise.all([
+  const [connections, { data: local }] = await Promise.all([
     loadConnectionHealth(admin, pluggy, userId),
+    // A última rodada do notebook que terminou.
     admin
-      .from('pluggy_robot')
-      .select('status, last_error')
+      .from('pluggy_local_rounds')
+      .select('result')
       .eq('user_id', userId)
+      .in('status', ['ok', 'failed'])
+      .order('requested_at', { ascending: false })
+      .limit(1)
       .maybeSingle(),
   ]);
-  const notices = connectionNotices(connections, robot as RobotState, day);
+  const notices = connectionNotices(
+    connections,
+    (local?.result as string | null) ?? null,
+    day,
+  );
   if (!notices.length) return;
   await admin.from('app_notifications').upsert(
     notices.map((notice) => ({

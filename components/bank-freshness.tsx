@@ -3,17 +3,14 @@
 import { useEffect, useState } from 'react';
 import { BANK_FOLLOW_UPS, subscribeManualRefresh } from '@/lib/manual-refresh';
 
-/* Quando o robô pediu a última atualização aos bancos; nada sem robô conectado. */
+/* Quando o notebook pediu a última atualização aos bancos (rodada aceita
+   pela Pluggy); nada antes da primeira. */
 
 async function fetchLastRefresh(): Promise<string | null> {
-  const response = await fetch('/api/pluggy/robot?only=status', {
-    cache: 'no-store',
-  });
+  const response = await fetch('/api/pluggy/local', { cache: 'no-store' });
   if (!response.ok) return null;
-  const body = (await response.json()) as {
-    robot: { last_refresh_at: string | null } | null;
-  };
-  return body.robot?.last_refresh_at ?? null;
+  const body = (await response.json()) as { lastOkAt: string | null };
+  return body.lastOkAt ?? null;
 }
 
 const label = (iso: string) => {
@@ -36,7 +33,7 @@ const label = (iso: string) => {
 /* Última data vista, só em memória: volta sem esperar e só redesenha se mudou. */
 let lastSeen: string | null | undefined;
 
-export function RobotFreshness() {
+export function BankFreshness() {
   const [lastRefresh, setLastRefresh] = useState<string | null>(
     () => lastSeen ?? null,
   );

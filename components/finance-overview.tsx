@@ -32,7 +32,7 @@ import { toTotalsView } from '@/lib/entry-share';
 import { AccountBalances } from '@/components/account-balances';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SwipePager, type PagerControl } from '@/components/swipe-pager';
-import { RobotFreshness } from '@/components/robot-freshness';
+import { BankFreshness } from '@/components/bank-freshness';
 import { EntryDetails } from '@/components/entry-details';
 import { WeeklyExpenseSummary } from '@/components/weekly-expense-summary';
 import { FinanceOverviewDataSkeleton } from '@/components/data-skeletons';
@@ -442,7 +442,7 @@ export function FinanceOverview({
     () => (
       <div className="min-w-0">
         <AccountBalances />
-        <RobotFreshness />
+        <BankFreshness />
       </div>
     ),
     [],

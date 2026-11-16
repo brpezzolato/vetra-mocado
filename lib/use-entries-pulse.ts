@@ -42,7 +42,7 @@ export function useEntriesPulse() {
           limits.data?.[0]?.taken_at ?? '',
         ].join(':');
         // A primeira leitura só marca o ponto de partida.
-        // Mudou: atualiza a tela e o sininho (o robô costuma trazer aviso).
+        // Mudou: atualiza a tela e o sininho (a rodada costuma trazer aviso).
         if (last !== null && signature !== last) {
           await refreshWidgetsOnce();
           window.dispatchEvent(new Event('vetra:notifications'));

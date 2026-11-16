@@ -348,49 +348,18 @@ export function AppHeader({
                 const roundStartedAt = new Date().toISOString();
                 startRefresh(async () => {
                   try {
-                    // Primeiro o robô pede atualização ao Meu Pluggy (lib/pluggy/robot.ts).
-                    // Sem robô ou dentro dos 10 min, só segue. Se pediu, espera os bancos.
-                    let robotLabel: string | null = null;
-                    const robot = await fetch('/api/pluggy/robot', {
-                      method: 'POST',
-                      headers: { 'content-type': 'application/json' },
-                      body: JSON.stringify({ action: 'refresh' }),
-                    })
-                      .then((response) => {
-                        // 429: pediu há menos de 10 min.
-                        if (response.status === 429)
-                          robotLabel = 'skipped:too_soon';
-                        return response.ok
-                          ? (response.json() as Promise<{
-                              ok?: boolean;
-                              reason?: string | null;
-                              clicked?: number;
-                            }>)
-                          : null;
-                      })
-                      .catch(() => null);
-                    if (robot)
-                      robotLabel = robot.ok
-                        ? 'done'
-                        : robot.reason === 'daily_cap' ||
-                            robot.reason === 'manual_cap'
-                          ? `skipped:${robot.reason}`
-                          : `failed:${robot.reason ?? 'error'}`;
-                    if (robot?.clicked) {
-                      advance(60, 8000, 'Esperando os bancos responderem…');
-                      await new Promise((resolve) =>
-                        window.setTimeout(resolve, 8000),
-                      );
-                    }
+                    // Pede ao notebook uma rodada no Meu Pluggy (app/api/pluggy/local).
+                    // Com o limite do dia ou outra na fila, só segue: os dados
+                    // da rodada chegam depois, pelo webhook.
+                    await fetch('/api/pluggy/local', { method: 'POST' }).catch(
+                      () => undefined,
+                    );
                     advance(85, 15_000, 'Trazendo os dados novos…');
                     // Depois traz da Pluggy o que o banco já tem. Falha aqui não impede o resto.
                     await fetch('/api/pluggy/sync', {
                       method: 'POST',
                       headers: { 'content-type': 'application/json' },
-                      body: JSON.stringify({
-                        startedAt: roundStartedAt,
-                        robot: robotLabel,
-                      }),
+                      body: JSON.stringify({ startedAt: roundStartedAt }),
                     }).catch(() => undefined);
                     advance(97, 4000, 'Atualizando a tela…');
                     await Promise.all([

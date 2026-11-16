@@ -124,7 +124,6 @@ describe('groupRounds', () => {
     status: 'ok',
     started_at: `2026-10-02T${at}Z`,
     duration_ms: ms,
-    robot: null,
     summary,
     error: null,
   });

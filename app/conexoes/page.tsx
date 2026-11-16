@@ -1,5 +1,5 @@
-import { PluggyRobotPanel } from '@/components/pluggy-robot-panel';
+import { ConnectionsPanel } from '@/components/connections-panel';
 
 export default function ConnectionsPage() {
-  return <PluggyRobotPanel />;
+  return <ConnectionsPanel />;
 }

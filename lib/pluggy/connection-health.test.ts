@@ -78,25 +78,18 @@ describe('avisos das conexões', () => {
     );
   });
 
-  it('pedido de confirmação, automática desligada e robô parado', () => {
+  it('pedido de confirmação, automática desligada e sessão do notebook vencida', () => {
     const titles = connectionNotices(
       [{ ...base, waitingInput: true, autoSyncOff: true }],
-      { status: 'expired', last_error: 'Sessão expirada.' },
+      'expired',
       day,
       now,
     ).map((notice) => notice.title);
     expect(titles).toEqual([
       'Nubank pede uma confirmação',
       'Atualização automática do Nubank desligada',
-      'Sessão do robô do Meu Pluggy expirou',
+      'Sessão do Meu Pluggy no notebook expirou',
     ]);
-    expect(
-      connectionNotices(
-        [base],
-        { status: 'active', last_error: null },
-        day,
-        now,
-      ),
-    ).toEqual([]);
+    expect(connectionNotices([base], 'ok', day, now)).toEqual([]);
   });
 });
