@@ -22,6 +22,7 @@ import { CARD_BANKS, cardBankName, type CardBankId } from '@/lib/payment-cards';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import type { ConnectionHealth } from '@/lib/pluggy/connection-health';
+import { delayLabel } from '@/lib/pluggy/arrival-delay';
 import { LOCAL_PER_DAY, type LocalRound } from '@/lib/pluggy/local-rounds';
 
 /* Conexões com os bancos: atualização pelo notebook (o Chrome do PC clica em
@@ -350,7 +351,8 @@ export function ConnectionsPanel() {
           <section className="mt-6 rounded-3xl border bg-card p-5">
             <h2 className="font-semibold">Bancos</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Quando cada um trouxe dados pela última vez.
+              Quando cada um trouxe dados pela última vez e quanto as compras do
+              cartão costumam demorar para o banco mandar.
             </p>
             <ul className="mt-3 divide-y divide-border/60">
               {banks.map((bank, index) => {
@@ -382,6 +384,11 @@ export function ConnectionsPanel() {
                           ? `Atualizado ${updatedLabel(bank.updatedAt)}`
                           : 'Sem data de atualização'}
                       </span>
+                      {delayLabel(bank.purchaseDelayHours ?? null) && (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {delayLabel(bank.purchaseDelayHours ?? null)}
+                        </span>
+                      )}
                     </span>
                     <span
                       className={cn(

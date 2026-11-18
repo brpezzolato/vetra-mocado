@@ -92,4 +92,33 @@ describe('avisos das conexões', () => {
     ]);
     expect(connectionNotices([base], 'ok', day, now)).toEqual([]);
   });
+
+  it('notebook sem sinal por mais de 9 h avisa; a noite não', () => {
+    const at = (lastSeenAt: string | null) =>
+      connectionNotices([base], 'ok', day, now, { lastSeenAt }).map(
+        (notice) => notice.key,
+      );
+    // 7 h sem sinal (da rodada das 23h à das 7h): normal.
+    expect(at(new Date(now - 7 * 3_600_000).toISOString())).toEqual([]);
+    expect(at(new Date(now - 10 * 3_600_000).toISOString())).toEqual([
+      `pluggy-local:offline:${day}`,
+    ]);
+    expect(at(null)).toEqual([`pluggy-local:offline:${day}`]);
+    // Notebook nunca instalado (sem estado): nada.
+    expect(connectionNotices([base], null, day, now)).toEqual([]);
+  });
+
+  it('automação falhando duas vezes seguidas avisa; uma vez só, não', () => {
+    const at = (recentResults: string[]) =>
+      connectionNotices([base], recentResults[0] ?? null, day, now, {
+        lastSeenAt: new Date(now).toISOString(),
+        recentResults,
+      }).map((notice) => notice.key);
+    expect(at(['no_button', 'no_button'])).toEqual([
+      `pluggy-local:broken:${day}`,
+    ]);
+    expect(at(['error', 'late'])).toEqual([`pluggy-local:broken:${day}`]);
+    expect(at(['no_button', 'ok'])).toEqual([]);
+    expect(at(['ok', 'error'])).toEqual([]);
+  });
 });
