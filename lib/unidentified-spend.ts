@@ -155,6 +155,9 @@ export function applySplits(
   });
 }
 
+const earlier = (a: string, b: string) =>
+  Date.parse(b) < Date.parse(a) ? b : a;
+
 /** As partes de uma divisão para o valor que ainda falta chegar. */
 function splitInto(
   item: UnidentifiedSpend,
@@ -169,7 +172,10 @@ function splitInto(
     day: part.day,
     account: item.account,
     amount: new Decimal(part.amount).toFixed(2),
-    at: `${part.day}T12:00:00-03:00`,
+    // Meio-dia do dia informado, mas nunca depois de quando a queda foi
+    // vista: nomeada de manhã, a compra de hoje ficava no futuro e sumia da
+    // tela inicial e dos totais até o meio-dia (18/11/2026).
+    at: earlier(`${part.day}T12:00:00-03:00`, item.at),
     ...(part.excluded && { excluded: true }),
     split: {
       day: item.day,

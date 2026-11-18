@@ -311,6 +311,25 @@ describe('divisão da compra a chegar', () => {
     });
   });
 
+  it('nomeada de manhã, a parte de hoje não fica no futuro', () => {
+    // Queda vista às 7h20 em São Paulo; meio-dia ainda não chegou.
+    const morning = { ...pending, at: '2026-10-13T10:20:00.000Z' };
+    const [today, yesterday] = applySplits(
+      [morning],
+      [
+        {
+          ...split,
+          parts: [
+            { amount: '400.00', day: '2026-10-13', description: 'Icloud' },
+            { amount: '92.51', day: '2026-10-12' },
+          ],
+        },
+      ],
+    );
+    expect(today!.at).toBe('2026-10-13T10:20:00.000Z');
+    expect(yesterday!.at).toBe('2026-10-12T12:00:00-03:00');
+  });
+
   it('o que as partes não cobrem continua como compra a chegar', () => {
     const items = applySplits(
       [pending],
