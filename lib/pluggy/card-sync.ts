@@ -33,6 +33,7 @@ import type { PluggyBill, PluggyTransaction } from './types';
 import { saoPauloDay } from './vault-movements';
 import { takeExcludedPart, type SplitPart } from '../unidentified-spend';
 import { failureCode, type SyncFailure } from './run-summary';
+import { limiter } from '../concurrency';
 
 export type CardSyncResult = {
   cards: number;
@@ -115,6 +116,10 @@ export async function syncCardsFromPluggy(
     result.failures.push({ where, code: failureCode(error) });
   };
   let aiBudget = options.aiLimit ?? 15;
+  // A IA classifica até 4 compras ao mesmo tempo. Uma por vez, 12 compras
+  // novas do PicPay levaram a sincronização a 83 s, além do tempo do webhook;
+  // ela morria antes de gravar, toda vez (18/11/2026).
+  const aiSlot = limiter(4);
   // Hora dos dados de cada conexão (`lastUpdatedAt`) para a foto do limite.
   // Uma consulta por item, só se houver foto.
   const dataTime = new Map<string, Promise<string | null>>();
@@ -203,6 +208,7 @@ export async function syncCardsFromPluggy(
         ((row.parts ?? []) as SplitPart[]).filter((part) => part.excluded),
       );
       const rows = [];
+      const classifying: Promise<void>[] = [];
       for (const bankEntry of plan.insert) {
         // Regra de nome do usuário primeiro; sem ela, o nome que o lugar já
         // tem. Antes da categoria e da IA.
@@ -223,7 +229,7 @@ export async function syncCardsFromPluggy(
                     installmentGroupId: bankEntry.installment?.groupId,
                   }),
               };
-        let category =
+        const category =
           entry.entryType === 'income'
             ? (entry.category ?? REFUND_CATEGORY)
             : (alias?.category ??
@@ -231,14 +237,9 @@ export async function syncCardsFromPluggy(
               learned.get(entry.description.toLocaleLowerCase('pt-BR')) ??
               options.inherit?.(target.account, entry) ??
               null);
-        if (!category && aiBudget > 0) {
-          aiBudget--;
-          category = await categorizeExpenseWithAI({
-            description: entry.description,
-            account: target.account,
-          }).catch(() => null);
-        }
-        rows.push({
+        const askAi = !category && aiBudget > 0;
+        if (askAi) aiBudget--;
+        const row = {
           user_id: target.user_id,
           entry_type: entry.entryType,
           amount: entry.amount,
@@ -265,8 +266,21 @@ export async function syncCardsFromPluggy(
                 amount: entry.amount,
                 day: saoPauloDay(entry.occurredAt),
               })),
-        });
+        };
+        if (askAi)
+          classifying.push(
+            aiSlot(() =>
+              categorizeExpenseWithAI({
+                description: entry.description,
+                account: target.account,
+              }).catch(() => null),
+            ).then((found) => {
+              if (found) row.category = found;
+            }),
+          );
+        rows.push(row);
       }
+      await Promise.all(classifying);
       const { error: insertError } = await admin
         .from('financial_entries')
         .insert(rows);
