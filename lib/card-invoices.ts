@@ -502,3 +502,65 @@ export function invoiceStage(
     .sort((a, b) => a.due.localeCompare(b.due))[0];
   return open?.due === invoice.due ? 'atual' : 'próxima';
 }
+
+/**
+ * O que falta pagar desta fatura sem as compras "fora das contas" (de outra
+ * pessoa no cartão: o banco cobra, mas não sai do cofrinho; estorno marcado
+ * assim devolve). Só desconta a parte delas que ainda está em aberto.
+ *
+ * O que já foi pago cobre as compras em ordem: o crédito que veio da
+ * anterior (`carried`, antecipação) cobre as mais antigas; cada pagamento,
+ * as que já existiam no dia dele, da mais velha para a mais nova (o que
+ * sobrar segue para as seguintes). Antes descontava tudo: no Nubank
+ * (19/11/2026) a compra "fora" já paga com antecipação saía de novo, de
+ * compras que nem a incluíam (R$ 122,87 em vez de R$ 282,77). Cobrir
+ * sempre as "fora" primeiro também erra: no PicPay o pagamento era da parte
+ * do Bruno, das compras anteriores a ele.
+ */
+export function ownBalance(invoice: CardInvoice) {
+  const purchases = invoice.entries
+    .filter((entry) => entry.entry_type !== 'income')
+    .sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+    .map((entry) => ({
+      day: saoDate(entry.occurred_at),
+      excluded: !!entry.excluded_from_totals,
+      open: new Decimal(entry.amount),
+    }));
+  /** Abate `amount` das compras em aberto até `until` (inclusive), em ordem. */
+  const cover = (amount: Decimal, until?: string) => {
+    let left = amount;
+    for (const purchase of purchases) {
+      if (left.lte(0)) break;
+      if (until && purchase.day > until) continue;
+      const take = Decimal.min(left, purchase.open);
+      purchase.open = purchase.open.minus(take);
+      left = left.minus(take);
+    }
+    return left;
+  };
+  let spare = cover(
+    Decimal.max(new Decimal(invoice.carried ?? 0).negated(), 0),
+  );
+  let dated = new Decimal(0);
+  for (const payment of [...invoice.paidOn].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  )) {
+    dated = dated.plus(payment.amount);
+    spare = spare.plus(cover(new Decimal(payment.amount), payment.date));
+  }
+  // Pago sem data (ou além das compras daquele dia): cobre o que sobrar.
+  cover(spare.plus(Decimal.max(new Decimal(invoice.paid).minus(dated), 0)));
+  const refunds = invoice.entries
+    .filter(
+      (entry) => entry.entry_type === 'income' && entry.excluded_from_totals,
+    )
+    .reduce((sum, entry) => sum.plus(entry.amount), new Decimal(0));
+  const openExcluded = Decimal.max(
+    purchases
+      .filter((purchase) => purchase.excluded)
+      .reduce((sum, purchase) => sum.plus(purchase.open), new Decimal(0))
+      .minus(refunds),
+    0,
+  );
+  return Decimal.max(new Decimal(invoice.balance).minus(openExcluded), 0);
+}

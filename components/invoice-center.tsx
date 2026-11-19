@@ -11,6 +11,7 @@ import { PaymentCardIcon } from '@/components/payment-card-icon';
 import { Button } from '@/components/ui/button';
 import {
   buildCreditCardInvoices,
+  ownBalance,
   type CardBill,
   type CardInvoicePayment,
   type CreditCardInvoices,
@@ -316,25 +317,10 @@ export function InvoiceCenter({
     (sum, item) => sum.plus(item.current.balance),
     new Decimal(0),
   );
-  // O mesmo total sem as compras "fora das contas" (como em /cobertura).
+  // O mesmo total sem as compras "fora das contas" em aberto (como em
+  // /cobertura).
   const countedOpenTotal = invoiceCards.reduce(
-    (sum, item) =>
-      sum.plus(
-        Decimal.max(
-          new Decimal(item.current.balance).minus(
-            item.current.entries
-              .filter((entry) => entry.excluded_from_totals)
-              .reduce(
-                (total, entry) =>
-                  entry.entry_type === 'income'
-                    ? total.minus(entry.amount)
-                    : total.plus(entry.amount),
-                new Decimal(0),
-              ),
-          ),
-          0,
-        ),
-      ),
+    (sum, item) => sum.plus(ownBalance(item.current)),
     new Decimal(0),
   );
   const nextDue = invoiceCards.map((item) => item.current.due).sort()[0];

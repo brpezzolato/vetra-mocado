@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { buildCreditCardInvoices, type CardInvoice } from '@/lib/card-invoices';
+import { buildCreditCardInvoices, ownBalance } from '@/lib/card-invoices';
 import type { CardInvoiceInputs } from '@/lib/card-invoices-query';
 import { bankLogo } from '@/lib/domain';
 import type { FlashWalletBalance } from '@/lib/flash-balances-query';
@@ -41,20 +41,9 @@ const dayMonth = (value: string) =>
     .format(new Date(`${value}T12:00:00Z`))
     .replace('.', '');
 
-// "Fora das contas" (compra de outra pessoa no cartão, por exemplo): o banco
-// cobra, mas não sai do cofrinho; estorno marcado assim devolve.
-const excludedOf = (invoice: CardInvoice) =>
-  invoice.entries
-    .filter((entry) => entry.excluded_from_totals)
-    .reduce(
-      (sum, entry) =>
-        entry.entry_type === 'income'
-          ? sum.minus(entry.amount)
-          : sum.plus(entry.amount),
-      new Decimal(0),
-    );
-const owed = (invoice: CardInvoice) =>
-  Decimal.max(new Decimal(invoice.balance).minus(excludedOf(invoice)), 0);
+// "Fora das contas" (compra de outra pessoa no cartão): o banco cobra, mas
+// não sai do cofrinho — só a parte ainda em aberto (lib/card-invoices.ts).
+const owed = ownBalance;
 
 export function VaultCoverage({
   inputs,
